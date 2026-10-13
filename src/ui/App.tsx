@@ -14,6 +14,7 @@ import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
 import { prepareScene, tipFor, type ExportMode } from '../export/outlines';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
+import { PagePanel } from './PagePanel';
 import { FEATURE_PEN_LABELS, penFor } from '../scene/pens';
 import type { FeaturePenKey } from '../features/types';
 import { PRINT_SIZES, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
@@ -179,6 +180,8 @@ export function App() {
             <option value="imperial">mi / ft</option><option value="metric">km / m</option>
           </select>
         </Row>
+
+        <PagePanel project={p} />
 
         <PensPanel project={p} scene={scene} />
 

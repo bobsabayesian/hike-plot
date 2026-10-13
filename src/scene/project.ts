@@ -61,10 +61,35 @@ export interface Feature {
 }
 export interface Lookup { peakName?: string; location?: string }
 
+/** Distances from the paper edge to the content area, in mm. */
+export interface Margins { top: number; right: number; bottom: number; left: number }
+export interface PageSettings {
+  margins: Margins;
+  /** edit all four sides together */
+  linked: boolean;
+}
+
+/** 1.25 in: about what the earlier layout used on an 18x24 poster, now fixed instead of scaling with the page. */
+export const DEFAULT_MARGIN_MM = 31.75;
+/** The content area keeps at least this share of the page in each direction. */
+export const MIN_CONTENT_SHARE = 0.2;
+
+/** Margins that are safe to lay out with: not negative, and leaving at least 20% of the page for content. */
+export function clampMargins(m: Margins, widthMm: number, heightMm: number): Margins {
+  const pos = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
+  let { top, right, bottom, left } = { top: pos(m.top), right: pos(m.right), bottom: pos(m.bottom), left: pos(m.left) };
+  const maxH = widthMm * (1 - MIN_CONTENT_SHARE);
+  const maxV = heightMm * (1 - MIN_CONTENT_SHARE);
+  if (left + right > maxH) { const k = maxH / (left + right); left *= k; right *= k; }
+  if (top + bottom > maxV) { const k = maxV / (top + bottom); top *= k; bottom *= k; }
+  return { top, right, bottom, left };
+}
+
 export interface Project {
   sizeId: string;
   landscape: boolean;
   paper: string;
+  page: PageSettings;
   points: TrackPoint[];
   /** typed-in geographic feature; used for the map view when there is no GPX */
   feature?: Feature;
@@ -141,6 +166,7 @@ export const defaultProject = (): Project => ({
   sizeId: '18x24',
   landscape: false,
   paper: '#f6f3ec',
+  page: { margins: { top: DEFAULT_MARGIN_MM, right: DEFAULT_MARGIN_MM, bottom: DEFAULT_MARGIN_MM, left: DEFAULT_MARGIN_MM }, linked: true },
   points: [],
   waypoints: [],
   lookup: {},

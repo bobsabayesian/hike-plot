@@ -16,7 +16,7 @@ import { featurePenId, penFor } from './pens';
 import { formatLevel, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
 import type { Box } from '../features/select';
 import type { Prim, Scene } from './types';
-import { posterMm, type InfoItem, type Placement, type Project, type StrokeStyle } from './project';
+import { clampMargins, posterMm, type InfoItem, type Placement, type Project, type StrokeStyle } from './project';
 
 const PT = 25.4 / 72;
 /** Poster title when there is no name to use (no GPX peak name and no searched feature). */
@@ -119,13 +119,16 @@ export interface Composed { scene: Scene; view?: View; landmarks?: LandmarkEntry
 function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: OsmData): Composed {
   const { w: W, h: H } = posterMm(p);
   const prims: Prim[] = [];
-  const m = Math.min(W, H) * 0.07;
+  const mg = clampMargins(p.page.margins, W, H); // explicit page margins, paper edge to content
+  const minMargin = Math.min(mg.top, mg.right, mg.bottom, mg.left);
   const t = p.text;
   const colorOf = (penId: string) => penFor(p.pens, penId).color;
   const fontFamily = FONTS[t.font];
   const anchor = t.align === 'left' ? 'start' : t.align === 'right' ? 'end' : 'middle';
-  const tx = t.align === 'left' ? m : t.align === 'right' ? W - m : W / 2;
-  const innerW = W - 2 * m;
+  const contentL = mg.left;
+  const contentR = W - mg.right;
+  const tx = t.align === 'left' ? contentL : t.align === 'right' ? contentR : (contentL + contentR) / 2;
+  const innerW = contentR - contentL;
   const stats = p.points.length ? computeStats(p.points) : undefined;
   const interval = p.terrain.enabled && terrain ? contourInterval(p.terrain.intervalM, terrain) : undefined;
   const auto = autoValues(p, stats, interval);
@@ -184,18 +187,18 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         if (column) return items.flatMap((it, i) => cellDraw(it, y + i * (cell + colGap), tx));
         const cw = innerW / items.length;
         return items.flatMap((it, i) => {
-          const x = t.align === 'left' ? m + i * cw : t.align === 'right' ? m + (i + 1) * cw : m + (i + 0.5) * cw;
+          const x = t.align === 'left' ? contentL + i * cw : t.align === 'right' ? contentL + (i + 1) * cw : contentL + (i + 0.5) * cw;
           return cellDraw(it, y, x);
         });
       },
     });
   }
 
-  let topCursor = m;
+  let topCursor = mg.top;
   if (!layoutOnly) for (const b of blocks.top) { prims.push(...b.draw(topCursor)); topCursor += b.height + b.gapAfter; }
   else for (const b of blocks.top) topCursor += b.height + b.gapAfter;
 
-  let bottomCursor = H - m;
+  let bottomCursor = H - mg.bottom;
   if (p.showWatermark) {
     const size = 7 * PT;
     if (!layoutOnly) prims.push(text(p.watermarkPen, WATERMARK_TEXT, bottomCursor, size, { trackingMm: size * 0.04, opacity: 0.55 }));
@@ -208,7 +211,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   }
 
   // ---- map
-  const gap = m * 0.4;
+  const gap = Math.max(6, minMargin * 0.4);
   const hasMap = p.points.length >= 2 || !!p.feature;
   let view: View | undefined;
   let landmarks: LandmarkEntry[] | undefined;
@@ -218,7 +221,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     const profileH = p.profile.enabled && p.profile.position === 'bottom' && p.points.length ? H * 0.09 : 0;
     // distance tick labels hang below the profile, so reserve room for them
     const tickPad = p.profile.enabled && p.profile.labels.xTicks && p.points.length ? p.profile.labels.sizePt * PT * 2.4 : 0;
-    const frame: Rect = { x: m, y: topCursor, w: innerW, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) - tickPad };
+    const frame: Rect = { x: contentL, y: topCursor, w: innerW, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) - tickPad };
     const focus: BBox = p.points.length >= 2 ? bbox(p.points) : featureView(p.feature!);
     const fit = fitBBox(focus, frame);
     const [la1, lo1] = fit.fromMm(frame.x, frame.y + frame.h);
@@ -237,7 +240,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           landmarks: [...p.waypoints, ...(osm?.landmarks ?? [])],
           water: osm?.water ?? [],
           fit, frame, route: routeXY,
-          labelBounds: { x: frame.x - m * 0.5, y: frame.y - m * 0.5, w: frame.w + m, h: frame.h + m * 0.5 }, settings: p.features, sizeMm,
+          labelBounds: { x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }, settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,
           penFor: (kind) => penFor(p.pens, featurePenId(p.features, penKeyOf(kind))),
           fontFamily, fontKey: t.font, trackingMm: sizeMm * 0.05,
@@ -256,7 +259,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
             avoid.push({ cx: nb.x + p.north.sizeMm / 2, cy: nb.y + p.north.sizeMm / 2, w: p.north.sizeMm, h: p.north.sizeMm, ang: 0 });
           }
           if (p.profile.enabled && p.profile.position === 'corner' && p.points.length)
-            avoid.push({ cx: W - m - innerW * 0.2, cy: frame.y + frame.h - H * 0.04, w: innerW * 0.4, h: H * 0.08, ang: 0 });
+            avoid.push({ cx: contentR - innerW * 0.2, cy: frame.y + frame.h - H * 0.04, w: innerW * 0.4, h: H * 0.08, ang: 0 });
           numbers = placeContourLabels(paths.pieces, {
             intervalM: interval!, indexEvery: tc.indexEvery, every: tc.labels.every, density: tc.labels.density, gap: tc.labels.gap,
             sizePt: tc.labels.sizePt, format: (lv) => formatLevel(lv, p.units), frame, obstacles: avoid, route: routeXY,
@@ -289,7 +292,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           const corner = p.profile.position === 'corner';
           const pw = corner ? innerW * 0.4 : innerW;
           const ph = corner ? H * 0.08 : profileH;
-          const px = corner ? W - m - pw : m;
+          const px = corner ? contentR - pw : contentL;
           const py = corner ? frame.y + frame.h - ph : frame.y + frame.h + gap;
           const withEle = clean.filter((q) => q.ele !== undefined);
           if (withEle.length >= 2) {
