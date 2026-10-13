@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { placeLandmarks, type PlaceInput } from '../src/features/select';
-import { defaultFeatures, type Landmark, type WaterLine } from '../src/features/types';
+import { defaultFeatures, requestCovers, requestIsEmpty, wantedRequest, type Landmark, type WaterLine } from '../src/features/types';
 import { markerPath } from '../src/features/draw';
 import { fitBBox } from '../src/geo/project';
 import { parseWaypoints } from '../src/gpx/parse';
@@ -32,6 +32,7 @@ describe('placeLandmarks', () => {
   it('GPX waypoints always outrank OSM features', () => {
     const wpt = lm('wpt-0', 'Camp', 'waypoint', 46.1, -121.2);
     const s = defaultFeatures();
+    s.kinds.waypoint = true;
     s.maxLabels = 1;
     expect(placeLandmarks(input([...grid, wpt], { settings: s })).labels[0]!.id).toBe('wpt-0');
   });
@@ -91,9 +92,35 @@ describe('placeLandmarks', () => {
       { id: 'w1', kind: 'lake', name: 'Big Lake', coords: ring(46.1, -121.2, 0.02) },
       { id: 'w2', kind: 'lake', name: 'Puddle', coords: ring(46.15, -121.3, 0.0002) },
     ];
-    const { labels } = placeLandmarks(input([], { water }));
+    const s = defaultFeatures();
+    s.waterLabels = true;
+    const { labels } = placeLandmarks(input([], { water, settings: s }));
     expect(labels.map((l) => l.text)).toEqual(['Big Lake']);
     expect(labels[0]!.marker).toBeUndefined();
+  });
+});
+
+describe('labels and markers', () => {
+  it('no label is written over any drawn marker', () => {
+    const s = defaultFeatures();
+    s.maxLabels = 20;
+    const { labels } = placeLandmarks(input(grid, { settings: s }));
+    const size = 4;
+    const hitsMarker = (l: (typeof labels)[number], m: [number, number]) => {
+      const w = l.text.length * size * 0.56;
+      const x0 = l.anchor === 'start' ? l.x : l.anchor === 'end' ? l.x - w : l.x - w / 2;
+      return m[0] > x0 && m[0] < x0 + w && m[1] > l.y - size * 0.8 && m[1] < l.y + size * 0.2;
+    };
+    for (const l of labels) for (const o of labels) if (o !== l && o.marker) expect(hitsMarker(l, o.marker)).toBe(false);
+  });
+  it('a label avoids the marker of a lower-ranked neighbor placed after it', () => {
+    const [x, y] = fit.toMm(46.1, -121.2);
+    const [lat2, lon2] = fit.fromMm(x + 14, y); // second peak 14 mm to the right: under a long label placed to the right of the first
+    const a = lm('a', 'Alpha Peak With A Long Name', 'peak', 46.1, -121.2, 3000);
+    const b = lm('b', 'Beta', 'peak', lat2, lon2, 2000);
+    const { labels } = placeLandmarks(input([a, b]));
+    const la = labels.find((l) => l.id === 'a')!;
+    expect(la.anchor).not.toBe('start'); // not through Beta's marker
   });
 });
 
@@ -141,7 +168,9 @@ describe('overpass normalization', () => {
 describe('landmarks in the scene', () => {
   const base = () => {
     const pts = sampleTrack();
-    return { ...defaultProject(), points: pts, waypoints: sampleWaypoints(pts) };
+    const p = { ...defaultProject(), points: pts, waypoints: sampleWaypoints(pts) };
+    p.features.kinds.waypoint = true; // waypoints are opt-in
+    return p;
   };
   const names = (p = base(), osm?: Parameters<typeof buildScene>[2]) =>
     buildScene(p, undefined, osm).prims.flatMap((x) => (x.kind === 'text' ? [x.text] : []));
@@ -257,20 +286,19 @@ describe('overpass mirrors and diagnostics', () => {
   it('falls through to the next mirror on a 504', async () => {
     const calls = script({
       'overpass-api.de': () => new Response('', { status: 504 }),
-      'lz4.overpass-api.de': () => ok([peak]),
+      'overpass.openstreetmap.fr': () => ok([peak]),
     });
     const d: any = await (await call(`/api/features?${small}`)).json();
     expect(d.landmarks[0].name).toBe('A');
     expect(d.partial).toEqual([]);
-    expect(calls).toContain('lz4.overpass-api.de');
-    expect(calls.filter((c) => c === 'overpass.private.coffee')).toHaveLength(0); // stopped once one worked
+    expect(calls).toContain('overpass.openstreetmap.fr');
+    expect(calls.filter((c) => c === 'z.overpass-api.de')).toHaveLength(0); // stopped once one worked
   });
-  it('treats a network error, a 429 and an HTML body as failures and keeps going', async () => {
+  it('treats a network error and an HTML body as failures and keeps going', async () => {
     script({
-      'overpass-api.de': () => { throw new TypeError('connection reset'); },
-      'lz4.overpass-api.de': () => new Response('', { status: 429 }),
-      'overpass.private.coffee': () => new Response('<html>busy</html>'),
-      'overpass.kumi.systems': () => ok([peak]),
+      'overpass-api.de': () => new Response('<html>busy</html>'),
+      'overpass.openstreetmap.fr': () => { throw new TypeError('connection reset'); },
+      'z.overpass-api.de': () => ok([peak]),
     });
     const d: any = await (await call(`/api/features?${small}`)).json();
     expect(d.landmarks[0].name).toBe('A');
@@ -278,7 +306,7 @@ describe('overpass mirrors and diagnostics', () => {
   it('a 200 that only carries a runtime-error remark counts as a failure', async () => {
     script({
       'overpass-api.de': () => new Response(JSON.stringify({ elements: [], remark: 'runtime error: Query timed out' })),
-      'lz4.overpass-api.de': () => ok([peak]),
+      'overpass.openstreetmap.fr': () => ok([peak]),
     });
     expect(((await (await call(`/api/features?${small}`)).json()) as any).landmarks[0].name).toBe('A');
   });
@@ -290,15 +318,14 @@ describe('overpass mirrors and diagnostics', () => {
   });
   it('when every server fails, the error says what each one answered', async () => {
     script({
-      'overpass-api.de': () => new Response('', { status: 504 }),
-      'lz4.overpass-api.de': () => new Response('', { status: 429 }),
-      'overpass.private.coffee': () => { throw new TypeError('connection reset'); },
-      'overpass.kumi.systems': () => new Response('', { status: 503 }),
+      'overpass-api.de': () => new Response('', { status: 521 }),
+      'overpass.openstreetmap.fr': () => new Response('', { status: 429 }),
+      'z.overpass-api.de': () => { throw new TypeError('connection reset'); },
     });
     const res = await call(`/api/features?${small}`);
     const msg = ((await res.json()) as any).error as string;
     expect(res.status).toBe(502);
-    for (const part of ['overpass-api.de 504', 'lz4.overpass-api.de 429', 'overpass.private.coffee connection reset', 'overpass.kumi.systems 503'])
+    for (const part of ['overpass-api.de 521', 'overpass.openstreetmap.fr 429', 'z.overpass-api.de connection reset'])
       expect(msg).toContain(part);
   });
   it('a partial answer carries the reason for the missing part', async () => {
@@ -309,24 +336,137 @@ describe('overpass mirrors and diagnostics', () => {
     expect(d.reason).toMatch(/water: .*overpass-api\.de 504/);
   });
   it('the peak lookup uses the mirrors too', async () => {
-    script({ 'overpass-api.de': () => new Response('', { status: 504 }), 'lz4.overpass-api.de': () => ok([peak]) });
+    script({ 'overpass-api.de': () => new Response('', { status: 504 }), 'overpass.openstreetmap.fr': () => ok([peak]) });
     const d: any = await (await call(`/api/peaks?${small}`)).json();
     expect(d.peaks).toHaveLength(1);
   });
   it('/api/health reports each server and is never cached', async () => {
     script({
       'overpass-api.de': () => ok([]),
-      'lz4.overpass-api.de': () => new Response('', { status: 504 }),
-      'overpass.private.coffee': () => { throw new TypeError('refused'); },
-      'overpass.kumi.systems': () => ok([]),
+      'overpass.openstreetmap.fr': () => new Response('', { status: 504 }),
+      'z.overpass-api.de': () => { throw new TypeError('refused'); },
     });
     const res = await call('/api/health');
     const d: any = await res.json();
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(d.hosts.map((h: any) => [h.host, h.ok])).toEqual([
-      ['overpass-api.de', true], ['lz4.overpass-api.de', false], ['overpass.private.coffee', false], ['overpass.kumi.systems', true],
+      ['overpass-api.de', true], ['overpass.openstreetmap.fr', false], ['z.overpass-api.de', false],
     ]);
     expect(d.hosts[1].status).toBe(504);
     expect(d.hosts[2].error).toBe('refused');
+    expect(d.hosts).toHaveLength(3);
+  });
+});
+
+describe('opt-in feature defaults', () => {
+  it('only peaks, trailheads and water lines are on by default', () => {
+    const d = defaultFeatures();
+    expect(Object.entries(d.kinds).filter(([, on]) => on).map(([k]) => k).sort()).toEqual(['peak', 'trailhead']);
+    expect(d.water).toBe(true);
+    expect(d.waterLabels).toBe(false);
+  });
+  it('the default request asks only for peaks, trailheads and water', () => {
+    expect(wantedRequest(defaultFeatures())).toEqual({ kinds: ['peak', 'trailhead'], lakes: true, rivers: true });
+  });
+  it('water labels alone still need the water geometry (rivers and lakes)', () => {
+    const s = defaultFeatures();
+    s.water = false;
+    s.waterLabels = true;
+    expect(wantedRequest(s)).toEqual({ kinds: ['peak', 'trailhead'], lakes: true, rivers: true });
+    s.waterLabels = false;
+    expect(wantedRequest(s)).toEqual({ kinds: ['peak', 'trailhead'], lakes: false, rivers: false });
+  });
+  it('knows when already-fetched data is enough, and when a new kind needs a fetch', () => {
+    const have = wantedRequest(defaultFeatures());
+    expect(requestCovers(have, have)).toBe(true);
+    const s = defaultFeatures();
+    s.kinds.hut = true;
+    expect(requestCovers(have, wantedRequest(s))).toBe(false);
+    s.kinds.hut = false;
+    s.kinds.peak = false; // fewer kinds is covered by a superset
+    expect(requestCovers(have, wantedRequest(s))).toBe(true);
+    expect(requestCovers(undefined, wantedRequest(s))).toBe(false);
+  });
+  it('nothing enabled means nothing to fetch', () => {
+    const s = defaultFeatures();
+    Object.keys(s.kinds).forEach((k) => ((s.kinds as any)[k] = false));
+    s.water = false;
+    s.waterLabels = false;
+    expect(requestIsEmpty(wantedRequest(s))).toBe(true);
+  });
+  it('by default the scene labels peaks and trailheads but not huts, passes, viewpoints or lakes', () => {
+    const pts = sampleTrack();
+    const p = { ...defaultProject(), points: pts };
+    const osm = {
+      landmarks: [
+        lm('n1', 'Summit Pk', 'peak', 46.82, -121.7, 3000), lm('n2', 'Start TH', 'trailhead', 46.79, -121.72),
+        lm('n3', 'Old Hut', 'hut', 46.8, -121.7), lm('n4', 'High Pass', 'pass', 46.81, -121.69), lm('n5', 'Nice View', 'viewpoint', 46.805, -121.69),
+      ],
+      water: [],
+      covers: B,
+    };
+    const labels = buildScene(p, undefined, osm).prims.flatMap((x) => (x.kind === 'text' ? [x.text] : []));
+    expect(labels).toEqual(expect.arrayContaining(['Summit Pk', 'Start TH']));
+    for (const off of ['Old Hut', 'High Pass', 'Nice View']) expect(labels).not.toContain(off);
+    p.features.kinds.hut = true;
+    expect(buildScene(p, undefined, osm).prims.flatMap((x) => (x.kind === 'text' ? [x.text] : []))).toContain('Old Hut');
+  });
+});
+
+describe('/api/features only asks for what is requested', () => {
+  const ok = (elements: unknown[] = []) => new Response(JSON.stringify({ elements }));
+  const small = 'minLat=46&maxLat=46.2&minLon=-121.4&maxLon=-121.2';
+  const queries = () => {
+    const qs: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_u: unknown, init: any) => { qs.push(decodeURIComponent(init.body)); return ok(); }));
+    return qs;
+  };
+  afterEach(() => vi.unstubAllGlobals());
+  const call = (q: string) => handleApi(new Request(`http://x/api/features?${small}&${q}`)) as Promise<Response>;
+
+  it('peaks and trailheads only: no hut/pass/viewpoint clauses, and no water query when water is off', async () => {
+    const qs = queries();
+    const d: any = await (await call('kinds=peak,trailhead&lakes=0&rivers=0')).json();
+    expect(qs).toHaveLength(1);
+    expect(qs[0]).toContain('"natural"="peak"');
+    expect(qs[0]).toContain('"highway"="trailhead"');
+    for (const nope of ['saddle', 'mountain_pass', 'alpine_hut', 'viewpoint', 'waterway']) expect(qs[0]).not.toContain(nope);
+    expect(d.partial).toEqual([]);
+  });
+  it('rivers only, and lakes only, build different water queries', async () => {
+    let qs = queries();
+    await call('kinds=&lakes=0&rivers=1');
+    expect(qs).toHaveLength(1); // no point kinds -> no node query
+    expect(qs[0]).toContain('waterway');
+    expect(qs[0]).not.toContain('natural"="water');
+    vi.unstubAllGlobals();
+    qs = queries();
+    await call('kinds=&lakes=1&rivers=0');
+    expect(qs[0]).toContain('natural"="water');
+    expect(qs[0]).not.toContain('waterway');
+  });
+  it('a skipped query is not reported as a failure', async () => {
+    queries();
+    const d: any = await (await call('kinds=peak&lakes=0&rivers=0')).json();
+    expect(d.partial).toEqual([]);
+    expect(d.reason).toBeUndefined();
+  });
+  it('asking for nothing makes no upstream calls', async () => {
+    const qs = queries();
+    await call('kinds=&lakes=0&rivers=0');
+    expect(qs).toHaveLength(0);
+  });
+  it('with no params at all, everything is requested (older clients)', async () => {
+    const qs = queries();
+    await handleApi(new Request(`http://x/api/features?${small}`));
+    expect(qs).toHaveLength(2);
+    expect(qs[0]).toContain('alpine_hut');
+    expect(qs[1]).toContain('waterway');
+  });
+  it('unknown kinds in the request are ignored', async () => {
+    const qs = queries();
+    await call('kinds=peak,bogus,waypoint&lakes=0&rivers=0');
+    expect(qs[0]).toContain('"natural"="peak"');
+    expect(qs[0]).not.toContain('bogus');
   });
 });

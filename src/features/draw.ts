@@ -54,12 +54,13 @@ export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[]; entries: Land
   if (markers.length)
     prims.push({
       kind: 'path', mode: 'stroke', color, widthMm: 0.35, round: true,
-      d: markers.map((l) => markerPath(l.kind, l.marker![0], l.marker![1], inp.markerR)).join(''),
+      d: markers.map((l) => markerPath(l.kind as LandmarkKind, l.marker![0], l.marker![1], inp.markerR)).join(''),
     });
   for (const l of labels)
     prims.push({
       kind: 'text', text: l.text, x: l.x, y: l.y, anchor: l.anchor, sizeMm: inp.sizeMm,
       trackingMm: inp.trackingMm, fontFamily: inp.fontFamily, fontKey: inp.fontKey, color,
+      ...(l.rotate ? { rotate: l.rotate } : {}),
     });
   return { prims, entries };
 }

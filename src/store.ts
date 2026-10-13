@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { defaultProject, type Project } from './scene/project';
 import type { TrackPoint } from './gpx/types';
-import type { Landmark, OsmData } from './features/types';
+import type { Landmark, OsmData, OsmRequest } from './features/types';
 import type { TerrainField } from './topo/terrain';
 import { fetchFeatures, geocodeFeature, type GeocodeHit, nearestPeakName, reverseLocation } from './lookup';
 
@@ -21,7 +21,7 @@ interface Store {
   set: (fn: (p: Project) => void) => void;
   setTerrain: (t: TerrainField | undefined, status: Store['terrainStatus'], error?: string) => void;
   loadPoints: (pts: TrackPoint[], lookups?: boolean, waypoints?: Landmark[]) => void;
-  loadOsm: (b: import('./geo/project').BBox) => Promise<void>;
+  loadOsm: (b: import('./geo/project').BBox, req: OsmRequest) => Promise<void>;
   retryOsm: () => void;
   searchFeature: (q: string) => Promise<void>;
   chooseResult: (i: number) => void;
@@ -45,10 +45,10 @@ export const useStore = create<Store>((setState, get) => ({
     }),
   setTerrain: (terrain, terrainStatus, terrainError) => setState({ terrain, terrainStatus, terrainError }),
 
-  loadOsm: async (b) => {
+  loadOsm: async (b, req) => {
     setState({ osmStatus: 'loading', osmError: undefined });
     try {
-      setState({ osm: await fetchFeatures(b), osmStatus: 'idle' });
+      setState({ osm: await fetchFeatures(b, req), osmStatus: 'idle' });
     } catch (e) {
       setState({ osm: undefined, osmStatus: 'error', osmError: e instanceof Error ? e.message : 'Landmarks failed' });
     }

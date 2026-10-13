@@ -19,7 +19,8 @@ function pathEl(p: PathPrim): string {
 
 function textEl(t: TextPrim): string {
   const op = t.opacity !== undefined && t.opacity < 1 ? ` opacity="${f(t.opacity)}"` : '';
-  return `<text x="${f(t.x)}" y="${f(t.y)}" text-anchor="${t.anchor}" font-size="${f(t.sizeMm)}" letter-spacing="${f(t.trackingMm)}" font-family="${esc(t.fontFamily)}" fill="${normColor(t.color)}"${op}>${esc(t.text)}</text>`;
+  const rot = t.rotate ? ` transform="rotate(${f(t.rotate)} ${f(t.x)} ${f(t.y)})"` : '';
+  return `<text x="${f(t.x)}" y="${f(t.y)}"${rot} text-anchor="${t.anchor}" font-size="${f(t.sizeMm)}" letter-spacing="${f(t.trackingMm)}" font-family="${esc(t.fontFamily)}" fill="${normColor(t.color)}"${op}>${esc(t.text)}</text>`;
 }
 
 const el = (p: Prim) => (p.kind === 'path' ? pathEl(p) : textEl(p));

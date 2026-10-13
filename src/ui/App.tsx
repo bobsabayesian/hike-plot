@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
-import { KIND_LABELS, LANDMARK_KINDS, type Side } from '../features/types';
+import { KIND_LABELS, LANDMARK_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Side } from '../features/types';
 import { composeScene, viewBBox, autoValues, featureView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
 import { sceneToSvg } from '../export/svg';
 import { pngSize, sceneToPng } from '../export/png';
 import { loadFonts } from '../export/fonts';
+import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
 import { prepareScene, type ExportMode } from '../export/outlines';
 import { PRINT_SIZES, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
 
@@ -31,6 +32,40 @@ function download(name: string, data: string | Blob, type: string) {
   URL.revokeObjectURL(url);
 }
 
+/** The "Showing <feature>" block: hover it and use the mouse wheel to zoom (wheel up = slider left = closer). */
+function FeatureStatus({ feature, onSpan }: { feature: NonNullable<ReturnType<typeof useStore.getState>['project']['feature']>; onSpan: (km: number | undefined) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, h] = viewSizeKm(featureView(feature));
+  const shown = Math.min(SPAN_MAX_KM, Math.max(SPAN_MIN_KM, Math.round(w)));
+  const latest = useRef(shown);
+  latest.current = shown;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // A non-passive listener is needed so the page doesn't scroll while the wheel is used here.
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY; // lines -> pixels
+      onSpan(wheelSpan(latest.current, delta));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [onSpan]);
+
+  return (
+    <div className="found" ref={ref} title="Scroll the mouse wheel here to zoom: up zooms in, down zooms out">
+      <div>Showing <b>{feature.name}</b>{feature.kind ? ` (${feature.kind})` : ''}</div>
+      <div className="hint">{feature.lat.toFixed(4)}°, {feature.lon.toFixed(4)}° · view about {Math.round(w)} × {Math.round(h)} km · scroll to zoom</div>
+      <Row label="View width">
+        <input type="range" min={SPAN_MIN_KM} max={SPAN_MAX_KM} step={1} value={shown} onChange={(e) => onSpan(+e.target.value)} />
+        <span>{shown} km</span>
+        <button disabled={feature.spanKm === undefined} onClick={() => onSpan(undefined)}>Auto</button>
+      </Row>
+    </div>
+  );
+}
+
 export function App() {
   const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, searchResults, searchIndex, chooseResult, osm, osmStatus, osmError, loadOsm, retryOsm, searchFeature, busy, notice } = useStore();
   const [query, setQuery] = useState('');
@@ -47,14 +82,16 @@ export function App() {
   const need = useMemo(() => viewBBox(p), [p]);
   const auto = useMemo(() => autoValues(p, p.points.length ? computeStats(p.points) : undefined), [p]);
 
-  // Fetch landmarks/water whenever the visible area is not covered by what we already have.
+  // Fetch landmarks/water whenever the visible area, or what we want to show, is not covered by what we have.
+  const want = useMemo(() => wantedRequest(p.features), [p.features.kinds, p.features.water, p.features.waterLabels]);
   useEffect(() => {
-    if (!p.features.enabled || !need) return;
+    if (!p.features.enabled || !need || requestIsEmpty(want)) return;
     const c = osm?.covers;
-    if (c && need.minLat >= c.minLat && need.maxLat <= c.maxLat && need.minLon >= c.minLon && need.maxLon <= c.maxLon) return;
-    const t = setTimeout(() => loadOsm(padBBox(need, 0.05)), 600);
+    const inside = c && need.minLat >= c.minLat && need.maxLat <= c.maxLat && need.minLon >= c.minLon && need.maxLon <= c.maxLon;
+    if (inside && requestCovers(osm?.requested, want)) return;
+    const t = setTimeout(() => loadOsm(padBBox(need, 0.05), want), 600);
     return () => clearTimeout(t);
-  }, [need, p.features.enabled, osm, loadOsm]);
+  }, [need, p.features.enabled, osm, want, loadOsm]);
 
   // Fetch terrain whenever the visible map area is not covered by what we already have.
   useEffect(() => {
@@ -114,20 +151,7 @@ export function App() {
             ))}
           </div>
         )}
-        {p.feature && (() => {
-          const [w, h] = viewSizeKm(featureView(p.feature));
-          return (
-            <div className="found">
-              <div>Showing <b>{p.feature.name}</b>{p.feature.kind ? ` (${p.feature.kind})` : ''}</div>
-              <div className="hint">{p.feature.lat.toFixed(4)}°, {p.feature.lon.toFixed(4)}° · view about {Math.round(w)} × {Math.round(h)} km</div>
-              <Row label="View width">
-                <input type="range" min={2} max={150} step={1} value={Math.min(150, Math.max(2, Math.round(w)))}
-                  onChange={(e) => set((x) => { x.feature!.spanKm = +e.target.value; })} />
-                <button disabled={p.feature.spanKm === undefined} onClick={() => set((x) => { x.feature!.spanKm = undefined; })}>Auto</button>
-              </Row>
-            </div>
-          );
-        })()}
+        {p.feature && <FeatureStatus feature={p.feature} onSpan={(km) => set((x) => { x.feature!.spanKm = km; })} />}
 
         <h2>Print size</h2>
         <Row label="Size">
@@ -195,12 +219,14 @@ export function App() {
           </div>
         ) : null}
         {p.features.enabled && (<>
-          <Row label="Max labels"><input type="range" min={0} max={20} step={1} value={p.features.maxLabels} onChange={(e) => set((x) => { x.features.maxLabels = +e.target.value; })} /><span>{p.features.maxLabels}</span></Row>
+          <Row label="Max points"><input type="range" min={0} max={20} step={1} value={p.features.maxLabels} onChange={(e) => set((x) => { x.features.maxLabels = +e.target.value; })} /><span>{p.features.maxLabels}</span></Row>
+          <Row label="Max water names"><input type="range" min={0} max={10} step={1} value={p.features.maxWaterLabels} onChange={(e) => set((x) => { x.features.maxWaterLabels = +e.target.value; })} /><span>{p.features.maxWaterLabels}</span></Row>
           <div className="kinds">
             {LANDMARK_KINDS.map((k) => (
               <label key={k}><input type="checkbox" checked={p.features.kinds[k]} onChange={(e) => set((x) => { x.features.kinds[k] = e.target.checked; })} /> {KIND_LABELS[k]}</label>
             ))}
-            <label><input type="checkbox" checked={p.features.water} onChange={(e) => set((x) => { x.features.water = e.target.checked; })} /> Rivers &amp; lake outlines</label>
+            <label title="Draw rivers and lake shapes"><input type="checkbox" checked={p.features.water} onChange={(e) => set((x) => { x.features.water = e.target.checked; })} /> Water outlines</label>
+            <label title="Write river and lake names"><input type="checkbox" checked={p.features.waterLabels} onChange={(e) => set((x) => { x.features.waterLabels = e.target.checked; })} /> Water labels</label>
           </div>
           <Row label="Size (pt)"><input type="number" min={6} max={60} value={p.features.sizePt} onChange={(e) => set((x) => { x.features.sizePt = +e.target.value || 11; })} /></Row>
           <Row label="Label color"><input type="color" value={p.features.color} onChange={(e) => set((x) => { x.features.color = e.target.value; })} /></Row>
@@ -212,7 +238,7 @@ export function App() {
               <div className="lm" key={l.id}>
                 <input type="checkbox" title="Show" checked={!l.hidden} onChange={(e) => edit({ hidden: !e.target.checked })} />
                 <input type="text" title={KIND_LABELS[l.kind]} value={ov.name ?? l.name} onChange={(e) => edit({ name: e.target.value })} />
-                <select title="Label side" value={ov.side ?? 'auto'} disabled={l.kind === 'lake'} onChange={(e) => edit({ side: e.target.value as Side })}>
+                <select title="Label side" value={ov.side ?? 'auto'} disabled={l.kind === 'lake' || l.kind === 'river'} onChange={(e) => edit({ side: e.target.value as Side })}>
                   <option value="auto">Auto</option><option value="right">Right</option><option value="left">Left</option>
                   <option value="above">Above</option><option value="below">Below</option>
                 </select>

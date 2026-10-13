@@ -1,12 +1,14 @@
 /** Shared by the Cloudflare Worker (production) and the Vite dev server (local). */
 const UA = 'hike-plot/0.1 (https://hike.bobsabayesian.io)';
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
-/** Tried in order. The first two are the official instances; the others are community mirrors. */
+/**
+ * Tried in order. The main server sometimes refuses requests from Cloudflare's network (HTTP 521), so the
+ * list leads with independent operators. Mirrors that timed out on every probe were left out.
+ */
 export const OVERPASS_HOSTS = [
   'https://overpass-api.de/api/interpreter',
-  'https://lz4.overpass-api.de/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
 ];
 
 const json = (data: unknown, status = 200) =>
@@ -41,6 +43,15 @@ export function normalizeFeatures(elements: any[]) {
   }
   return { landmarks, water };
 }
+
+/** Overpass tag filters per point kind (each is combined with a name filter). */
+const NODE_CLAUSES: Record<string, string[]> = {
+  peak: ['["natural"="peak"]'],
+  pass: ['["natural"="saddle"]', '["mountain_pass"="yes"]'],
+  hut: ['["tourism"~"^(alpine_hut|wilderness_hut)$"]'],
+  viewpoint: ['["tourism"="viewpoint"]'],
+  trailhead: ['["highway"="trailhead"]'],
+};
 
 /** Water queries get slow and flaky past this span (degrees); skip them rather than fail. */
 const WATER_MAX_SPAN = 0.35;
@@ -187,16 +198,23 @@ async function route(url: URL): Promise<Response> {
       if ([s, n, w, e].some((v) => v === undefined)) return json({ error: 'missing bbox' }, 400);
       if ((n! - s!) > 1 || (e! - w!) > 1) return json({ error: 'area too large for landmarks' }, 400);
       const bb = `(${s},${w},${n},${e})`;
+      // Ask only for what the client shows: fewer clauses means a cheaper query on a busy public server.
+      // With no params at all (older clients) everything is requested.
+      const kindsParam = url.searchParams.get('kinds');
+      const kinds = kindsParam === null ? Object.keys(NODE_CLAUSES) : kindsParam.split(',').filter((k) => k in NODE_CLAUSES);
+      const flag = (k: string) => (url.searchParams.has(k) ? url.searchParams.get(k) === '1' : true);
+      const wantLakes = flag('lakes');
+      const wantRivers = flag('rivers');
       const nodeQuery = `[out:json][timeout:20];
-(node["natural"="peak"]["name"]${bb};node["natural"="saddle"]["name"]${bb};node["mountain_pass"="yes"]["name"]${bb};node["tourism"~"^(alpine_hut|wilderness_hut|viewpoint)$"]["name"]${bb};node["highway"="trailhead"]["name"]${bb};);out body 300;`;
+(${kinds.flatMap((k) => NODE_CLAUSES[k]!).map((c) => `node${c}["name"]${bb};`).join('')});out body 300;`;
       const waterQuery = `[out:json][timeout:20];
-(way["natural"="water"]["name"]${bb};way["waterway"="river"]["name"]${bb};);out geom 150;`;
+(${wantLakes ? `way["natural"="water"]["name"]${bb};` : ''}${wantRivers ? `way["waterway"="river"]["name"]${bb};` : ''});out geom 150;`;
       // Point features are cheap and reliable; ways with geometry are what the public Overpass servers
       // time out on. Fetch them separately so a water failure never costs the landmarks.
       const waterTooBig = (n! - s!) > WATER_MAX_SPAN || (e! - w!) > WATER_MAX_SPAN;
       const [nodes, water] = await Promise.allSettled([
-        overpass(nodeQuery),
-        waterTooBig ? Promise.reject(new Error('area too large for water')) : overpass(waterQuery),
+        kinds.length ? overpass(nodeQuery) : Promise.resolve([]),
+        !wantLakes && !wantRivers ? Promise.resolve([]) : waterTooBig ? Promise.reject(new Error('area too large for water')) : overpass(waterQuery),
       ]);
       const why = (r: PromiseSettledResult<unknown>, part: string) =>
         r.status === 'rejected' ? `${part}: ${r.reason instanceof Error ? r.reason.message.replace('overpass unavailable: ', '') : 'failed'}` : '';

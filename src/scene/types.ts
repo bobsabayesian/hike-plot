@@ -22,6 +22,8 @@ export interface TextPrim {
   trackingMm: number;
   fontFamily: string;
   fontKey: 'sans' | 'serif';
+  /** degrees clockwise about (x, y); undefined = horizontal */
+  rotate?: number;
   color: string;
   opacity?: number;
 }
