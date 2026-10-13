@@ -2,6 +2,7 @@ import type { TrackPoint } from '../gpx/types';
 import type { BBox } from '../geo/project';
 import { defaultFeatures, type FeatureSettings, type Landmark } from '../features/types';
 import { defaultPens, PEN_INK, PEN_RED, type Pen } from './pens';
+import { defaultBorder, type BorderSettings } from './border';
 
 export interface PrintSize {
   id: string;
@@ -90,6 +91,8 @@ export interface Project {
   landscape: boolean;
   paper: string;
   page: PageSettings;
+  /** a single or double frame inside the page margin */
+  border: BorderSettings;
   points: TrackPoint[];
   /** typed-in geographic feature; used for the map view when there is no GPX */
   feature?: Feature;
@@ -167,6 +170,7 @@ export const defaultProject = (): Project => ({
   landscape: false,
   paper: '#f6f3ec',
   page: { margins: { top: DEFAULT_MARGIN_MM, right: DEFAULT_MARGIN_MM, bottom: DEFAULT_MARGIN_MM, left: DEFAULT_MARGIN_MM }, linked: true },
+  border: defaultBorder(PEN_INK),
   points: [],
   waypoints: [],
   lookup: {},

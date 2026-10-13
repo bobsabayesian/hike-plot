@@ -93,6 +93,7 @@ describe('a full poster really is one pen per layer', () => {
     p.features.waterLabels = true;
     p.north.enabled = true;
     p.north.style = 'rose';
+    p.border = { ...p.border, enabled: true, style: 'double', weightMm: 0.6 };
     p.terrain.labels.enabled = true;
     p.terrain.labels.density = 'dense';
     p.profile.labels = { extremes: true, yTicks: true, xTicks: true, sizePt: 9 };

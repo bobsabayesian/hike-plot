@@ -81,7 +81,7 @@ describe('removing a pen', () => {
     const p = defaultProject();
     const seen: string[] = [];
     mapPenRefs(p, (id) => { seen.push(id); return 'x'; });
-    expect(seen.length).toBe(9 + 2); // route, contours, profile, north, title, location, info, watermark, landmarks default + 2 overrides
+    expect(seen.length).toBe(10 + 2); // route, contours, profile, north, title, location, info, watermark, border, landmarks default + 2 overrides
     expect(p.route.pen).toBe('x');
     expect(p.terrain.pen).toBe('x');
     expect(p.profile.pen).toBe('x');
@@ -90,6 +90,7 @@ describe('removing a pen', () => {
     expect(p.text.location.pen).toBe('x');
     expect(p.text.info.pen).toBe('x');
     expect(p.watermarkPen).toBe('x');
+    expect(p.border.pen).toBe('x');
     expect(p.features.pens).toEqual({ default: 'x', overrides: { waterOutline: 'x', waterLabel: 'x' } });
   });
 });

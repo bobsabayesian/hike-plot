@@ -12,6 +12,7 @@ import type { LandmarkEntry, LandmarkPlacement } from '../features/select';
 import { penKeyOf, type OsmData } from '../features/types';
 import type { XY } from '../geo/clip';
 import { northBox, northPrims } from './north';
+import { borderPrims, layoutBorder } from './border';
 import { featurePenId, penFor } from './pens';
 import { formatLevel, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
 import type { Box } from '../features/select';
@@ -123,6 +124,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   const minMargin = Math.min(mg.top, mg.right, mg.bottom, mg.left);
   const t = p.text;
   const colorOf = (penId: string) => penFor(p.pens, penId).color;
+  // the border goes first so it is drawn under everything else
+  if (!layoutOnly) prims.push(...borderPrims(W, H, p.border, mg, colorOf(p.border.pen)));
   const fontFamily = FONTS[t.font];
   const anchor = t.align === 'left' ? 'start' : t.align === 'right' ? 'end' : 'middle';
   const contentL = mg.left;
@@ -230,6 +233,13 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
 
     if (!layoutOnly) {
       // The route and the landmark labels are worked out first: contour numbers have to stay clear of both.
+      // Labels may spill a little into the margin, but never onto or past the border.
+      const innerBorder = p.border.enabled ? layoutBorder(W, H, p.border, mg).rects.at(-1)!.x + p.border.weightMm / 2 + 1.5 : 0;
+      const withinBorder = (r: Rect): Rect => {
+        const x0 = Math.max(r.x, innerBorder);
+        const y0 = Math.max(r.y, innerBorder);
+        return { x: x0, y: y0, w: Math.min(r.x + r.w, W - innerBorder) - x0, h: Math.min(r.y + r.h, H - innerBorder) - y0 };
+      };
       const clean = p.points.length >= 2 ? cleanTrack(p.points, fit.metersPerMm * 0.1) : [];
       const routeXY: XY[] = clean.map((q) => fit.toMm(q.lat, q.lon));
 
@@ -240,7 +250,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           landmarks: [...p.waypoints, ...(osm?.landmarks ?? [])],
           water: osm?.water ?? [],
           fit, frame, route: routeXY,
-          labelBounds: { x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }, settings: p.features, sizeMm,
+          labelBounds: withinBorder({ x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }), settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,
           penFor: (kind) => penFor(p.pens, featurePenId(p.features, penKeyOf(kind))),
           fontFamily, fontKey: t.font, trackingMm: sizeMm * 0.05,

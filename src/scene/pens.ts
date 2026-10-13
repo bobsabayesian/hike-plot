@@ -46,6 +46,7 @@ export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   p.text.location.pen = fn(p.text.location.pen);
   p.text.info.pen = fn(p.text.info.pen);
   p.watermarkPen = fn(p.watermarkPen);
+  p.border.pen = fn(p.border.pen);
   p.features.pens.default = fn(p.features.pens.default);
   for (const k of Object.keys(p.features.pens.overrides) as FeaturePenKey[]) {
     const id = p.features.pens.overrides[k];
@@ -90,6 +91,7 @@ export function penUsage(p: Project): PenUse[] {
   if (p.text.location.visible) add(p.text.location.pen, 'Location');
   if (p.text.info.visible) add(p.text.info.pen, 'Route info');
   if (p.showWatermark) add(p.watermarkPen, 'Watermark');
+  if (p.border.enabled) add(p.border.pen, 'Border');
   if (p.features.enabled) {
     add(p.features.pens.default, 'Landmarks');
     for (const k of Object.keys(p.features.pens.overrides) as FeaturePenKey[]) {

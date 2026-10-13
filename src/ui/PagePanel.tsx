@@ -1,4 +1,6 @@
 import { clampMargins, posterMm, type Margins, type Project } from '../scene/project';
+import { layoutBorder } from '../scene/border';
+import { PenSelect } from './PensPanel';
 import { useStore } from '../store';
 
 const SIDES: { key: keyof Margins; label: string }[] = [
@@ -45,6 +47,40 @@ export function PagePanel({ project: p }: { project: Project }) {
         Distance from the paper edge to the map and text. Margins stay the same when you change the poster size.
         {clamped ? ' Reduced to leave room for the content (at least 20% of the page each way).' : ''}
       </div>
+      <h2>Border</h2>
+      <div className="row">
+        <label><input type="checkbox" checked={p.border.enabled} onChange={(e) => set((x) => { x.border.enabled = e.target.checked; })} /> Draw a border</label>
+      </div>
+      {p.border.enabled && (() => {
+        const lay = layoutBorder(w, h, p.border, used);
+        return (<>
+          <div className="row">
+            <label>Style</label>
+            <select value={p.border.style} onChange={(e) => set((x) => { x.border.style = e.target.value as 'single' | 'double'; })}>
+              <option value="single">Single line</option><option value="double">Double line</option>
+            </select>
+          </div>
+          <div className="row">
+            <label>From edge</label>
+            <input type="number" min={0} step={step} value={marginToUnits(p.border.offsetMm, p.units)} onChange={(e) => set((x) => { x.border.offsetMm = marginFromUnits(+e.target.value, x.units); })} />
+            <span className="unit">{unit}</span>
+          </div>
+          {p.border.style === 'double' && (
+            <div className="row">
+              <label>Gap between</label>
+              <input type="number" min={0} step={step / 2} value={marginToUnits(p.border.gapMm, p.units)} onChange={(e) => set((x) => { x.border.gapMm = marginFromUnits(+e.target.value, x.units); })} />
+              <span className="unit">{unit}</span>
+            </div>
+          )}
+          <div className="row">
+            <label>Line weight</label>
+            <input type="number" min={0.1} max={3} step={0.1} value={p.border.weightMm} onChange={(e) => set((x) => { x.border.weightMm = Math.max(0.1, +e.target.value || 0.5); })} />
+            <span className="unit">mm</span>
+          </div>
+          <div className="row"><label>Pen</label><PenSelect pens={p.pens} value={p.border.pen} onChange={(id) => set((x) => { x.border.pen = id!; })} /></div>
+          {lay.clamped && <div className="err">Pulled in to fit inside the smallest margin: now {marginToUnits(lay.offsetMm, p.units)} {unit} from the edge{p.border.style === 'double' ? `, ${marginToUnits(lay.gapMm, p.units)} ${unit} apart` : ''}. Widen the margins for more room.</div>}
+        </>);
+      })()}
     </>
   );
 }
