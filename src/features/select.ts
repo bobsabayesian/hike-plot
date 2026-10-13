@@ -129,6 +129,20 @@ function routeHits(route: XY[], b: Box): boolean {
   return false;
 }
 
+/** Length of route (mm) that lies inside the box: how badly a label would cross it. */
+export function routeLengthIn(route: XY[], b: Box): number {
+  if (route.length < 2) return 0;
+  const c = Math.cos(-b.ang);
+  const s = Math.sin(-b.ang);
+  const local = route.map(([x, y]): XY => [(x - b.cx) * c - (y - b.cy) * s, (x - b.cx) * s + (y - b.cy) * c]);
+  const rect = { x: -b.w / 2, y: -b.h / 2, w: b.w, h: b.h };
+  let total = 0;
+  for (let i = 1; i < local.length; i++)
+    for (const piece of clipPolyline([local[i - 1]!, local[i]!], rect))
+      for (let k = 1; k < piece.length; k++) total += Math.hypot(piece[k]![0] - piece[k - 1]![0], piece[k]![1] - piece[k - 1]![1]);
+  return total;
+}
+
 /**
  * OpenStreetMap splits a long river into many ways. Join pieces of the same name that share an end point so a
  * river is labeled once, and along its longest clear stretch.
@@ -365,6 +379,13 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
     const forced = ov.side && ov.side !== 'auto';
     const sides = c.marker ? sideOrder(ov.side ?? 'auto') : (['middle'] as const);
 
+    // A feature that sits on the route (a trailhead is where the route starts) can't avoid it on every side,
+    // and one the user chose from the list should be drawn regardless. For those, if no side is clear,
+    // take the side that crosses the route least instead of giving up.
+    const onRoute = c.marker && route.length > 1 && distToPolyline([c.x, c.y], route) < markerR * 2 + sizeMm;
+    const relax = !!ov.pinned || onRoute;
+    const fallbacks: { label: PlacedLabel; box: Box; crossing: number }[] = [];
+
     for (const side of sides) {
       let label: PlacedLabel;
       let box: Box;
@@ -389,13 +410,24 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
         label = { ...base, x: c.x, y: c.y + sizeMm * 0.35, anchor: 'middle' };
         box = boxAt(c.x - w / 2, c.y - sizeMm * 0.55, c.x + w / 2, c.y + sizeMm * 0.45);
       }
-      const clear = insideBounds(box, lb) && !routeHits(route, box) && !taken.some((t) => overlap(t, box)) && !(c.marker && side !== 'middle' && overlap(box, markerBox));
-      if (clear || forced) {
+      const inside = insideBounds(box, lb);
+      const labelsFree = !taken.some((t) => overlap(t, box)) && !(c.marker && side !== 'middle' && overlap(box, markerBox));
+      const crossesRoute = routeHits(route, box);
+      if ((inside && labelsFree && !crossesRoute) || forced) {
         taken.push(box);
         if (c.marker) taken.push(markerBox);
         labels.push(label);
         return true;
       }
+      if (inside && labelsFree) fallbacks.push({ label, box, crossing: routeLengthIn(route, box) });
+    }
+
+    if (relax && fallbacks.length) {
+      const best = fallbacks.reduce((p, q) => (q.crossing < p.crossing ? q : p));
+      taken.push(best.box);
+      if (c.marker) taken.push(markerBox);
+      labels.push(best.label);
+      return true;
     }
     return false;
   };
