@@ -28,3 +28,6 @@ button.primary { background:var(--accent); color:#fff; border-color:var(--accent
 .item input[type=text] { min-width:0; padding:4px; border:1px solid var(--line); border-radius:4px; background:transparent; color:inherit; font:inherit; }
 .item button { padding:2px 0; }
 .hint { color:var(--muted); font-size:12px; margin:2px 0 8px; }
+.kinds { display:grid; grid-template-columns:1fr 1fr; gap:2px 8px; margin:6px 0; font-size:12px; }
+.lm { display:grid; grid-template-columns:20px 1fr 70px; gap:4px; margin:4px 0; align-items:center; }
+.lm input[type=text], .lm select { min-width:0; padding:4px; border:1px solid var(--line); border-radius:4px; background:transparent; color:inherit; font:inherit; }

@@ -2,6 +2,7 @@ import { bbox, haversine, type BBox } from './geo/project';
 import type { TrackPoint } from './gpx/types';
 import type { Feature } from './scene/project';
 import { computeStats } from './geo/stats';
+import type { OsmData } from './features/types';
 
 async function api<T>(path: string): Promise<T> {
   const r = await fetch(path);
@@ -36,4 +37,13 @@ export async function nearestPeakName(pts: TrackPoint[], maxM = 1500): Promise<s
     if (d <= maxM && (!best || d < best.d)) best = { name: pk.name, d };
   }
   return best?.name;
+}
+
+/** Named landmarks and water lines inside `b` (at most ~1 degree across). */
+export async function fetchFeatures(b: BBox): Promise<OsmData> {
+  const qs = new URLSearchParams({
+    minLat: String(b.minLat), maxLat: String(b.maxLat), minLon: String(b.minLon), maxLon: String(b.maxLon),
+  });
+  const d = await api<Pick<OsmData, 'landmarks' | 'water'>>(`/api/features?${qs}`);
+  return { ...d, covers: b };
 }

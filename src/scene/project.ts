@@ -1,5 +1,6 @@
 import type { TrackPoint } from '../gpx/types';
 import type { BBox } from '../geo/project';
+import { defaultFeatures, type FeatureSettings, type Landmark } from '../features/types';
 
 export interface PrintSize {
   id: string;
@@ -54,8 +55,11 @@ export interface Project {
   points: TrackPoint[];
   /** typed-in geographic feature; used for the map view when there is no GPX */
   feature?: Feature;
+  /** named <wpt> entries from the GPX */
+  waypoints: Landmark[];
   /** names found online for the loaded GPX */
   lookup: Lookup;
+  features: FeatureSettings;
   units: 'imperial' | 'metric';
   route: { color: string; weightMm: number; style: StrokeStyle };
   terrain: {
@@ -93,7 +97,9 @@ export const defaultProject = (): Project => ({
   landscape: false,
   paper: '#f6f3ec',
   points: [],
+  waypoints: [],
   lookup: {},
+  features: defaultFeatures(),
   units: 'imperial',
   route: { color: '#b4441f', weightMm: 0.9, style: 'solid' },
   terrain: {

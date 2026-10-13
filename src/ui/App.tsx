@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
-import { parseGpx } from '../gpx/parse';
-import { sampleTrack } from '../sample';
-import { buildScene, viewBBox, autoValues } from '../scene/buildScene';
+import { parseGpx, parseWaypoints } from '../gpx/parse';
+import { sampleTrack, sampleWaypoints } from '../sample';
+import { KIND_LABELS, LANDMARK_KINDS, type Side } from '../features/types';
+import { composeScene, viewBBox, autoValues } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
 import { sceneToSvg } from '../export/svg';
@@ -31,7 +32,7 @@ function download(name: string, data: string | Blob, type: string) {
 }
 
 export function App() {
-  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, searchFeature, busy, notice } = useStore();
+  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, osm, osmStatus, osmError, loadOsm, searchFeature, busy, notice } = useStore();
   const [query, setQuery] = useState('');
   const [err, setErr] = useState('');
   const [over, setOver] = useState(false);
@@ -41,9 +42,19 @@ export function App() {
   const [pngBusy, setPngBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const scene = useMemo(() => buildScene(p, terrain), [p, terrain]);
+  const composed = useMemo(() => composeScene(p, terrain, osm), [p, terrain, osm]);
+  const scene = composed.scene;
   const need = useMemo(() => viewBBox(p), [p]);
   const auto = useMemo(() => autoValues(p, p.points.length ? computeStats(p.points) : undefined), [p]);
+
+  // Fetch landmarks/water whenever the visible area is not covered by what we already have.
+  useEffect(() => {
+    if (!p.features.enabled || !need) return;
+    const c = osm?.covers;
+    if (c && need.minLat >= c.minLat && need.maxLat <= c.maxLat && need.minLon >= c.minLon && need.maxLon <= c.maxLon) return;
+    const t = setTimeout(() => loadOsm(padBBox(need, 0.05)), 600);
+    return () => clearTimeout(t);
+  }, [need, p.features.enabled, osm, loadOsm]);
 
   // Fetch terrain whenever the visible map area is not covered by what we already have.
   useEffect(() => {
@@ -63,8 +74,8 @@ export function App() {
   async function load(file?: File) {
     if (!file) return;
     try {
-      const points = parseGpx(await file.text());
-      loadPoints(points);
+      const xml = await file.text();
+      loadPoints(parseGpx(xml), true, parseWaypoints(xml));
       setErr('');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not read file');
@@ -85,7 +96,7 @@ export function App() {
           Drop a .gpx file here, or click to browse
           <input ref={input} type="file" accept=".gpx" hidden onChange={(e) => load(e.target.files?.[0])} />
         </div>
-        <div className="row"><button onClick={() => loadPoints(sampleTrack(), false)}>Use sample route</button></div>
+        <div className="row"><button onClick={() => { const t = sampleTrack(); loadPoints(t, false, sampleWaypoints(t)); }}>Use sample route</button></div>
         {err && <div className="err">{err}</div>}
         <h2>Or search a feature</h2>
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (query.trim()) searchFeature(query.trim()); }}>
@@ -144,6 +155,40 @@ export function App() {
           <Row label="Color"><input type="color" value={p.terrain.color} onChange={(e) => set((x) => { x.terrain.color = e.target.value; })} /></Row>
           <Row label="Weight"><input type="range" min={0.05} max={0.6} step={0.01} value={p.terrain.weightMm} onChange={(e) => set((x) => { x.terrain.weightMm = +e.target.value; x.terrain.indexWeightMm = +e.target.value * 2; })} /></Row>
           <Row label="Opacity"><input type="range" min={0.1} max={1} step={0.05} value={p.terrain.opacity} onChange={(e) => set((x) => { x.terrain.opacity = +e.target.value; })} /></Row>
+        </>)}
+
+        <h2>Landmarks</h2>
+        <Row label="Show">
+          <input type="checkbox" checked={p.features.enabled} onChange={(e) => set((x) => { x.features.enabled = e.target.checked; })} />
+          <span>{osmStatus === 'loading' ? 'Loading landmarks…' : ''}</span>
+        </Row>
+        {osmError && <div className="err">{osmError}</div>}
+        {p.features.enabled && (<>
+          <Row label="Max labels"><input type="range" min={0} max={20} step={1} value={p.features.maxLabels} onChange={(e) => set((x) => { x.features.maxLabels = +e.target.value; })} /><span>{p.features.maxLabels}</span></Row>
+          <div className="kinds">
+            {LANDMARK_KINDS.map((k) => (
+              <label key={k}><input type="checkbox" checked={p.features.kinds[k]} onChange={(e) => set((x) => { x.features.kinds[k] = e.target.checked; })} /> {KIND_LABELS[k]}</label>
+            ))}
+            <label><input type="checkbox" checked={p.features.water} onChange={(e) => set((x) => { x.features.water = e.target.checked; })} /> Rivers &amp; lake outlines</label>
+          </div>
+          <Row label="Size (pt)"><input type="number" min={6} max={60} value={p.features.sizePt} onChange={(e) => set((x) => { x.features.sizePt = +e.target.value || 11; })} /></Row>
+          <Row label="Label color"><input type="color" value={p.features.color} onChange={(e) => set((x) => { x.features.color = e.target.value; })} /></Row>
+          <Row label="Water color"><input type="color" value={p.features.waterColor} onChange={(e) => set((x) => { x.features.waterColor = e.target.value; })} /></Row>
+          {composed.landmarks?.map((l) => {
+            const ov = p.features.overrides[l.id] ?? {};
+            const edit = (patch: Partial<typeof ov>) => set((x) => { x.features.overrides[l.id] = { ...x.features.overrides[l.id], ...patch }; });
+            return (
+              <div className="lm" key={l.id}>
+                <input type="checkbox" title="Show" checked={!l.hidden} onChange={(e) => edit({ hidden: !e.target.checked })} />
+                <input type="text" title={KIND_LABELS[l.kind]} value={ov.name ?? l.name} onChange={(e) => edit({ name: e.target.value })} />
+                <select title="Label side" value={ov.side ?? 'auto'} disabled={l.kind === 'lake'} onChange={(e) => edit({ side: e.target.value as Side })}>
+                  <option value="auto">Auto</option><option value="right">Right</option><option value="left">Left</option>
+                  <option value="above">Above</option><option value="below">Below</option>
+                </select>
+                {!l.placed && !l.hidden && <span className="hint" title="No room for this label">no room</span>}
+              </div>
+            );
+          })}
         </>)}
 
         <h2>Elevation profile</h2>

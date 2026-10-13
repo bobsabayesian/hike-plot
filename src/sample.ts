@@ -1,4 +1,5 @@
 import type { TrackPoint } from './gpx/types';
+import type { Landmark } from './features/types';
 
 /** Synthetic out-and-back summit hike so the editor can be tried without a GPX file. */
 export function sampleTrack(): TrackPoint[] {
@@ -14,4 +15,13 @@ export function sampleTrack(): TrackPoint[] {
     pts.push({ lat, lon, ele, time: t0 + u * 6 * 3600e3 });
   }
   return pts;
+}
+
+export function sampleWaypoints(pts: TrackPoint[]): Landmark[] {
+  const top = pts.reduce((a, b) => ((b.ele ?? 0) > (a.ele ?? 0) ? b : a));
+  const start = pts[0]!;
+  return [
+    { id: 'wpt-0', name: 'Summit', kind: 'waypoint', lat: top.lat, lon: top.lon, ele: top.ele },
+    { id: 'wpt-1', name: 'Trailhead', kind: 'waypoint', lat: start.lat, lon: start.lon, ele: start.ele },
+  ];
 }

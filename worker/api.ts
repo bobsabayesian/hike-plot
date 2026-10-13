@@ -9,6 +9,33 @@ const json = (data: unknown, status = 200) =>
     headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600, s-maxage=86400' },
   });
 
+/** Overpass elements -> the landmarks and water lines the client draws. */
+export function normalizeFeatures(elements: any[]) {
+  const landmarks: any[] = [];
+  const water: any[] = [];
+  for (const el of elements) {
+    const t = el.tags ?? {};
+    if (!t.name) continue;
+    if (el.type === 'node') {
+      const kind =
+        t.natural === 'peak' ? 'peak'
+        : t.natural === 'saddle' || t.mountain_pass === 'yes' ? 'pass'
+        : t.tourism === 'alpine_hut' || t.tourism === 'wilderness_hut' ? 'hut'
+        : t.tourism === 'viewpoint' ? 'viewpoint'
+        : t.highway === 'trailhead' ? 'trailhead'
+        : undefined;
+      if (!kind) continue;
+      const ele = Number.parseFloat(String(t.ele ?? ''));
+      landmarks.push({ id: `n${el.id}`, name: t.name, kind, lat: el.lat, lon: el.lon, ...(Number.isFinite(ele) ? { ele } : {}) });
+    } else if (el.type === 'way' && Array.isArray(el.geometry) && el.geometry.length > 1) {
+      const kind = t.natural === 'water' ? 'lake' : t.waterway === 'river' || t.waterway === 'stream' ? 'river' : undefined;
+      if (!kind) continue;
+      water.push({ id: `w${el.id}`, kind, name: t.name, coords: el.geometry.map((g: any) => [g.lat, g.lon]) });
+    }
+  }
+  return { landmarks, water };
+}
+
 const num = (v: string | null) => (v !== null && v.trim() !== '' && Number.isFinite(+v) ? +v : undefined);
 
 export async function handleApi(req: Request): Promise<Response | null> {
@@ -76,6 +103,22 @@ async function route(url: URL): Promise<Response> {
       return json({
         peaks: (d.elements ?? []).map((x: any) => ({ name: x.tags.name, lat: x.lat, lon: x.lon, ele: num(x.tags.ele ?? null) })),
       });
+    }
+    case '/api/features': {
+      const [s, n, w, e] = ['minLat', 'maxLat', 'minLon', 'maxLon'].map((k) => num(url.searchParams.get(k)));
+      if ([s, n, w, e].some((v) => v === undefined)) return json({ error: 'missing bbox' }, 400);
+      if ((n! - s!) > 1 || (e! - w!) > 1) return json({ error: 'area too large for landmarks' }, 400);
+      const bb = `(${s},${w},${n},${e})`;
+      const query = `[out:json][timeout:25];
+(node["natural"="peak"]["name"]${bb};node["natural"="saddle"]["name"]${bb};node["mountain_pass"="yes"]["name"]${bb};node["tourism"~"^(alpine_hut|wilderness_hut|viewpoint)$"]["name"]${bb};node["highway"="trailhead"]["name"]${bb};);out body 300;
+(way["natural"="water"]["name"]${bb};way["waterway"~"^(river|stream)$"]["name"]${bb};);out geom 200;`;
+      const r = await fetch(OVERPASS, {
+        method: 'POST',
+        headers: { 'user-agent': UA, 'content-type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+      });
+      if (!r.ok) return json({ error: 'overpass unavailable' }, 502);
+      return json(normalizeFeatures(((await r.json()) as any).elements ?? []));
     }
     default:
       return json({ error: 'not found' }, 404);

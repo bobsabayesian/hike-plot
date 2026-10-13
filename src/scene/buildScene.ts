@@ -7,6 +7,10 @@ import {
 } from '../geo/stats';
 import { autoInterval, contourPaths, fieldRange } from '../topo/contours';
 import type { TerrainField } from '../topo/terrain';
+import { landmarkPrims, waterPrims } from '../features/draw';
+import type { LandmarkEntry } from '../features/select';
+import type { OsmData } from '../features/types';
+import type { XY } from '../geo/clip';
 import type { Prim, Scene } from './types';
 import { posterMm, type InfoItem, type Placement, type Project, type StrokeStyle } from './project';
 
@@ -73,9 +77,9 @@ export function autoValues(p: Project, stats?: TrackStats) {
 interface Block { height: number; gapAfter: number; draw: (yTop: number) => Prim[] }
 
 export interface View { frame: Rect; fit: Fit; bbox: BBox }
-export interface Composed { scene: Scene; view?: View }
+export interface Composed { scene: Scene; view?: View; landmarks?: LandmarkEntry[] }
 
-function compose(p: Project, terrain?: TerrainField, layoutOnly = false): Composed {
+function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: OsmData): Composed {
   const { w: W, h: H } = posterMm(p);
   const prims: Prim[] = [];
   const m = Math.min(W, H) * 0.07;
@@ -168,6 +172,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false): Compos
   const gap = m * 0.4;
   const hasMap = p.points.length >= 2 || !!p.feature;
   let view: View | undefined;
+  let landmarks: LandmarkEntry[] | undefined;
   if (hasMap) {
     const profileH = p.profile.enabled && p.profile.position === 'bottom' && p.points.length ? H * 0.09 : 0;
     const frame: Rect = { x: m, y: topCursor, w: innerW, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) };
@@ -187,9 +192,13 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false): Compos
         if (paths.index) prims.push({ kind: 'path', d: paths.index, color: tc.color, mode: 'stroke', widthMm: tc.indexWeightMm, opacity: tc.opacity });
       }
 
+      if (p.features.enabled && p.features.water && osm) prims.push(...waterPrims(osm.water, fit, frame, p.features));
+
+      let routeXY: XY[] = [];
       if (p.points.length >= 2) {
         const clean = cleanTrack(p.points, fit.metersPerMm * 0.1);
         const xy = clean.map((q) => fit.toMm(q.lat, q.lon));
+        routeXY = xy;
 
         if (p.profile.enabled) {
           const corner = p.profile.position === 'corner';
@@ -219,13 +228,28 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false): Compos
           ...dashFor(p.route.style, p.route.weightMm),
         });
       }
+
+      if (p.features.enabled) {
+        const sizeMm = p.features.sizePt * PT;
+        const out = landmarkPrims({
+          landmarks: [...p.waypoints, ...(osm?.landmarks ?? [])],
+          water: osm?.water ?? [],
+          fit, frame, route: routeXY,
+          labelBounds: { x: frame.x - m * 0.5, y: frame.y - m * 0.5, w: frame.w + m, h: frame.h + m * 0.5 }, settings: p.features, sizeMm,
+          markerR: Math.min(W, H) * 0.0045,
+          fontFamily, fontKey: t.font, trackingMm: sizeMm * 0.05,
+        });
+        prims.push(...out.prims);
+        landmarks = out.entries;
+      }
     }
   }
 
-  return { scene: { widthMm: W, heightMm: H, paper: p.paper, prims }, view };
+  return { scene: { widthMm: W, heightMm: H, paper: p.paper, prims }, view, landmarks };
 }
 
-export const buildScene = (p: Project, terrain?: TerrainField): Scene => compose(p, terrain).scene;
+export const composeScene = (p: Project, terrain?: TerrainField, osm?: OsmData): Composed => compose(p, terrain, false, osm);
+export const buildScene = (p: Project, terrain?: TerrainField, osm?: OsmData): Scene => compose(p, terrain, false, osm).scene;
 
 /** The geographic area the map frame shows; terrain must cover this. Cheap (no route/contour work). */
 export const viewBBox = (p: Project): BBox | undefined => compose(p, undefined, true).view?.bbox;
