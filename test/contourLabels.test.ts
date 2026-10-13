@@ -240,7 +240,7 @@ describe('contour numbers in the poster', () => {
     expect(await words(true)).toEqual(await words(false));
   });
   it('take the text color and size they were given', async () => {
-    const { scene } = await make((p) => { p.terrain.labels.enabled = true; p.terrain.labels.color = '#336699'; p.terrain.labels.sizePt = 12; });
+    const { scene } = await make((p) => { p.terrain.labels.enabled = true; p.pens[0]!.color = '#336699'; p.terrain.labels.sizePt = 12; });
     const t = numbers(scene)[0] as { color: string; sizeMm: number };
     expect(t.color).toBe('#336699');
     expect(t.sizeMm).toBeCloseTo((12 * 25.4) / 72, 6);

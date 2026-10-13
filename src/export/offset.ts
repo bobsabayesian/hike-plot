@@ -21,14 +21,16 @@ export function passOffsets(widthMm: number, penMm: number, minPasses = 1): numb
 }
 
 /** The line weights in a scene that the plotter export draws as several passes, for the export panel. */
-export function summarizePasses(
-  prims: { kind: string; mode?: string; widthMm?: number; minPasses?: number }[],
-  penMm: number,
+export function summarizePasses<P extends { kind: string; mode?: string; widthMm?: number; minPasses?: number }>(
+  prims: P[],
+  /** one tip width for everything, or a function giving each primitive its pen's tip */
+  tip: number | ((p: P) => number),
 ): { widthMm: number; passes: number; forced: boolean }[] {
   const seen = new Map<string, { widthMm: number; passes: number; forced: boolean }>();
   for (const p of prims) {
     if (p.kind !== 'path' || p.mode !== 'stroke') continue;
     const widthMm = +(p.widthMm ?? 0.5).toFixed(2);
+    const penMm = typeof tip === 'number' ? tip : tip(p);
     const passes = passCount(widthMm, penMm, p.minPasses);
     if (passes > 1) seen.set(`${widthMm}|${passes}`, { widthMm, passes, forced: passCount(widthMm, penMm) < passes });
   }

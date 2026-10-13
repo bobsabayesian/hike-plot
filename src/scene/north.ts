@@ -7,6 +7,8 @@ export interface NorthOpts {
   corner: Corner;
   sizeMm: number;
   color: string;
+  /** pen id, carried onto the drawn lines */
+  pen?: string;
   weightMm: number;
   fontFamily: string;
   fontKey: 'sans' | 'serif';
@@ -38,12 +40,12 @@ export function northPrims(frame: Rect, o: NorthOpts): Prim[] {
   const { x: x0, y: y0 } = northBox(frame, o.corner, s);
   const cx = x0 + s / 2;
   const prims: Prim[] = [];
-  const line = (d: string) => prims.push({ kind: 'path', d, color: o.color, mode: 'stroke', widthMm: o.weightMm, round: true });
-  const fill = (d: string) => prims.push({ kind: 'path', d, color: o.color, mode: 'fill' });
+  const line = (d: string) => prims.push({ kind: 'path', d, color: o.color, pen: o.pen, mode: 'stroke', widthMm: o.weightMm, round: true });
+  const fill = (d: string) => prims.push({ kind: 'path', d, color: o.color, pen: o.pen, mode: 'fill' });
   const label = (t: string, x: number, baseline: number, size: number) =>
     prims.push({
       kind: 'text', text: t, x, y: baseline, anchor: 'middle', sizeMm: size, trackingMm: 0,
-      fontFamily: o.fontFamily, fontKey: o.fontKey, color: o.color,
+      fontFamily: o.fontFamily, fontKey: o.fontKey, color: o.color, pen: o.pen,
     });
 
   switch (o.style) {

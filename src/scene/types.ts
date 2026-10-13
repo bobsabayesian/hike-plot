@@ -9,6 +9,8 @@ export interface PathPrim {
   dash?: number[];
   round?: boolean;
   opacity?: number;
+  /** id of the pen this is drawn with (sets the tip width in the plotter export) */
+  pen?: string;
   /** plotter export: draw at least this many passes of the pen, even if the line is thinner than that implies */
   minPasses?: number;
 }
@@ -26,6 +28,8 @@ export interface TextPrim {
   fontKey: 'sans' | 'serif';
   /** degrees clockwise about (x, y); undefined = horizontal */
   rotate?: number;
+  /** id of the pen this is written with */
+  pen?: string;
   color: string;
   opacity?: number;
 }

@@ -27,6 +27,7 @@ const build = async (edit: (p: ReturnType<typeof defaultProject>) => void = () =
   const terrain = await loadTerrain(viewBBox(p)!, cone);
   return { p, scene: buildScene(p, terrain) };
 };
+const colorOf = (p: ReturnType<typeof defaultProject>, id: string) => p.pens.find((x) => x.id === id)!.color;
 const paths = (s: Scene) => s.prims.filter((x): x is PathPrim => x.kind === 'path');
 const subs = (d: string) => (d.match(/M/g) ?? []).length;
 
@@ -81,14 +82,14 @@ describe('heavy contours in the plotter export', () => {
   it('are drawn as two passes of the pen, while regular contours stay a single pass', async () => {
     const { p, scene } = await build();
     const out = prepareScene(scene, 'plotter', fonts);
-    const count = (w: number, s: Scene) => paths(s).filter((x) => x.widthMm === w && x.color === p.terrain.color).length;
+    const count = (w: number, s: Scene) => paths(s).filter((x) => x.widthMm === w && x.color === colorOf(p, p.terrain.pen)).length;
     const heavyBefore = paths(scene).filter((x) => x.widthMm === p.terrain.indexWeightMm).length;
     const regularBefore = paths(scene).filter((x) => x.widthMm === p.terrain.weightMm).length;
     expect(heavyBefore).toBeGreaterThan(0);
     expect(regularBefore).toBeGreaterThan(0);
     // after: every stroke is the pen width, so count the prims that came from each
-    const total = paths(out).filter((x) => x.color === p.terrain.color).length;
-    const profileLine = paths(scene).filter((x) => x.color === p.terrain.color && x.widthMm !== p.terrain.weightMm && x.widthMm !== p.terrain.indexWeightMm).length;
+    const total = paths(out).filter((x) => x.color === colorOf(p, p.terrain.pen)).length;
+    const profileLine = paths(scene).filter((x) => x.color === colorOf(p, p.terrain.pen) && x.widthMm !== p.terrain.weightMm && x.widthMm !== p.terrain.indexWeightMm).length;
     expect(total).toBeGreaterThanOrEqual(regularBefore + heavyBefore * 2);
     expect(count(PLOTTER_PEN_MM, out)).toBe(total);
     expect(profileLine).toBeGreaterThan(0);

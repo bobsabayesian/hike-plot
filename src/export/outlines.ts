@@ -1,5 +1,6 @@
 import type { PathPrim, Scene, TextPrim } from '../scene/types';
 import { offsetPath, passOffsets } from './offset';
+import { penFor, type Pen } from '../scene/pens';
 
 interface PathCommand { type: string; x?: number; y?: number; x1?: number; y1?: number; x2?: number; y2?: number }
 interface GlyphLike {
@@ -58,20 +59,27 @@ function rotatedPathData(commands: PathCommand[], cx: number, cy: number, rot: n
 }
 
 export interface PrepareOptions {
-  /** plotter pen width in mm; heavier lines are drawn as several passes of this pen */
+  /** the pen palette: each primitive is drawn with the tip width of its pen */
+  pens?: Pen[];
+  /** tip width for anything without a pen (and when there is no palette); defaults to 0.3 mm */
   penMm?: number;
+}
+
+/** The tip width the plotter export uses for a primitive. */
+export function tipFor(p: { pen?: string }, opts: PrepareOptions): number {
+  return opts.pens && p.pen !== undefined ? penFor(opts.pens, p.pen).tipMm : (opts.penMm ?? PLOTTER_PEN_MM);
 }
 
 export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, opts: PrepareOptions = {}): Scene {
   if (mode === 'live') return scene;
   if (!fonts) throw new Error('Fonts are required to outline text');
   const plotter = mode === 'plotter';
-  const pen = opts.penMm ?? PLOTTER_PEN_MM;
   const prims = scene.prims.flatMap((p): Scene['prims'] => {
+    const pen = tipFor(p, opts);
     if (p.kind === 'text') {
       const path: PathPrim = plotter
-        ? { kind: 'path', d: textToPath(p, fonts), color: p.color, mode: 'stroke', widthMm: pen, round: true }
-        : { kind: 'path', d: textToPath(p, fonts), color: p.color, mode: 'fill', opacity: p.opacity };
+        ? { kind: 'path', d: textToPath(p, fonts), color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }
+        : { kind: 'path', d: textToPath(p, fonts), color: p.color, pen: p.pen, mode: 'fill', opacity: p.opacity };
       return [path];
     }
     if (!plotter) return [p];

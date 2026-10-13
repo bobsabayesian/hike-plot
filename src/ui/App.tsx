@@ -11,8 +11,11 @@ import { sceneToSvg } from '../export/svg';
 import { pngSize, sceneToPng } from '../export/png';
 import { loadFonts } from '../export/fonts';
 import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
-import { prepareScene, PLOTTER_PEN_MM, type ExportMode } from '../export/outlines';
+import { prepareScene, tipFor, type ExportMode } from '../export/outlines';
 import { summarizePasses } from '../export/offset';
+import { PenSelect, PensPanel } from './PensPanel';
+import { FEATURE_PEN_LABELS, penFor } from '../scene/pens';
+import type { FeaturePenKey } from '../features/types';
 import { PRINT_SIZES, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
 
 const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placement) => void }) => (
@@ -75,7 +78,6 @@ export function App() {
   const [over, setOver] = useState(false);
   const [paperInExport, setPaperInExport] = useState(false);
   const [mode, setMode] = useState<ExportMode>('print');
-  const [penMm, setPenMm] = useState(PLOTTER_PEN_MM);
   const [dpi, setDpi] = useState(150);
   const [pngBusy, setPngBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -112,7 +114,7 @@ export function App() {
     return () => { live = false; clearTimeout(t); };
   }, [need, p.terrain.enabled, terrain, setTerrain]);
   // Which line weights in this design become several passes with the chosen pen (plotter export).
-  const passes = useMemo(() => summarizePasses(scene.prims, penMm), [scene, penMm]);
+  const passes = useMemo(() => summarizePasses(scene.prims, (x) => tipFor(x as { pen?: string }, { pens: p.pens })), [scene, p.pens]);
   const previewSvg = useMemo(() => sceneToSvg(scene, { paper: true }), [scene]);
 
   async function load(file?: File) {
@@ -178,9 +180,11 @@ export function App() {
           </select>
         </Row>
 
+        <PensPanel project={p} scene={scene} />
+
         {hasTrack && (<>
         <h2>Route</h2>
-        <Row label="Color"><input type="color" value={p.route.color} onChange={(e) => set((x) => { x.route.color = e.target.value; })} /></Row>
+        <Row label="Pen"><PenSelect pens={p.pens} value={p.route.pen} onChange={(id) => set((x) => { x.route.pen = id!; })} /></Row>
         <Row label="Weight">
           <input type="range" min={0.2} max={3} step={0.1} value={p.route.weightMm} onChange={(e) => set((x) => { x.route.weightMm = +e.target.value; })} />
           <span>{p.route.weightMm.toFixed(1)} mm</span>
@@ -209,7 +213,7 @@ export function App() {
               {[4, 5, 10].map((n) => <option key={n} value={n}>{n}th line</option>)}
             </select>
           </Row>
-          <Row label="Color"><input type="color" value={p.terrain.color} onChange={(e) => set((x) => { x.terrain.color = e.target.value; })} /></Row>
+          <Row label="Pen"><PenSelect pens={p.pens} value={p.terrain.pen} onChange={(id) => set((x) => { x.terrain.pen = id!; })} /></Row>
           <Row label="Weight"><input type="range" min={0.05} max={0.6} step={0.01} value={p.terrain.weightMm} onChange={(e) => set((x) => { x.terrain.weightMm = +e.target.value; x.terrain.indexWeightMm = +e.target.value * 2; })} /></Row>
           <Row label="Opacity"><input type="range" min={0.1} max={1} step={0.05} value={p.terrain.opacity} onChange={(e) => set((x) => { x.terrain.opacity = +e.target.value; })} /></Row>
           {p.terrain.indexEvery > 0 && (<>
@@ -227,7 +231,6 @@ export function App() {
               </Row>
               <Row label="Break the line"><input type="checkbox" checked={p.terrain.labels.gap} onChange={(e) => set((x) => { x.terrain.labels.gap = e.target.checked; })} /><span>gap behind each number</span></Row>
               <Row label="Number size"><input type="number" min={5} max={30} value={p.terrain.labels.sizePt} onChange={(e) => set((x) => { x.terrain.labels.sizePt = +e.target.value || 8; })} /></Row>
-              <Row label="Number color"><input type="color" value={p.terrain.labels.color} onChange={(e) => set((x) => { x.terrain.labels.color = e.target.value; })} /></Row>
             </>)}
           </>)}
         </>)}
@@ -256,8 +259,20 @@ export function App() {
             <label title="Write river and lake names"><input type="checkbox" checked={p.features.waterLabels} onChange={(e) => set((x) => { x.features.waterLabels = e.target.checked; })} /> Water labels</label>
           </div>
           <Row label="Size (pt)"><input type="number" min={6} max={60} value={p.features.sizePt} onChange={(e) => set((x) => { x.features.sizePt = +e.target.value || 11; })} /></Row>
-          <Row label="Label color"><input type="color" value={p.features.color} onChange={(e) => set((x) => { x.features.color = e.target.value; })} /></Row>
-          <Row label="Water color"><input type="color" value={p.features.waterColor} onChange={(e) => set((x) => { x.features.waterColor = e.target.value; })} /></Row>
+          <Row label="Pen"><PenSelect pens={p.pens} value={p.features.pens.default} onChange={(id) => set((x) => { x.features.pens.default = id!; })} /></Row>
+          <details className="overrides">
+            <summary>Pen for each kind</summary>
+            {(Object.keys(FEATURE_PEN_LABELS) as FeaturePenKey[]).map((k) => (
+              <Row key={k} label={FEATURE_PEN_LABELS[k]}>
+                <PenSelect
+                  pens={p.pens}
+                  value={p.features.pens.overrides[k]}
+                  allowDefault={`Same as landmarks (${penFor(p.pens, p.features.pens.default).name})`}
+                  onChange={(id) => set((x) => { if (id === undefined) delete x.features.pens.overrides[k]; else x.features.pens.overrides[k] = id; })}
+                />
+              </Row>
+            ))}
+          </details>
           {composed.landmarks?.map((l) => {
             const ov = p.features.overrides[l.id] ?? {};
             const edit = (patch: Partial<typeof ov>) => set((x) => { x.features.overrides[l.id] = { ...x.features.overrides[l.id], ...patch }; });
@@ -309,8 +324,7 @@ export function App() {
               <option value="bottom">Bottom</option><option value="corner">Bottom corner</option>
             </select>
           </Row>
-          <Row label="Fill"><input type="color" value={p.profile.fill} onChange={(e) => set((x) => { x.profile.fill = e.target.value; })} /></Row>
-          <Row label="Stroke"><input type="color" value={p.profile.stroke} onChange={(e) => set((x) => { x.profile.stroke = e.target.value; })} /></Row>
+          <Row label="Pen"><PenSelect pens={p.pens} value={p.profile.pen} onChange={(id) => set((x) => { x.profile.pen = id!; })} /></Row>
           <Row label="Opacity"><input type="range" min={0} max={1} step={0.02} value={p.profile.opacity} onChange={(e) => set((x) => { x.profile.opacity = +e.target.value; })} /></Row>
                   <Row label="Label peaks"><input type="checkbox" checked={p.profile.labels.extremes} onChange={(e) => set((x) => { x.profile.labels.extremes = e.target.checked; })} /><span>highest and lowest point</span></Row>
           <Row label="Elevation ticks"><input type="checkbox" checked={p.profile.labels.yTicks} onChange={(e) => set((x) => { x.profile.labels.yTicks = e.target.checked; })} /></Row>
@@ -335,7 +349,7 @@ export function App() {
             </select>
           </Row>
           <Row label="Size"><input type="range" min={8} max={70} step={1} value={p.north.sizeMm} onChange={(e) => set((x) => { x.north.sizeMm = +e.target.value; })} /><span>{p.north.sizeMm} mm</span></Row>
-          <Row label="Color"><input type="color" value={p.north.color} onChange={(e) => set((x) => { x.north.color = e.target.value; })} /></Row>
+          <Row label="Pen"><PenSelect pens={p.pens} value={p.north.pen} onChange={(id) => set((x) => { x.north.pen = id!; })} /></Row>
           <Row label="Line weight"><input type="range" min={0.1} max={1} step={0.05} value={p.north.weightMm} onChange={(e) => set((x) => { x.north.weightMm = +e.target.value; })} /></Row>
         </>)}
 
@@ -345,7 +359,6 @@ export function App() {
             <option value="sans">Sans-serif</option><option value="serif">Serif</option>
           </select>
         </Row>
-        <Row label="Color"><input type="color" value={p.text.color} onChange={(e) => set((x) => { x.text.color = e.target.value; })} /></Row>
         <Row label="Tracking"><input type="range" min={0} max={0.5} step={0.01} value={p.text.trackingEm} onChange={(e) => set((x) => { x.text.trackingEm = +e.target.value; })} /></Row>
         <Row label="Align">
           <select value={p.text.align} onChange={(e) => set((x) => { x.text.align = e.target.value as Align; })}>
@@ -358,6 +371,7 @@ export function App() {
           <Row label="Text"><input type="text" placeholder={auto.title} value={p.text.title.value ?? ''} onChange={(e) => set((x) => { x.text.title.value = e.target.value || undefined; })} />
             <input type="checkbox" title="Show" checked={p.text.title.visible} onChange={(e) => set((x) => { x.text.title.visible = e.target.checked; })} /></Row>
           <Row label="Size (pt)"><input type="number" min={6} max={200} value={p.text.title.sizePt} onChange={(e) => set((x) => { x.text.title.sizePt = +e.target.value || 12; })} /></Row>
+          <Row label="Pen"><PenSelect pens={p.pens} value={p.text.title.pen} onChange={(id) => set((x) => { x.text.title.pen = id!; })} /></Row>
           <PlaceRow value={p.text.title.placement} onChange={(v) => set((x) => { x.text.title.placement = v; })} />
         </div>
 
@@ -367,6 +381,7 @@ export function App() {
             <input type="checkbox" title="Show" checked={p.text.location.visible} onChange={(e) => set((x) => { x.text.location.visible = e.target.checked; })} /></Row>
           <Row label="Coordinates"><input type="checkbox" checked={p.text.location.showCoords} onChange={(e) => set((x) => { x.text.location.showCoords = e.target.checked; })} /></Row>
           <Row label="Size (pt)"><input type="number" min={6} max={120} value={p.text.location.sizePt} onChange={(e) => set((x) => { x.text.location.sizePt = +e.target.value || 12; })} /></Row>
+          <Row label="Pen"><PenSelect pens={p.pens} value={p.text.location.pen} onChange={(id) => set((x) => { x.text.location.pen = id!; })} /></Row>
           <PlaceRow value={p.text.location.placement} onChange={(v) => set((x) => { x.text.location.placement = v; })} />
         </div>
 
@@ -379,6 +394,7 @@ export function App() {
             </select>
           </Row>
           <Row label="Size (pt)"><input type="number" min={6} max={120} value={p.text.info.sizePt} onChange={(e) => set((x) => { x.text.info.sizePt = +e.target.value || 12; })} /></Row>
+          <Row label="Pen"><PenSelect pens={p.pens} value={p.text.info.pen} onChange={(id) => set((x) => { x.text.info.pen = id!; })} /></Row>
           <PlaceRow value={p.text.info.placement} onChange={(v) => set((x) => { x.text.info.placement = v; })} />
           {p.text.info.items.map((it, i) => (
             <div className="item" key={it.key}>
@@ -394,6 +410,7 @@ export function App() {
         <Row label="Watermark">
           <label><input type="checkbox" checked={p.showWatermark} onChange={(e) => set((x) => { x.showWatermark = e.target.checked; })} /> Include attribution</label>
         </Row>
+        {p.showWatermark && <Row label="Watermark pen"><PenSelect pens={p.pens} value={p.watermarkPen} onChange={(id) => set((x) => { x.watermarkPen = id!; })} /></Row>}
         <Row label="Paper color">
           <label><input type="checkbox" checked={paperInExport} onChange={(e) => setPaperInExport(e.target.checked)} /> Include in SVG</label>
         </Row>
@@ -405,20 +422,15 @@ export function App() {
           </select>
         </Row>
         {mode === 'plotter' && (<>
-          <Row label="Pen width">
-            <select value={penMm} onChange={(e) => setPenMm(+e.target.value)}>
-              {[0.2, 0.25, 0.3, 0.4, 0.5, 0.7, 1].map((w) => <option key={w} value={w}>{w} mm</option>)}
-            </select>
-          </Row>
           <div className="hint">
-            Every line is drawn with this one pen. Heavier lines are repeated side by side:{' '}
-            {passes.length ? passes.map((x) => `${x.widthMm} mm = ${x.passes} passes${x.forced ? ' (kept heavier than the rest)' : ''}`).join(', ') : 'none at this pen width'}.
+            Every line is drawn with its pen's tip width. Heavier lines are repeated side by side:{' '}
+            {passes.length ? passes.map((x) => `${x.widthMm} mm = ${x.passes} passes${x.forced ? ' (kept heavier than the rest)' : ''}`).join(', ') : 'none with these pens'}.
           </div>
         </>)}
         <div className="row">
           <button className="primary" onClick={async () => {
             try {
-              const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { penMm });
+              const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { pens: p.pens });
               download('hike-poster.svg', sceneToSvg(out, { paper: paperInExport && mode !== 'plotter' }), 'image/svg+xml');
             } catch (e) {
               setErr(e instanceof Error ? e.message : 'SVG export failed');

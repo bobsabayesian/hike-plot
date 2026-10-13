@@ -1,6 +1,7 @@
 import type { TrackPoint } from '../gpx/types';
 import type { BBox } from '../geo/project';
 import { defaultFeatures, type FeatureSettings, type Landmark } from '../features/types';
+import { defaultPens, PEN_INK, PEN_RED, type Pen } from './pens';
 
 export interface PrintSize {
   id: string;
@@ -37,10 +38,11 @@ export interface InfoItem {
   value?: string;
 }
 
-export interface TitleBlock { visible: boolean; value?: string; sizePt: number; placement: Placement }
+export interface TitleBlock { visible: boolean; value?: string; sizePt: number; placement: Placement; pen: string }
 export interface LocationBlock extends TitleBlock { showCoords: boolean }
 export interface InfoBlock {
   visible: boolean;
+  pen: string;
   sizePt: number;
   placement: Placement;
   layout: 'row' | 'column';
@@ -72,17 +74,20 @@ export interface Project {
   lookup: Lookup;
   features: FeatureSettings;
   units: 'imperial' | 'metric';
-  route: { color: string; weightMm: number; style: StrokeStyle };
+  /** the pen palette every section picks from */
+  pens: Pen[];
+  route: { pen: string; weightMm: number; style: StrokeStyle };
   terrain: {
     enabled: boolean;
     /** meters; 0 = automatic */
     intervalM: number;
     /** every Nth contour is drawn heavier; 0 = none */
     indexEvery: number;
-    color: string;
     weightMm: number;
     indexWeightMm: number;
     opacity: number;
+    /** one pen for regular lines, heavy lines and the elevation numbers */
+    pen: string;
     /** elevation numbers written along the heavy contour lines */
     labels: {
       enabled: boolean;
@@ -93,14 +98,14 @@ export interface Project {
       /** leave a gap in the line behind the number (otherwise it sits just above the line) */
       gap: boolean;
       sizePt: number;
-      color: string;
     };
   };
   profile: {
     enabled: boolean;
     position: ProfilePosition;
-    fill: string;
-    stroke: string;
+    /** one pen for the line, fill, ticks and labels */
+    pen: string;
+    /** how strong the fill is in print and PNG (a plotter outlines it instead) */
     opacity: number;
     labels: {
       /** label the highest and lowest points */
@@ -117,12 +122,11 @@ export interface Project {
     style: NorthStyle;
     corner: Corner;
     sizeMm: number;
-    color: string;
+    pen: string;
     weightMm: number;
   };
   text: {
     font: FontKey;
-    color: string;
     trackingEm: number;
     align: Align;
     title: TitleBlock;
@@ -130,6 +134,7 @@ export interface Project {
     info: InfoBlock;
   };
   showWatermark: boolean;
+  watermarkPen: string;
 }
 
 export const defaultProject = (): Project => ({
@@ -141,26 +146,26 @@ export const defaultProject = (): Project => ({
   lookup: {},
   features: defaultFeatures(),
   units: 'imperial',
-  route: { color: '#b4441f', weightMm: 0.9, style: 'solid' },
+  pens: defaultPens(),
+  route: { pen: PEN_RED, weightMm: 0.9, style: 'solid' },
   terrain: {
     enabled: true, intervalM: 0, indexEvery: 5,
-    color: '#1f2a24', weightMm: 0.12, indexWeightMm: 0.25, opacity: 0.8,
-    labels: { enabled: false, density: 'normal', every: 1, gap: true, sizePt: 8, color: '#1f2a24' },
+    pen: PEN_INK, weightMm: 0.12, indexWeightMm: 0.25, opacity: 0.8,
+    labels: { enabled: false, density: 'normal', every: 1, gap: true, sizePt: 8 },
   },
   profile: {
-    enabled: true, position: 'bottom', fill: '#1f2a24', stroke: '#1f2a24', opacity: 0.12,
+    enabled: true, position: 'bottom', pen: PEN_INK, opacity: 0.12,
     labels: { extremes: false, yTicks: false, xTicks: false, sizePt: 9 },
   },
-  north: { enabled: false, style: 'arrow', corner: 'tr', sizeMm: 22, color: '#1f2a24', weightMm: 0.35 },
+  north: { enabled: false, style: 'arrow', corner: 'tr', sizeMm: 22, pen: PEN_INK, weightMm: 0.35 },
   text: {
     font: 'sans',
-    color: '#1f2a24',
     trackingEm: 0.12,
     align: 'left',
-    title: { visible: true, sizePt: 60, placement: 'bottom' },
-    location: { visible: true, sizePt: 18, placement: 'bottom', showCoords: true },
+    title: { visible: true, sizePt: 60, placement: 'bottom', pen: PEN_INK },
+    location: { visible: true, sizePt: 18, placement: 'bottom', showCoords: true, pen: PEN_INK },
     info: {
-      visible: true, sizePt: 22, placement: 'bottom', layout: 'row',
+      visible: true, pen: PEN_INK, sizePt: 22, placement: 'bottom', layout: 'row',
       items: [
         { key: 'distance', visible: true, label: 'Distance' },
         { key: 'gain', visible: true, label: 'Elevation gain' },
@@ -172,6 +177,7 @@ export const defaultProject = (): Project => ({
     },
   },
   showWatermark: true,
+  watermarkPen: PEN_INK,
 });
 
 export function posterMm(p: Pick<Project, 'sizeId' | 'landscape'>): { w: number; h: number } {

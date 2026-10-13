@@ -9,6 +9,7 @@ import type { PathPrim, Scene } from '../src/scene/types';
 
 const fake = { unitsPerEm: 1000, charToGlyph: () => ({ advanceWidth: 500, getPath: () => ({ toPathData: () => 'M0 0L1 1', commands: [{ type: 'M', x: 0, y: 0 }, { type: 'L', x: 1, y: 1 }] }) }) };
 const fonts = { sans: fake, serif: fake } as unknown as FontSet;
+const colorOf = (p: ReturnType<typeof defaultProject>, id: string) => p.pens.find((x) => x.id === id)!.color;
 const paths = (s: Scene) => s.prims.filter((p): p is PathPrim => p.kind === 'path');
 const nums = (d: string) => (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
 
@@ -116,23 +117,23 @@ describe('plotter export draws heavy lines as passes of one pen', () => {
   it('the 0.9 mm route becomes 3 passes with a 0.3 mm pen, in the same color', () => {
     const p = base();
     const scene = buildScene(p);
-    const before = paths(scene).filter((x) => x.widthMm === routeWidth(p) && x.color === p.route.color).length;
+    const before = paths(scene).filter((x) => x.widthMm === routeWidth(p) && x.color === colorOf(p, p.route.pen)).length;
     const out = prepareScene(scene, 'plotter', fonts);
-    const after = paths(out).filter((x) => x.color === p.route.color).length;
+    const after = paths(out).filter((x) => x.color === colorOf(p, p.route.pen)).length;
     expect(after).toBe(before * 3);
   });
   it('the passes lie side by side: they never touch the original width limits', () => {
     const p = base();
     p.route.style = 'solid';
     const out = prepareScene(buildScene(p), 'plotter', fonts);
-    const lines = paths(out).filter((x) => x.color === p.route.color);
+    const lines = paths(out).filter((x) => x.color === colorOf(p, p.route.pen));
     expect(lines).toHaveLength(3);
     const firstY = lines.map((l) => nums(l.d)[1]!);
     expect(new Set(firstY.map((v) => +v.toFixed(2))).size).toBe(3); // three distinct tracks
   });
   it('a different pen changes the pass count', () => {
     const scene = buildScene(base());
-    const count = (penMm: number) => paths(prepareScene(scene, 'plotter', fonts, { penMm })).filter((x) => x.color === base().route.color).length;
+    const count = (penMm: number) => paths(prepareScene(scene, 'plotter', fonts, { penMm })).filter((x) => x.color === colorOf(base(), base().route.pen)).length;
     const one = count(0.9);
     expect(count(0.3)).toBe(one * 3);
     expect(count(0.2)).toBe(Math.round((0.9 / 0.2)) * one);
@@ -142,7 +143,7 @@ describe('plotter export draws heavy lines as passes of one pen', () => {
     const p = base();
     p.route.style = 'dashed';
     const out = prepareScene(buildScene(p), 'plotter', fonts);
-    const route = paths(out).filter((x) => x.color === p.route.color);
+    const route = paths(out).filter((x) => x.color === colorOf(p, p.route.pen));
     expect(route.length).toBe(3);
     expect(route.every((x) => x.dash && x.dash.length === 2)).toBe(true);
   });

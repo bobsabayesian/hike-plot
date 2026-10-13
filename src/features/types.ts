@@ -5,6 +5,8 @@ export const LANDMARK_KINDS = ['peak', 'pass', 'hut', 'viewpoint', 'trailhead', 
 export type LandmarkKind = (typeof LANDMARK_KINDS)[number];
 /** What a drawn label can be: a point feature, or a named lake or river. */
 export type LabelKind = LandmarkKind | 'lake' | 'river';
+/** What a landmark pen can be set for: each point kind, water outlines, and water names (lakes and rivers). */
+export type FeaturePenKey = LandmarkKind | 'waterOutline' | 'waterLabel';
 
 export const KIND_LABELS: Record<LabelKind, string> = {
   peak: 'Peaks', pass: 'Passes', hut: 'Huts', viewpoint: 'Viewpoints',
@@ -75,9 +77,8 @@ export interface FeatureSettings {
   /** write river and lake names */
   waterLabels: boolean;
   sizePt: number;
-  /** markers and labels */
-  color: string;
-  waterColor: string;
+  /** pens: one default for markers and labels, with per-kind overrides (water defaults to blue) */
+  pens: { default: string; overrides: Partial<Record<FeaturePenKey, string>> };
   waterWeightMm: number;
   overrides: Record<string, FeatureOverride>;
 }
@@ -112,8 +113,10 @@ export const defaultFeatures = (): FeatureSettings => ({
   water: true,
   waterLabels: false,
   sizePt: 11,
-  color: '#1f2a24',
-  waterColor: '#1f2a24',
+  pens: { default: 'ink', overrides: { waterOutline: 'blue', waterLabel: 'blue' } },
   waterWeightMm: 0.2,
   overrides: {},
 });
+
+/** The pen key for a drawn label: a point kind, or "waterLabel" for lake and river names. */
+export const penKeyOf = (kind: LabelKind): FeaturePenKey => (kind === 'lake' || kind === 'river' ? 'waterLabel' : kind);

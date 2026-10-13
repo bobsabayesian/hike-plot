@@ -30,18 +30,19 @@ describe('scene', () => {
   });
   it('layers are split by color and stroke width; identical ones merge', () => {
     const count = (p = base()) => sceneToSvg(buildScene(p)).match(/inkscape:groupmode="layer"/g)!.length;
-    // route (orange, 0.9 mm), profile line (ink, 0.4 mm), and the filled profile + text (ink fill)
+    // route (red pen, 0.9 mm), profile line (ink, 0.4 mm), and the filled profile + text (ink fill)
     expect(count()).toBe(3);
     const p = base();
-    p.route.color = '#1F2A24'; // same ink as the profile line (different case), but a different width
+    p.route.pen = 'ink'; // same ink as the profile line, but a different width
     expect(count(p)).toBe(3);
     p.route.weightMm = 0.4; // now the same color and width as the profile line -> they merge
     expect(count(p)).toBe(2);
     const q = base();
-    q.route.color = '#CC3300';
-    q.profile.fill = '#336699';
+    q.pens[1]!.color = '#CC3300'; // recoloring a pen recolors everything on it, still one layer
+    expect(count(q)).toBe(3);
+    q.profile.pen = 'blue'; // the elevation profile moves to the blue pen: its line and its fill are new layers
     const svg = sceneToSvg(buildScene(q));
-    expect(svg.match(/inkscape:groupmode="layer"/g)).toHaveLength(4); // + a separate blue fill layer
+    expect(svg.match(/inkscape:groupmode="layer"/g)).toHaveLength(4); // route, blue line, blue fill, ink text fill
     expect(svg).not.toContain('id="paper"');
     expect(sceneToSvg(buildScene(q), { paper: true })).toContain('id="paper"');
   });

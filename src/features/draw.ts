@@ -2,20 +2,21 @@ import { clipPolyline, simplifyXY, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
 import type { Prim } from '../scene/types';
 import { placeLandmarks, type LandmarkPlacement, type PlaceInput } from './select';
-import type { FeatureSettings, LandmarkKind, WaterLine } from './types';
+import type { Pen } from '../scene/pens';
+import type { FeatureSettings, LabelKind, LandmarkKind, WaterLine } from './types';
 
 const f = (n: number) => +n.toFixed(2);
 const toD = (lines: XY[][]) => lines.map((l) => l.map(([x, y], i) => `${i ? 'L' : 'M'}${f(x)} ${f(y)}`).join('')).join('');
 
 /** Rivers, streams and lake outlines as thin strokes clipped to the map frame (real geometry, plotter-safe). */
-export function waterPrims(water: WaterLine[], fit: Fit, frame: Rect, s: FeatureSettings): Prim[] {
+export function waterPrims(water: WaterLine[], fit: Fit, frame: Rect, s: FeatureSettings, pen: Pen): Prim[] {
   const lines: XY[][] = [];
   for (const w of water) {
     const mm = simplifyXY(w.coords.map(([la, lo]) => fit.toMm(la, lo)), 0.08);
     lines.push(...clipPolyline(mm, frame));
   }
   return lines.length
-    ? [{ kind: 'path', d: toD(lines), color: s.waterColor, mode: 'stroke', widthMm: s.waterWeightMm }]
+    ? [{ kind: 'path', d: toD(lines), color: pen.color, pen: pen.id, mode: 'stroke', widthMm: s.waterWeightMm }]
     : [];
 }
 
@@ -41,6 +42,8 @@ export function markerPath(kind: LandmarkKind, x: number, y: number, r: number):
 }
 
 export interface LandmarkDraw extends PlaceInput {
+  /** the pen a label of this kind is drawn with */
+  penFor: (kind: LabelKind) => Pen;
   fontFamily: string;
   fontKey: 'sans' | 'serif';
   trackingMm: number;
@@ -49,18 +52,24 @@ export interface LandmarkDraw extends PlaceInput {
 export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[] } & Pick<LandmarkPlacement, 'entries' | 'pool' | 'open' | 'obstacles'> {
   const { labels, entries, pool, open, obstacles } = placeLandmarks(inp);
   const prims: Prim[] = [];
-  const color = inp.settings.color;
+  // markers are grouped by pen so each pen gets one path; labels carry their own pen
   const markers = labels.filter((l) => l.marker);
-  if (markers.length)
-    prims.push({
-      kind: 'path', mode: 'stroke', color, widthMm: 0.35, round: true,
-      d: markers.map((l) => markerPath(l.kind as LandmarkKind, l.marker![0], l.marker![1], inp.markerR)).join(''),
-    });
-  for (const l of labels)
+  const byPen = new Map<string, { pen: Pen; ds: string[] }>();
+  for (const l of markers) {
+    const pen = inp.penFor(l.kind);
+    const g = byPen.get(pen.id) ?? { pen, ds: [] };
+    g.ds.push(markerPath(l.kind as LandmarkKind, l.marker![0], l.marker![1], inp.markerR));
+    byPen.set(pen.id, g);
+  }
+  for (const { pen, ds } of byPen.values())
+    prims.push({ kind: 'path', mode: 'stroke', color: pen.color, pen: pen.id, widthMm: 0.35, round: true, d: ds.join('') });
+  for (const l of labels) {
+    const pen = inp.penFor(l.kind);
     prims.push({
       kind: 'text', text: l.text, x: l.x, y: l.y, anchor: l.anchor, sizeMm: inp.sizeMm,
-      trackingMm: inp.trackingMm, fontFamily: inp.fontFamily, fontKey: inp.fontKey, color,
+      trackingMm: inp.trackingMm, fontFamily: inp.fontFamily, fontKey: inp.fontKey, color: pen.color, pen: pen.id,
       ...(l.rotate ? { rotate: l.rotate } : {}),
     });
+  }
   return { prims, entries, pool, open, obstacles };
 }

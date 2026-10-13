@@ -9,9 +9,10 @@ import { contourInterval, contourPaths } from '../topo/contours';
 import type { TerrainField } from '../topo/terrain';
 import { landmarkPrims, waterPrims } from '../features/draw';
 import type { LandmarkEntry, LandmarkPlacement } from '../features/select';
-import type { OsmData } from '../features/types';
+import { penKeyOf, type OsmData } from '../features/types';
 import type { XY } from '../geo/clip';
 import { northBox, northPrims } from './north';
+import { featurePenId, penFor } from './pens';
 import { formatLevel, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
 import type { Box } from '../features/select';
 import type { Prim, Scene } from './types';
@@ -120,6 +121,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   const prims: Prim[] = [];
   const m = Math.min(W, H) * 0.07;
   const t = p.text;
+  const colorOf = (penId: string) => penFor(p.pens, penId).color;
   const fontFamily = FONTS[t.font];
   const anchor = t.align === 'left' ? 'start' : t.align === 'right' ? 'end' : 'middle';
   const tx = t.align === 'left' ? m : t.align === 'right' ? W - m : W / 2;
@@ -127,8 +129,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   const stats = p.points.length ? computeStats(p.points) : undefined;
   const interval = p.terrain.enabled && terrain ? contourInterval(p.terrain.intervalM, terrain) : undefined;
   const auto = autoValues(p, stats, interval);
-  const text = (s: string, y: number, sizeMm: number, extra: Partial<Extract<Prim, { kind: 'text' }>> = {}, x = tx): Prim => ({
-    kind: 'text', text: s, x, y, anchor, sizeMm, trackingMm: sizeMm * t.trackingEm, fontFamily, fontKey: t.font, color: t.color, ...extra,
+  const text = (penId: string, s: string, y: number, sizeMm: number, extra: Partial<Extract<Prim, { kind: 'text' }>> = {}, x = tx): Prim => ({
+    kind: 'text', text: s, x, y, anchor, sizeMm, trackingMm: sizeMm * t.trackingEm, fontFamily, fontKey: t.font, color: colorOf(penId), pen: penId, ...extra,
   });
 
   // ---- text blocks (height + draw), stacked from the top and bottom margins
@@ -139,7 +141,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     const size = t.title.sizePt * PT;
     blocks[t.title.placement].push({
       height: size * 0.75, gapAfter: size * 0.4,
-      draw: (y) => [text(title.toUpperCase(), y + size * 0.72, size)],
+      draw: (y) => [text(t.title.pen, title.toUpperCase(), y + size * 0.72, size)],
     });
   }
 
@@ -154,8 +156,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       draw: (y) => {
         const out: Prim[] = [];
         let cy = y;
-        if (loc) { out.push(text(loc, cy + size * 0.72, size)); cy += size * 1.25; }
-        if (coords) out.push(text(coords, cy + small * 0.72, small, { opacity: 0.7 }));
+        if (loc) { out.push(text(t.location.pen, loc, cy + size * 0.72, size)); cy += size * 1.25; }
+        if (coords) out.push(text(t.location.pen, coords, cy + small * 0.72, small, { opacity: 0.7 }));
         return out;
       },
     });
@@ -172,8 +174,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     const column = t.info.layout === 'column';
     const colGap = size * 0.6;
     const cellDraw = (it: (typeof items)[number], y: number, x: number): Prim[] => [
-      text(it.label.toUpperCase(), y + ls * 0.72, ls, { opacity: 0.65 }, x),
-      text(it.value, y + ls * 1.5 + size * 0.72, size, { trackingMm: size * t.trackingEm * 0.6 }, x),
+      text(t.info.pen, it.label.toUpperCase(), y + ls * 0.72, ls, { opacity: 0.65 }, x),
+      text(t.info.pen, it.value, y + ls * 1.5 + size * 0.72, size, { trackingMm: size * t.trackingEm * 0.6 }, x),
     ];
     blocks[t.info.placement].push({
       height: column ? items.length * cell + (items.length - 1) * colGap : cell,
@@ -196,7 +198,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   let bottomCursor = H - m;
   if (p.showWatermark) {
     const size = 7 * PT;
-    if (!layoutOnly) prims.push(text(WATERMARK_TEXT, bottomCursor, size, { trackingMm: size * 0.04, opacity: 0.55 }));
+    if (!layoutOnly) prims.push(text(p.watermarkPen, WATERMARK_TEXT, bottomCursor, size, { trackingMm: size * 0.04, opacity: 0.55 }));
     bottomCursor -= size * 2.4;
   }
   for (const b of [...blocks.bottom].reverse()) {
@@ -237,6 +239,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           fit, frame, route: routeXY,
           labelBounds: { x: frame.x - m * 0.5, y: frame.y - m * 0.5, w: frame.w + m, h: frame.h + m * 0.5 }, settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,
+          penFor: (kind) => penFor(p.pens, featurePenId(p.features, penKeyOf(kind))),
           fontFamily, fontKey: t.font, trackingMm: sizeMm * 0.05,
         });
       }
@@ -260,9 +263,9 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           });
           if (numbers.length && tc.labels.gap) ({ regular, index } = pathsWithGaps(paths.pieces, numbers, tc.labels.sizePt));
         }
-        if (regular) prims.push({ kind: 'path', d: regular, color: tc.color, mode: 'stroke', widthMm: tc.weightMm, opacity: tc.opacity });
+        if (regular) prims.push({ kind: 'path', d: regular, color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke', widthMm: tc.weightMm, opacity: tc.opacity });
         // heavy lines are drawn as two passes of the pen in the plotter export, so they stay heavier than the rest
-        if (index) prims.push({ kind: 'path', d: index, color: tc.color, mode: 'stroke', widthMm: tc.indexWeightMm, opacity: tc.opacity, minPasses: 2 });
+        if (index) prims.push({ kind: 'path', d: index, color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke', widthMm: tc.indexWeightMm, opacity: tc.opacity, minPasses: 2 });
         const nsize = tc.labels.sizePt * PT;
         for (const n of numbers) {
           // text sits centered on its line (gap) or just above it, always upright along the line
@@ -271,13 +274,13 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           const lift = tc.labels.gap ? 0 : nsize * (1.15 / 2 + 0.2); // same offset the placement reserved
           prims.push({
             kind: 'text', text: n.text, x: n.x + nx * lift - nx * nsize * 0.36, y: n.y + ny * lift - ny * nsize * 0.36,
-            anchor: 'middle', sizeMm: nsize, trackingMm: nsize * 0.04, fontFamily, fontKey: t.font, color: tc.labels.color,
+            anchor: 'middle', sizeMm: nsize, trackingMm: nsize * 0.04, fontFamily, fontKey: t.font, color: colorOf(tc.pen), pen: tc.pen,
             ...(n.angle ? { rotate: (n.angle * 180) / Math.PI } : {}),
           });
         }
       }
 
-      if (p.features.enabled && p.features.water && osm) prims.push(...waterPrims(osm.water, fit, frame, p.features));
+      if (p.features.enabled && p.features.water && osm) prims.push(...waterPrims(osm.water, fit, frame, p.features, penFor(p.pens, featurePenId(p.features, 'waterOutline'))));
 
       if (p.points.length >= 2) {
         const xy = routeXY;
@@ -300,20 +303,20 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
             const span = Math.max(eMax - eMin, 1);
             const line = series.map((s): [number, number] => [px + (s.d / (d || 1)) * pw, py + ph - ((s.e - eMin) / span) * ph * 0.92 - ph * 0.04]);
             const topLine = polyline(line);
-            prims.push({ kind: 'path', d: `${topLine}L${f(px + pw)} ${f(py + ph)}L${f(px)} ${f(py + ph)}Z`, color: p.profile.fill, mode: 'fill', opacity: p.profile.opacity });
-            prims.push({ kind: 'path', d: topLine, color: p.profile.stroke, mode: 'stroke', widthMm: 0.4 });
+            prims.push({ kind: 'path', d: `${topLine}L${f(px + pw)} ${f(py + ph)}L${f(px)} ${f(py + ph)}Z`, color: colorOf(p.profile.pen), pen: p.profile.pen, mode: 'fill', opacity: p.profile.opacity });
+            prims.push({ kind: 'path', d: topLine, color: colorOf(p.profile.pen), pen: p.profile.pen, mode: 'stroke', widthMm: 0.4 });
 
             const lb = p.profile.labels;
             if (lb.extremes || lb.yTicks || lb.xTicks) {
               const size = lb.sizePt * PT;
-              const col = p.profile.stroke;
+              const col = colorOf(p.profile.pen);
               const imperial = p.units === 'imperial';
               const yOf = (e: number) => py + ph - ((e - eMin) / span) * ph * 0.92 - ph * 0.04;
               const xOf = (dist: number) => px + (dist / (d || 1)) * pw;
               const txt = (s: string, x: number, y: number, anchor: 'start' | 'middle' | 'end', opacity?: number) =>
-                prims.push({ kind: 'text', text: s, x, y, anchor, sizeMm: size, trackingMm: size * 0.04, fontFamily, fontKey: t.font, color: col, opacity });
+                prims.push({ kind: 'text', text: s, x, y, anchor, sizeMm: size, trackingMm: size * 0.04, fontFamily, fontKey: t.font, color: col, pen: p.profile.pen, opacity });
               const grid = (d: string, w: number, opacity?: number) =>
-                prims.push({ kind: 'path', d, color: col, mode: 'stroke', widthMm: w, opacity });
+                prims.push({ kind: 'path', d, color: col, pen: p.profile.pen, mode: 'stroke', widthMm: w, opacity });
 
               if (lb.yTicks) {
                 const toDisp = (m: number) => (imperial ? metersToFeet(m) : m);
@@ -357,13 +360,13 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         }
 
         prims.push({
-          kind: 'path', d: polyline(xy), color: p.route.color, mode: 'stroke', widthMm: p.route.weightMm,
+          kind: 'path', d: polyline(xy), color: colorOf(p.route.pen), pen: p.route.pen, mode: 'stroke', widthMm: p.route.weightMm,
           ...dashFor(p.route.style, p.route.weightMm),
         });
       }
 
       if (p.north.enabled) {
-        prims.push(...northPrims(frame, { ...p.north, fontFamily, fontKey: t.font }));
+        prims.push(...northPrims(frame, { ...p.north, color: colorOf(p.north.pen), fontFamily, fontKey: t.font }));
       }
 
       if (landmarkOut) {
