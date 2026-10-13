@@ -33,6 +33,8 @@ export interface OsmData {
   water: WaterLine[];
   /** area this data was fetched for */
   covers: BBox;
+  /** parts the server could not fetch this time */
+  partial?: ('landmarks' | 'water')[];
 }
 
 export type Side = 'auto' | 'right' | 'left' | 'above' | 'below';

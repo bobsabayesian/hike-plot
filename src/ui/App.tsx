@@ -32,7 +32,7 @@ function download(name: string, data: string | Blob, type: string) {
 }
 
 export function App() {
-  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, osm, osmStatus, osmError, loadOsm, searchFeature, busy, notice } = useStore();
+  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, osm, osmStatus, osmError, loadOsm, retryOsm, searchFeature, busy, notice } = useStore();
   const [query, setQuery] = useState('');
   const [err, setErr] = useState('');
   const [over, setOver] = useState(false);
@@ -162,7 +162,13 @@ export function App() {
           <input type="checkbox" checked={p.features.enabled} onChange={(e) => set((x) => { x.features.enabled = e.target.checked; })} />
           <span>{osmStatus === 'loading' ? 'Loading landmarks…' : ''}</span>
         </Row>
-        {osmError && <div className="err">{osmError}</div>}
+        {osmError && <div className="err">{osmError} <button onClick={retryOsm}>Retry</button></div>}
+        {osm?.partial?.length ? (
+          <div className="hint">
+            {osm.partial.includes('water') ? 'Rivers and lakes are unavailable for this area right now' : 'Some landmarks are unavailable right now'}
+            {' '}(OpenStreetMap servers are busy or the area is large). <button onClick={retryOsm}>Retry</button>
+          </div>
+        ) : null}
         {p.features.enabled && (<>
           <Row label="Max labels"><input type="range" min={0} max={20} step={1} value={p.features.maxLabels} onChange={(e) => set((x) => { x.features.maxLabels = +e.target.value; })} /><span>{p.features.maxLabels}</span></Row>
           <div className="kinds">

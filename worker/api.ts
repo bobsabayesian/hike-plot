@@ -36,6 +36,27 @@ export function normalizeFeatures(elements: any[]) {
   return { landmarks, water };
 }
 
+/** Water queries get slow and flaky past this span (degrees); skip them rather than fail. */
+const WATER_MAX_SPAN = 0.35;
+
+/** POST an Overpass query; retries once on the gateway timeouts/rate limits the public servers return. */
+async function overpass(query: string, retries: number): Promise<any[]> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch(OVERPASS, {
+        method: 'POST',
+        headers: { 'user-agent': UA, 'content-type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(15000),
+      });
+      if (r.ok) return ((await r.json()) as any).elements ?? [];
+      throw new Error(`overpass ${r.status}`);
+    } catch (e) {
+      if (attempt >= retries) throw e;
+    }
+  }
+}
+
 const num = (v: string | null) => (v !== null && v.trim() !== '' && Number.isFinite(+v) ? +v : undefined);
 
 export async function handleApi(req: Request): Promise<Response | null> {
@@ -109,16 +130,27 @@ async function route(url: URL): Promise<Response> {
       if ([s, n, w, e].some((v) => v === undefined)) return json({ error: 'missing bbox' }, 400);
       if ((n! - s!) > 1 || (e! - w!) > 1) return json({ error: 'area too large for landmarks' }, 400);
       const bb = `(${s},${w},${n},${e})`;
-      const query = `[out:json][timeout:25];
-(node["natural"="peak"]["name"]${bb};node["natural"="saddle"]["name"]${bb};node["mountain_pass"="yes"]["name"]${bb};node["tourism"~"^(alpine_hut|wilderness_hut|viewpoint)$"]["name"]${bb};node["highway"="trailhead"]["name"]${bb};);out body 300;
-(way["natural"="water"]["name"]${bb};way["waterway"~"^(river|stream)$"]["name"]${bb};);out geom 200;`;
-      const r = await fetch(OVERPASS, {
-        method: 'POST',
-        headers: { 'user-agent': UA, 'content-type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`,
-      });
-      if (!r.ok) return json({ error: 'overpass unavailable' }, 502);
-      return json(normalizeFeatures(((await r.json()) as any).elements ?? []));
+      const nodeQuery = `[out:json][timeout:20];
+(node["natural"="peak"]["name"]${bb};node["natural"="saddle"]["name"]${bb};node["mountain_pass"="yes"]["name"]${bb};node["tourism"~"^(alpine_hut|wilderness_hut|viewpoint)$"]["name"]${bb};node["highway"="trailhead"]["name"]${bb};);out body 300;`;
+      const waterQuery = `[out:json][timeout:20];
+(way["natural"="water"]["name"]${bb};way["waterway"="river"]["name"]${bb};);out geom 150;`;
+      // Point features are cheap and reliable; ways with geometry are what the public Overpass servers
+      // time out on. Fetch them separately so a water failure never costs the landmarks.
+      const waterTooBig = (n! - s!) > WATER_MAX_SPAN || (e! - w!) > WATER_MAX_SPAN;
+      const [nodes, water] = await Promise.allSettled([
+        overpass(nodeQuery, 1),
+        waterTooBig ? Promise.reject(new Error('area too large for water')) : overpass(waterQuery, 1),
+      ]);
+      if (nodes.status === 'rejected' && water.status === 'rejected') return json({ error: 'overpass unavailable' }, 502);
+      const partial = [nodes.status === 'rejected' ? 'landmarks' : '', water.status === 'rejected' ? 'water' : ''].filter(Boolean);
+      const out = normalizeFeatures([
+        ...(nodes.status === 'fulfilled' ? nodes.value : []),
+        ...(water.status === 'fulfilled' ? water.value : []),
+      ]);
+      const res = json({ ...out, partial });
+      // Don't let a degraded answer sit in the cache for a day.
+      if (partial.length) res.headers.set('cache-control', 'public, max-age=60, s-maxage=60');
+      return res;
     }
     default:
       return json({ error: 'not found' }, 404);

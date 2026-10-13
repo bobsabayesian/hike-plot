@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { placeLandmarks, type PlaceInput } from '../src/features/select';
 import { defaultFeatures, type Landmark, type WaterLine } from '../src/features/types';
 import { markerPath } from '../src/features/draw';
 import { fitBBox } from '../src/geo/project';
 import { parseWaypoints } from '../src/gpx/parse';
-import { normalizeFeatures } from '../worker/api';
+import { handleApi, normalizeFeatures } from '../worker/api';
 import { buildScene, composeScene } from '../src/scene/buildScene';
 import { defaultProject } from '../src/scene/project';
 import { sampleTrack, sampleWaypoints } from '../src/sample';
@@ -178,5 +178,58 @@ describe('landmarks in the scene', () => {
     const p = base();
     p.features.enabled = false;
     expect(withLabels).toBe(svgLayers(p));
+  });
+});
+
+describe('/api/features resilience', () => {
+  const peak = { type: 'node', id: 1, lat: 1, lon: 2, tags: { name: 'A', natural: 'peak' } };
+  const lake = { type: 'way', id: 2, tags: { name: 'L', natural: 'water' }, geometry: [{ lat: 1, lon: 1 }, { lat: 2, lon: 2 }] };
+  const reply = (status: number, elements: unknown[] = []) =>
+    new Response(status === 200 ? JSON.stringify({ elements }) : 'gateway', { status });
+  const call = async (qs: string) => handleApi(new Request(`http://x/api/features?${qs}`)) as Promise<Response>;
+  const small = 'minLat=46&maxLat=46.2&minLon=-121.4&maxLon=-121.2';
+
+  afterEach(() => vi.unstubAllGlobals());
+  const stub = (fn: (isWater: boolean, call: number) => Response) => {
+    let n = { node: 0, water: 0 };
+    const f = vi.fn(async (_u: string, init: any) => {
+      const isWater = decodeURIComponent(init.body).includes('out geom');
+      return fn(isWater, ++n[isWater ? 'water' : 'node']);
+    });
+    vi.stubGlobal('fetch', f);
+    return f;
+  };
+
+  it('returns everything when both queries succeed', async () => {
+    stub((w) => reply(200, w ? [lake] : [peak]));
+    const d: any = await (await call(small)).json();
+    expect(d.landmarks).toHaveLength(1);
+    expect(d.water).toHaveLength(1);
+    expect(d.partial).toEqual([]);
+  });
+  it('keeps landmarks when the water query times out (504), and flags it', async () => {
+    stub((w) => (w ? reply(504) : reply(200, [peak])));
+    const res = await call(small);
+    const d: any = await res.json();
+    expect(res.status).toBe(200);
+    expect(d.landmarks).toHaveLength(1);
+    expect(d.partial).toEqual(['water']);
+    expect(res.headers.get('cache-control')).toContain('max-age=60');
+  });
+  it('retries a 504 once and recovers', async () => {
+    const f = stub((w, n) => (w ? (n === 1 ? reply(504) : reply(200, [lake])) : reply(200, [peak])));
+    const d: any = await (await call(small)).json();
+    expect(d.partial).toEqual([]);
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+  it('skips the expensive water query for large areas', async () => {
+    const f = stub(() => reply(200, [peak]));
+    const d: any = await (await call('minLat=46&maxLat=46.8&minLon=-121.8&maxLon=-121.2')).json();
+    expect(d.partial).toEqual(['water']);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+  it('only errors when everything fails', async () => {
+    stub(() => reply(504));
+    expect((await call(small)).status).toBe(502);
   });
 });

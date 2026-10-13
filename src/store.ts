@@ -19,6 +19,7 @@ interface Store {
   setTerrain: (t: TerrainField | undefined, status: Store['terrainStatus'], error?: string) => void;
   loadPoints: (pts: TrackPoint[], lookups?: boolean, waypoints?: Landmark[]) => void;
   loadOsm: (b: import('./geo/project').BBox) => Promise<void>;
+  retryOsm: () => void;
   searchFeature: (q: string) => Promise<void>;
 }
 
@@ -46,6 +47,8 @@ export const useStore = create<Store>((setState, get) => ({
       setState({ osm: undefined, osmStatus: 'error', osmError: e instanceof Error ? e.message : 'Landmarks failed' });
     }
   },
+
+  retryOsm: () => setState({ osm: undefined, osmError: undefined }),
 
   loadPoints: (pts, lookups = true, waypoints = []) => {
     const id = ++loadId;
