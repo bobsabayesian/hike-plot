@@ -3,6 +3,7 @@ import type { BBox } from '../geo/project';
 import { defaultFeatures, type FeatureSettings, type Landmark } from '../features/types';
 import { defaultPens, PEN_INK, PEN_RED, type Pen } from './pens';
 import { defaultBorder, type BorderSettings } from './border';
+import type { HatchDensity } from './types';
 
 export interface PrintSize {
   id: string;
@@ -41,6 +42,19 @@ export interface InfoItem {
 
 export interface TitleBlock { visible: boolean; value?: string; sizePt: number; placement: Placement; pen: string }
 export interface LocationBlock extends TitleBlock { showCoords: boolean }
+export type TitleAlign = 'inherit' | 'left' | 'center' | 'right' | 'justify';
+export type TitleStyle = 'fill' | 'outline' | 'outlineFill';
+export interface TitleSettings extends TitleBlock {
+  /** 'inherit' follows the text alignment; 'justify' stretches the title across the content width */
+  align: TitleAlign;
+  style: TitleStyle;
+  /** line weight of the letter outline (outline and outlineFill) */
+  outlineMm: number;
+  /** pen for the inside of the letters (outlineFill); `pen` draws the outline */
+  fillPen: string;
+  /** how densely the inside is hatched in the plotter export */
+  fillDensity: HatchDensity;
+}
 export interface InfoBlock {
   visible: boolean;
   pen: string;
@@ -133,8 +147,10 @@ export interface Project {
     position: ProfilePosition;
     /** one pen for the line, fill, ticks and labels */
     pen: string;
-    /** how strong the fill is in print and PNG (a plotter outlines it instead) */
+    /** how strong the fill is in print and PNG */
     opacity: number;
+    /** plotter export: hatch the fill with lines of the pen (off = just the outline) */
+    hatch: 'off' | HatchDensity;
     labels: {
       /** label the highest and lowest points */
       extremes: boolean;
@@ -157,7 +173,7 @@ export interface Project {
     font: FontKey;
     trackingEm: number;
     align: Align;
-    title: TitleBlock;
+    title: TitleSettings;
     location: LocationBlock;
     info: InfoBlock;
   };
@@ -184,7 +200,7 @@ export const defaultProject = (): Project => ({
     labels: { enabled: false, density: 'normal', every: 1, gap: true, sizePt: 8 },
   },
   profile: {
-    enabled: true, position: 'bottom', pen: PEN_INK, opacity: 0.12,
+    enabled: true, position: 'bottom', pen: PEN_INK, opacity: 0.12, hatch: 'off',
     labels: { extremes: false, yTicks: false, xTicks: false, sizePt: 9 },
   },
   north: { enabled: false, style: 'arrow', corner: 'tr', sizeMm: 22, pen: PEN_INK, weightMm: 0.35 },
@@ -192,7 +208,7 @@ export const defaultProject = (): Project => ({
     font: 'sans',
     trackingEm: 0.12,
     align: 'left',
-    title: { visible: true, sizePt: 60, placement: 'bottom', pen: PEN_INK },
+    title: { visible: true, sizePt: 60, placement: 'bottom', pen: PEN_INK, align: 'inherit', style: 'fill', outlineMm: 0.35, fillPen: PEN_INK, fillDensity: 'solid' },
     location: { visible: true, sizePt: 18, placement: 'bottom', showCoords: true, pen: PEN_INK },
     info: {
       visible: true, pen: PEN_INK, sizePt: 22, placement: 'bottom', layout: 'row',

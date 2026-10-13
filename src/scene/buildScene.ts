@@ -144,10 +144,29 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
 
   const title = (t.title.value ?? auto.title).trim();
   if (t.title.visible && title) {
-    const size = t.title.sizePt * PT;
-    blocks[t.title.placement].push({
+    const ts = t.title;
+    const size = ts.sizePt * PT;
+    const align = ts.align === 'inherit' ? t.align : ts.align;
+    const justify = align === 'justify';
+    const where = {
+      anchor: (justify || align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle') as 'start' | 'middle' | 'end',
+      x: justify || align === 'left' ? contentL : align === 'right' ? contentR : (contentL + contentR) / 2,
+      ...(justify ? { fitWidthMm: innerW } : {}),
+    };
+    const { x: titleX, ...place } = where;
+    blocks[ts.placement].push({
       height: size * 0.75, gapAfter: size * 0.4,
-      draw: (y) => [text(t.title.pen, title.toUpperCase(), y + size * 0.72, size)],
+      draw: (y) => {
+        const base = y + size * 0.72;
+        const outline = { ...place, mode: 'stroke' as const, strokeMm: ts.outlineMm };
+        if (ts.style === 'outline') return [text(ts.pen, title.toUpperCase(), base, size, outline, titleX)];
+        // inside first, so the outline sits on top of it
+        if (ts.style === 'outlineFill') return [
+          text(ts.fillPen, title.toUpperCase(), base, size, { ...place, hatch: ts.fillDensity }, titleX),
+          text(ts.pen, title.toUpperCase(), base, size, outline, titleX),
+        ];
+        return [text(ts.pen, title.toUpperCase(), base, size, place, titleX)];
+      },
     });
   }
 
@@ -316,7 +335,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
             const span = Math.max(eMax - eMin, 1);
             const line = series.map((s): [number, number] => [px + (s.d / (d || 1)) * pw, py + ph - ((s.e - eMin) / span) * ph * 0.92 - ph * 0.04]);
             const topLine = polyline(line);
-            prims.push({ kind: 'path', d: `${topLine}L${f(px + pw)} ${f(py + ph)}L${f(px)} ${f(py + ph)}Z`, color: colorOf(p.profile.pen), pen: p.profile.pen, mode: 'fill', opacity: p.profile.opacity });
+            prims.push({ kind: 'path', d: `${topLine}L${f(px + pw)} ${f(py + ph)}L${f(px)} ${f(py + ph)}Z`, color: colorOf(p.profile.pen), pen: p.profile.pen, mode: 'fill', opacity: p.profile.opacity, ...(p.profile.hatch !== 'off' ? { hatch: p.profile.hatch } : {}) });
             prims.push({ kind: 'path', d: topLine, color: colorOf(p.profile.pen), pen: p.profile.pen, mode: 'stroke', widthMm: 0.4 });
 
             const lb = p.profile.labels;

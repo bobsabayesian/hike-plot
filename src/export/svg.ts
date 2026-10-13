@@ -20,7 +20,12 @@ function pathEl(p: PathPrim): string {
 function textEl(t: TextPrim): string {
   const op = t.opacity !== undefined && t.opacity < 1 ? ` opacity="${f(t.opacity)}"` : '';
   const rot = t.rotate ? ` transform="rotate(${f(t.rotate)} ${f(t.x)} ${f(t.y)})"` : '';
-  return `<text x="${f(t.x)}" y="${f(t.y)}"${rot} text-anchor="${t.anchor}" font-size="${f(t.sizeMm)}" letter-spacing="${f(t.trackingMm)}" font-family="${esc(t.fontFamily)}" fill="${normColor(t.color)}"${op}>${esc(t.text)}</text>`;
+  // justified text: let the viewer spread the letters to the width
+  const fit = t.fitWidthMm !== undefined ? ` textLength="${f(t.fitWidthMm)}" lengthAdjust="spacing"` : '';
+  const paint = t.mode === 'stroke'
+    ? `fill="none" stroke="${normColor(t.color)}" stroke-width="${f(t.strokeMm ?? 0.35)}" stroke-linejoin="round"`
+    : `fill="${normColor(t.color)}"`;
+  return `<text x="${f(t.x)}" y="${f(t.y)}"${rot}${fit} text-anchor="${t.anchor}" font-size="${f(t.sizeMm)}" letter-spacing="${f(t.trackingMm)}" font-family="${esc(t.fontFamily)}" ${paint}${op}>${esc(t.text)}</text>`;
 }
 
 const el = (p: Prim) => (p.kind === 'path' ? pathEl(p) : textEl(p));
@@ -38,8 +43,10 @@ export interface SvgOptions {
  */
 export function layerOf(p: Prim): { id: string; label: string } {
   const c = colorOf(p);
-  if (p.kind === 'path' && p.mode === 'stroke') {
-    const w = +(p.widthMm ?? 0.5).toFixed(2);
+  // outlined text is drawn with a pen like any other line
+  const width = p.kind === 'path' && p.mode === 'stroke' ? (p.widthMm ?? 0.5) : p.kind === 'text' && p.mode === 'stroke' ? (p.strokeMm ?? 0.35) : undefined;
+  if (width !== undefined) {
+    const w = +width.toFixed(2);
     return { id: `layer-${c.slice(1)}-${w}mm`, label: `${c} ${w}mm` };
   }
   return { id: `layer-${c.slice(1)}-fill`, label: `${c} fill` };

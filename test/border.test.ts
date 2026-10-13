@@ -14,6 +14,8 @@ const W = 400;
 const H = 600;
 const margins = { top: 30, right: 30, bottom: 30, left: 30 };
 const on = (e: Partial<BorderSettings> = {}): BorderSettings => ({ ...defaultBorder('ink'), enabled: true, ...e });
+/** A border pass: a closed four-cornered rectangle (centered pass keeps H/V, shifted passes are four L's). */
+const isRect = (d: string) => /^M[\d.]+ [\d.]+H[\d.]+V[\d.]+H[\d.]+Z$/.test(d) || /^M[\d.]+ [\d.]+(L[\d.]+ [\d.]+){3,4}Z$/.test(d);
 const base = (edit: (p: Project) => void = () => {}): Project => {
   const p = { ...defaultProject(), points: sampleTrack() };
   edit(p);
@@ -153,19 +155,19 @@ describe('the border in the exports', () => {
   it('plotter: a heavy border becomes passes of its pen, each a closed rectangle', () => {
     const p = base((q) => { q.border = on({ weightMm: 0.9 }); });
     const out = prepareScene(buildScene(p), 'plotter', fonts, { pens: p.pens });
-    const closed = out.prims.filter((x): x is PathPrim => x.kind === 'path' && x.d.endsWith('Z') && x.widthMm === 0.3);
+    const closed = out.prims.filter((x): x is PathPrim => x.kind === 'path' && isRect(x.d) && x.widthMm === 0.3);
     expect(closed.length).toBeGreaterThanOrEqual(3); // 0.9 / 0.3 = 3 passes (the north arrow is off)
   });
   it('plotter: a double border is twice the passes of a single one', () => {
     const count = (style: 'single' | 'double') => {
       const p = base((q) => { q.border = on({ style, weightMm: 0.9 }); q.profile.enabled = false; q.features.enabled = false; });
-      return prepareScene(buildScene(p), 'plotter', fonts, { pens: p.pens }).prims.filter((x) => x.kind === 'path' && x.d.endsWith('Z') && x.widthMm === 0.3).length;
+      return prepareScene(buildScene(p), 'plotter', fonts, { pens: p.pens }).prims.filter((x) => x.kind === 'path' && isRect(x.d) && x.widthMm === 0.3).length;
     };
     expect(count('double')).toBe(2 * count('single'));
   });
   it('plotter: the passes of a thin border are a single line at the pen width', () => {
     const p = base((q) => { q.border = on({ weightMm: 0.3 }); q.profile.enabled = false; q.features.enabled = false; });
-    const closed = prepareScene(buildScene(p), 'plotter', fonts, { pens: p.pens }).prims.filter((x) => x.kind === 'path' && x.d.endsWith('Z'));
+    const closed = prepareScene(buildScene(p), 'plotter', fonts, { pens: p.pens }).prims.filter((x) => x.kind === 'path' && isRect(x.d));
     expect(closed).toHaveLength(1);
   });
   it('print: unchanged by the pen tip', () => {

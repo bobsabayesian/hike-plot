@@ -43,6 +43,7 @@ export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   p.profile.pen = fn(p.profile.pen);
   p.north.pen = fn(p.north.pen);
   p.text.title.pen = fn(p.text.title.pen);
+  p.text.title.fillPen = fn(p.text.title.fillPen);
   p.text.location.pen = fn(p.text.location.pen);
   p.text.info.pen = fn(p.text.info.pen);
   p.watermarkPen = fn(p.watermarkPen);
@@ -87,7 +88,10 @@ export function penUsage(p: Project): PenUse[] {
   if (p.terrain.enabled) add(p.terrain.pen, p.terrain.labels.enabled ? 'Contours and their numbers' : 'Contours');
   if (p.profile.enabled && p.points.length) add(p.profile.pen, 'Elevation profile');
   if (p.north.enabled) add(p.north.pen, 'North arrow');
-  if (p.text.title.visible) add(p.text.title.pen, 'Title');
+  if (p.text.title.visible) {
+    add(p.text.title.pen, p.text.title.style === 'fill' ? 'Title' : 'Title outline');
+    if (p.text.title.style === 'outlineFill') add(p.text.title.fillPen, 'Title fill');
+  }
   if (p.text.location.visible) add(p.text.location.pen, 'Location');
   if (p.text.info.visible) add(p.text.info.pen, 'Route info');
   if (p.showWatermark) add(p.watermarkPen, 'Watermark');

@@ -328,6 +328,11 @@ export function App() {
             </select>
           </Row>
           <Row label="Pen"><PenSelect pens={p.pens} value={p.profile.pen} onChange={(id) => set((x) => { x.profile.pen = id!; })} /></Row>
+          <Row label="Fill (plotter)">
+            <select value={p.profile.hatch} onChange={(e) => set((x) => { x.profile.hatch = e.target.value as typeof p.profile.hatch; })}>
+              <option value="off">Outline only</option><option value="light">Light hatching</option><option value="medium">Medium hatching</option><option value="solid">Solid hatching</option>
+            </select>
+          </Row>
           <Row label="Opacity"><input type="range" min={0} max={1} step={0.02} value={p.profile.opacity} onChange={(e) => set((x) => { x.profile.opacity = +e.target.value; })} /></Row>
                   <Row label="Label peaks"><input type="checkbox" checked={p.profile.labels.extremes} onChange={(e) => set((x) => { x.profile.labels.extremes = e.target.checked; })} /><span>highest and lowest point</span></Row>
           <Row label="Elevation ticks"><input type="checkbox" checked={p.profile.labels.yTicks} onChange={(e) => set((x) => { x.profile.labels.yTicks = e.target.checked; })} /></Row>
@@ -374,7 +379,32 @@ export function App() {
           <Row label="Text"><input type="text" placeholder={auto.title} value={p.text.title.value ?? ''} onChange={(e) => set((x) => { x.text.title.value = e.target.value || undefined; })} />
             <input type="checkbox" title="Show" checked={p.text.title.visible} onChange={(e) => set((x) => { x.text.title.visible = e.target.checked; })} /></Row>
           <Row label="Size (pt)"><input type="number" min={6} max={200} value={p.text.title.sizePt} onChange={(e) => set((x) => { x.text.title.sizePt = +e.target.value || 12; })} /></Row>
-          <Row label="Pen"><PenSelect pens={p.pens} value={p.text.title.pen} onChange={(id) => set((x) => { x.text.title.pen = id!; })} /></Row>
+          <Row label="Align">
+            <select value={p.text.title.align} onChange={(e) => set((x) => { x.text.title.align = e.target.value as typeof p.text.title.align; })}>
+              <option value="inherit">Same as the other text</option>
+              <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
+              <option value="justify">Justified (fill the width)</option>
+            </select>
+          </Row>
+          <Row label="Style">
+            <select value={p.text.title.style} onChange={(e) => set((x) => { x.text.title.style = e.target.value as typeof p.text.title.style; })}>
+              <option value="fill">Filled letters</option>
+              <option value="outline">Outline only</option>
+              <option value="outlineFill">Outline with fill</option>
+            </select>
+          </Row>
+          <Row label={p.text.title.style === 'fill' ? 'Pen' : 'Outline pen'}><PenSelect pens={p.pens} value={p.text.title.pen} onChange={(id) => set((x) => { x.text.title.pen = id!; })} /></Row>
+          {p.text.title.style !== 'fill' && (
+            <Row label="Outline weight"><input type="number" min={0.1} max={3} step={0.05} value={p.text.title.outlineMm} onChange={(e) => set((x) => { x.text.title.outlineMm = Math.max(0.1, +e.target.value || 0.35); })} /><span className="unit">mm</span></Row>
+          )}
+          {p.text.title.style === 'outlineFill' && (<>
+            <Row label="Fill pen"><PenSelect pens={p.pens} value={p.text.title.fillPen} onChange={(id) => set((x) => { x.text.title.fillPen = id!; })} /></Row>
+            <Row label="Fill (plotter)">
+              <select value={p.text.title.fillDensity} onChange={(e) => set((x) => { x.text.title.fillDensity = e.target.value as typeof p.text.title.fillDensity; })}>
+                <option value="solid">Solid hatching</option><option value="medium">Medium hatching</option><option value="light">Light hatching</option>
+              </select>
+            </Row>
+          </>)}
           <PlaceRow value={p.text.title.placement} onChange={(v) => set((x) => { x.text.title.placement = v; })} />
         </div>
 
