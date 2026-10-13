@@ -48,6 +48,7 @@ export async function fetchFeatures(b: BBox, req: OsmRequest): Promise<OsmData> 
     minLat: String(b.minLat), maxLat: String(b.maxLat), minLon: String(b.minLon), maxLon: String(b.maxLon),
     kinds: req.kinds.join(','), lakes: req.lakes ? '1' : '0', rivers: req.rivers ? '1' : '0',
   });
-  const d = await api<Pick<OsmData, 'landmarks' | 'water' | 'partial' | 'reason'>>(`/api/features?${qs}`);
-  return { ...d, covers: b, requested: req };
+  const d = await api<Pick<OsmData, 'landmarks' | 'water' | 'partial' | 'reason'> & { covers?: BBox }>(`/api/features?${qs}`);
+  // The server rounds the area outward; what it really covers is what we may reuse without another fetch.
+  return { ...d, covers: d.covers ?? b, requested: req };
 }

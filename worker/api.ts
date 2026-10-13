@@ -53,6 +53,57 @@ const NODE_CLAUSES: Record<string, string[]> = {
   trailhead: ['["highway"="trailhead"]'],
 };
 
+export interface Box { minLat: number; maxLat: number; minLon: number; maxLon: number }
+
+/**
+ * Grid sizes (degrees) a request is snapped outward to. The smallest grid at least as big as the request is
+ * used, so any view of the same place maps to the same few squares and shares one cached answer. Blocks are at
+ * most two squares wide, and the 0.175 grid keeps blocks within the water-query limit.
+ */
+export const SNAP_GRIDS = [0.05, 0.1, 0.175, 0.5];
+export const MAX_REQUEST_SPAN = 0.5;
+const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+
+export function snapBBox(b: Box): Box {
+  const span = Math.max(b.maxLat - b.minLat, b.maxLon - b.minLon);
+  const g = SNAP_GRIDS.find((x) => x >= span - 1e-9) ?? SNAP_GRIDS[SNAP_GRIDS.length - 1]!; // tolerance: 46.2 - 46.1 is not exactly 0.1
+  return {
+    minLat: r4(Math.max(-90, Math.floor(b.minLat / g + 1e-9) * g)),
+    maxLat: r4(Math.min(90, Math.ceil(b.maxLat / g - 1e-9) * g)),
+    minLon: r4(Math.max(-180, Math.floor(b.minLon / g + 1e-9) * g)),
+    maxLon: r4(Math.min(180, Math.ceil(b.maxLon / g - 1e-9) * g)),
+  };
+}
+
+/**
+ * The request that identifies an answer in the cache. Different views of one place, and different spellings of
+ * one search, become the same key, so they share a cached response.
+ */
+export function cacheKey(req: Request): Request {
+  const url = new URL(req.url);
+  if (url.pathname === '/api/features') {
+    const [s, n, w, e] = ['minLat', 'maxLat', 'minLon', 'maxLon'].map((k) => num(url.searchParams.get(k)));
+    if ([s, n, w, e].every((v) => v !== undefined)) {
+      const b = snapBBox({ minLat: s!, maxLat: n!, minLon: w!, maxLon: e! });
+      const key = new URL(url.origin + url.pathname);
+      key.searchParams.set('bbox', `${b.minLat},${b.minLon},${b.maxLat},${b.maxLon}`);
+      const kinds = url.searchParams.get('kinds');
+      key.searchParams.set('kinds', kinds === null ? '*' : kinds.split(',').filter(Boolean).sort().join(','));
+      for (const f of ['lakes', 'rivers']) key.searchParams.set(f, url.searchParams.has(f) ? url.searchParams.get(f)! : '1');
+      return new Request(key.toString());
+    }
+  }
+  if (url.pathname === '/api/geocode') {
+    const q = url.searchParams.get('q')?.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (q) {
+      const key = new URL(url.origin + url.pathname);
+      key.searchParams.set('q', q);
+      return new Request(key.toString());
+    }
+  }
+  return req;
+}
+
 /** Water queries get slow and flaky past this span (degrees); skip them rather than fail. */
 const WATER_MAX_SPAN = 0.35;
 
@@ -146,7 +197,8 @@ export async function handleApi(req: Request): Promise<Response | null> {
   if (req.method !== 'GET') return json({ error: 'method not allowed' }, 405);
 
   const cache = url.pathname === '/api/health' ? undefined : (globalThis as { caches?: { default?: Cache } }).caches?.default;
-  const hit = await cache?.match(req);
+  const key = cache ? cacheKey(req) : req;
+  const hit = await cache?.match(key);
   if (hit) return hit;
 
   let res: Response;
@@ -155,7 +207,7 @@ export async function handleApi(req: Request): Promise<Response | null> {
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : 'upstream failure' }, 502);
   }
-  if (res.ok) await cache?.put(req, res.clone());
+  if (res.ok) await cache?.put(key, res.clone());
   return res;
 }
 
@@ -196,8 +248,10 @@ async function route(url: URL): Promise<Response> {
     case '/api/features': {
       const [s, n, w, e] = ['minLat', 'maxLat', 'minLon', 'maxLon'].map((k) => num(url.searchParams.get(k)));
       if ([s, n, w, e].some((v) => v === undefined)) return json({ error: 'missing bbox' }, 400);
-      if ((n! - s!) > 1 || (e! - w!) > 1) return json({ error: 'area too large for landmarks' }, 400);
-      const bb = `(${s},${w},${n},${e})`;
+      if ((n! - s!) > MAX_REQUEST_SPAN || (e! - w!) > MAX_REQUEST_SPAN) return json({ error: 'area too large for landmarks' }, 400);
+      // Snap outward to a fixed grid so every view of this place is the same query (and the same cached answer).
+      const covers = snapBBox({ minLat: s!, maxLat: n!, minLon: w!, maxLon: e! });
+      const bb = `(${covers.minLat},${covers.minLon},${covers.maxLat},${covers.maxLon})`;
       // Ask only for what the client shows: fewer clauses means a cheaper query on a busy public server.
       // With no params at all (older clients) everything is requested.
       const kindsParam = url.searchParams.get('kinds');
@@ -211,7 +265,7 @@ async function route(url: URL): Promise<Response> {
 (${wantLakes ? `way["natural"="water"]["name"]${bb};` : ''}${wantRivers ? `way["waterway"="river"]["name"]${bb};` : ''});out geom 150;`;
       // Point features are cheap and reliable; ways with geometry are what the public Overpass servers
       // time out on. Fetch them separately so a water failure never costs the landmarks.
-      const waterTooBig = (n! - s!) > WATER_MAX_SPAN || (e! - w!) > WATER_MAX_SPAN;
+      const waterTooBig = covers.maxLat - covers.minLat > WATER_MAX_SPAN + 1e-9 || covers.maxLon - covers.minLon > WATER_MAX_SPAN + 1e-9;
       const [nodes, water] = await Promise.allSettled([
         kinds.length ? overpass(nodeQuery) : Promise.resolve([]),
         !wantLakes && !wantRivers ? Promise.resolve([]) : waterTooBig ? Promise.reject(new Error('area too large for water')) : overpass(waterQuery),
@@ -226,7 +280,7 @@ async function route(url: URL): Promise<Response> {
         ...(water.status === 'fulfilled' ? water.value : []),
       ]);
       const reason = [why(nodes, 'landmarks'), why(water, 'water')].filter(Boolean).join('; ');
-      const res = json({ ...out, partial, ...(reason ? { reason } : {}) });
+      const res = json({ ...out, covers, partial, ...(reason ? { reason } : {}) });
       // Don't let a degraded answer sit in the cache for a day.
       if (partial.length) res.headers.set('cache-control', 'public, max-age=60, s-maxage=60');
       return res;

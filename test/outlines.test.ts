@@ -66,8 +66,11 @@ describe('export modes', () => {
     expect(sceneToSvg(out)).not.toMatch(/stroke="none"|<text|opacity=/);
     expect(out.prims.some((p) => p.kind === 'path' && p.widthMm === PLOTTER_PEN_MM)).toBe(true);
   });
-  it('plotter keeps one layer per color', () => {
+  it('plotter layers are all strokes at the one pen width, so one layer per color', () => {
     const svg = sceneToSvg(prepareScene(scene, 'plotter', fonts));
-    expect(svg.match(/inkscape:groupmode="layer"/g)).toHaveLength(2);
+    const ids = [...svg.matchAll(/<g id="(layer-[^"]+)"/g)].map((m) => m[1]!);
+    // route (orange) and everything else (ink): heavy lines became repeated passes of the same pen
+    expect(ids).toHaveLength(2);
+    expect(ids.every((i) => i.endsWith(`-${PLOTTER_PEN_MM}mm`))).toBe(true);
   });
 });

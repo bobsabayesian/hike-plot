@@ -1,7 +1,7 @@
 import { clipPolyline, simplifyXY, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
 import type { Prim } from '../scene/types';
-import { placeLandmarks, type LandmarkEntry, type PlaceInput } from './select';
+import { placeLandmarks, type LandmarkPlacement, type PlaceInput } from './select';
 import type { FeatureSettings, LandmarkKind, WaterLine } from './types';
 
 const f = (n: number) => +n.toFixed(2);
@@ -46,8 +46,8 @@ export interface LandmarkDraw extends PlaceInput {
   trackingMm: number;
 }
 
-export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[]; entries: LandmarkEntry[] } {
-  const { labels, entries } = placeLandmarks(inp);
+export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[] } & Pick<LandmarkPlacement, 'entries' | 'pool' | 'open'> {
+  const { labels, entries, pool, open } = placeLandmarks(inp);
   const prims: Prim[] = [];
   const color = inp.settings.color;
   const markers = labels.filter((l) => l.marker);
@@ -62,5 +62,5 @@ export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[]; entries: Land
       trackingMm: inp.trackingMm, fontFamily: inp.fontFamily, fontKey: inp.fontKey, color,
       ...(l.rotate ? { rotate: l.rotate } : {}),
     });
-  return { prims, entries };
+  return { prims, entries, pool, open };
 }

@@ -8,7 +8,7 @@ import {
 import { contourInterval, contourPaths } from '../topo/contours';
 import type { TerrainField } from '../topo/terrain';
 import { landmarkPrims, waterPrims } from '../features/draw';
-import type { LandmarkEntry } from '../features/select';
+import type { LandmarkEntry, LandmarkPlacement } from '../features/select';
 import type { OsmData } from '../features/types';
 import type { XY } from '../geo/clip';
 import { northPrims } from './north';
@@ -109,7 +109,7 @@ export function autoValues(p: Project, stats?: TrackStats, contourM?: number) {
 interface Block { height: number; gapAfter: number; draw: (yTop: number) => Prim[] }
 
 export interface View { frame: Rect; fit: Fit; bbox: BBox }
-export interface Composed { scene: Scene; view?: View; landmarks?: LandmarkEntry[] }
+export interface Composed { scene: Scene; view?: View; landmarks?: LandmarkEntry[]; pool?: LandmarkPlacement['pool']; open?: LandmarkPlacement['open'] }
 
 function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: OsmData): Composed {
   const { w: W, h: H } = posterMm(p);
@@ -206,6 +206,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   const hasMap = p.points.length >= 2 || !!p.feature;
   let view: View | undefined;
   let landmarks: LandmarkEntry[] | undefined;
+  let pool: LandmarkPlacement['pool'] | undefined;
+  let open: LandmarkPlacement['open'] | undefined;
   if (hasMap) {
     const profileH = p.profile.enabled && p.profile.position === 'bottom' && p.points.length ? H * 0.09 : 0;
     // distance tick labels hang below the profile, so reserve room for them
@@ -329,11 +331,13 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         });
         prims.push(...out.prims);
         landmarks = out.entries;
+        pool = out.pool;
+        open = out.open;
       }
     }
   }
 
-  return { scene: { widthMm: W, heightMm: H, paper: p.paper, prims }, view, landmarks };
+  return { scene: { widthMm: W, heightMm: H, paper: p.paper, prims }, view, landmarks, pool, open };
 }
 
 export const composeScene = (p: Project, terrain?: TerrainField, osm?: OsmData): Composed => compose(p, terrain, false, osm);

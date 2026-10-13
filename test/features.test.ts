@@ -59,15 +59,6 @@ describe('placeLandmarks', () => {
     const { labels } = placeLandmarks(input([p], { route }));
     expect(labels[0]!.anchor).not.toBe('start');
   });
-  it('hidden landmarks are listed but do not use a slot', () => {
-    const s = defaultFeatures();
-    s.maxLabels = 2;
-    s.overrides['n55'] = { hidden: true };
-    const { entries, labels } = placeLandmarks(input(grid, { settings: s }));
-    expect(entries.find((e) => e.id === 'n55')).toMatchObject({ hidden: true, placed: false });
-    expect(labels).toHaveLength(2);
-    expect(labels.map((l) => l.id)).not.toContain('n55');
-  });
   it('honors rename and a forced side', () => {
     const s = defaultFeatures();
     s.overrides['n1'] = { name: 'Renamed', side: 'left' };
@@ -216,7 +207,7 @@ describe('/api/features resilience', () => {
   const reply = (status: number, elements: unknown[] = []) =>
     new Response(status === 200 ? JSON.stringify({ elements }) : 'gateway', { status });
   const call = async (qs: string) => handleApi(new Request(`http://x/api/features?${qs}`)) as Promise<Response>;
-  const small = 'minLat=46&maxLat=46.2&minLon=-121.4&maxLon=-121.2';
+  const small = 'minLat=46.01&maxLat=46.08&minLon=-121.39&maxLon=-121.32';
 
   afterEach(() => vi.unstubAllGlobals());
   const stub = (fn: (isWater: boolean, call: number) => Response) => {
@@ -253,7 +244,7 @@ describe('/api/features resilience', () => {
   });
   it('skips the expensive water query for large areas', async () => {
     const f = stub(() => reply(200, [peak]));
-    const d: any = await (await call('minLat=46&maxLat=46.8&minLon=-121.8&maxLon=-121.2')).json();
+    const d: any = await (await call('minLat=46&maxLat=46.4&minLon=-121.5&maxLon=-121.2')).json();
     expect(d.partial).toEqual(['water']);
     expect(f).toHaveBeenCalledTimes(1);
   });
@@ -266,7 +257,7 @@ describe('/api/features resilience', () => {
 describe('overpass mirrors and diagnostics', () => {
   const peak = { type: 'node', id: 1, lat: 1, lon: 2, tags: { name: 'A', natural: 'peak' } };
   const ok = (elements: unknown[]) => new Response(JSON.stringify({ elements }));
-  const small = 'minLat=46&maxLat=46.2&minLon=-121.4&maxLon=-121.2';
+  const small = 'minLat=46.01&maxLat=46.08&minLon=-121.39&maxLon=-121.32';
   const call = (path: string) => handleApi(new Request(`http://x${path}`)) as Promise<Response>;
   const host = (u: unknown) => new URL(String(u)).hostname;
   afterEach(() => vi.unstubAllGlobals());
@@ -365,34 +356,34 @@ describe('opt-in feature defaults', () => {
     expect(d.water).toBe(true);
     expect(d.waterLabels).toBe(false);
   });
-  it('the default request asks only for peaks, trailheads and water', () => {
-    expect(wantedRequest(defaultFeatures())).toEqual({ kinds: ['peak', 'trailhead'], lakes: true, rivers: true });
+  it('the request always covers every point kind (the add-landmark list offers them), plus water by setting', () => {
+    expect(wantedRequest(defaultFeatures())).toEqual({ kinds: ['peak', 'pass', 'hut', 'viewpoint', 'trailhead'], lakes: true, rivers: true });
   });
   it('water labels alone still need the water geometry (rivers and lakes)', () => {
     const s = defaultFeatures();
     s.water = false;
     s.waterLabels = true;
-    expect(wantedRequest(s)).toEqual({ kinds: ['peak', 'trailhead'], lakes: true, rivers: true });
+    expect(wantedRequest(s)).toMatchObject({ lakes: true, rivers: true });
     s.waterLabels = false;
-    expect(wantedRequest(s)).toEqual({ kinds: ['peak', 'trailhead'], lakes: false, rivers: false });
+    expect(wantedRequest(s)).toMatchObject({ lakes: false, rivers: false });
   });
-  it('knows when already-fetched data is enough, and when a new kind needs a fetch', () => {
+  it('switching a point kind on or off never needs a new fetch; turning water on does', () => {
     const have = wantedRequest(defaultFeatures());
-    expect(requestCovers(have, have)).toBe(true);
     const s = defaultFeatures();
     s.kinds.hut = true;
-    expect(requestCovers(have, wantedRequest(s))).toBe(false);
-    s.kinds.hut = false;
-    s.kinds.peak = false; // fewer kinds is covered by a superset
+    s.kinds.peak = false;
     expect(requestCovers(have, wantedRequest(s))).toBe(true);
     expect(requestCovers(undefined, wantedRequest(s))).toBe(false);
+    const noWater = wantedRequest({ ...defaultFeatures(), water: false });
+    expect(requestCovers(noWater, wantedRequest(defaultFeatures()))).toBe(false);
+    expect(requestCovers(have, wantedRequest({ ...defaultFeatures(), water: false }))).toBe(true);
   });
-  it('nothing enabled means nothing to fetch', () => {
+  it('only water settings can make a request empty of water', () => {
     const s = defaultFeatures();
-    Object.keys(s.kinds).forEach((k) => ((s.kinds as any)[k] = false));
     s.water = false;
     s.waterLabels = false;
-    expect(requestIsEmpty(wantedRequest(s))).toBe(true);
+    expect(wantedRequest(s)).toMatchObject({ lakes: false, rivers: false });
+    expect(requestIsEmpty(wantedRequest(s))).toBe(false); // points are still fetched
   });
   it('by default the scene labels peaks and trailheads but not huts, passes, viewpoints or lakes', () => {
     const pts = sampleTrack();
@@ -415,7 +406,7 @@ describe('opt-in feature defaults', () => {
 
 describe('/api/features only asks for what is requested', () => {
   const ok = (elements: unknown[] = []) => new Response(JSON.stringify({ elements }));
-  const small = 'minLat=46&maxLat=46.2&minLon=-121.4&maxLon=-121.2';
+  const small = 'minLat=46.01&maxLat=46.08&minLon=-121.39&maxLon=-121.32';
   const queries = () => {
     const qs: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_u: unknown, init: any) => { qs.push(decodeURIComponent(init.body)); return ok(); }));

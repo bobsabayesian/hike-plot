@@ -32,26 +32,40 @@ export interface SvgOptions {
 }
 
 /**
- * One <g> per distinct color, flagged as an Inkscape layer so each pen gets its own layer.
+ * Layer key for a primitive. Pen plotters need one pen per layer, so every distinct color AND every distinct
+ * stroke width is its own layer. Fills (and live <text>, which is filled) cannot be plotted and go in separate
+ * fill layers by color.
+ */
+export function layerOf(p: Prim): { id: string; label: string } {
+  const c = colorOf(p);
+  if (p.kind === 'path' && p.mode === 'stroke') {
+    const w = +(p.widthMm ?? 0.5).toFixed(2);
+    return { id: `layer-${c.slice(1)}-${w}mm`, label: `${c} ${w}mm` };
+  }
+  return { id: `layer-${c.slice(1)}-fill`, label: `${c} fill` };
+}
+
+/**
+ * One <g> per distinct (color, stroke width), flagged as an Inkscape layer so each pen gets its own layer.
  * Layers are ordered by first appearance, which keeps painter's order for fills under lines.
  */
 export function sceneToSvg(scene: Scene, opts: SvgOptions = {}): string {
   const order: string[] = [];
-  const groups = new Map<string, string[]>();
+  const groups = new Map<string, { label: string; els: string[] }>();
   for (const p of scene.prims) {
-    const c = colorOf(p);
-    if (!groups.has(c)) {
-      groups.set(c, []);
-      order.push(c);
+    const { id, label } = layerOf(p);
+    if (!groups.has(id)) {
+      groups.set(id, { label, els: [] });
+      order.push(id);
     }
-    groups.get(c)!.push(el(p));
+    groups.get(id)!.els.push(el(p));
   }
   const { widthMm: w, heightMm: h } = scene;
   const layers = order
-    .map(
-      (c, i) =>
-        `<g id="layer-${c.slice(1)}" inkscape:groupmode="layer" inkscape:label="Pen ${i + 1} ${c}">${groups.get(c)!.join('')}</g>`,
-    )
+    .map((id, i) => {
+      const g = groups.get(id)!;
+      return `<g id="${id}" inkscape:groupmode="layer" inkscape:label="Layer ${i + 1} ${g.label}">${g.els.join('')}</g>`;
+    })
     .join('\n');
   const paper = opts.paper ? `<rect id="paper" width="${f(w)}" height="${f(h)}" fill="${normColor(scene.paper)}"/>\n` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${f(w)}mm" height="${f(h)}mm" viewBox="0 0 ${f(w)} ${f(h)}">\n${paper}${layers}\n</svg>`;

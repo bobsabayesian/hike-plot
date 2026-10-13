@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
+import { describePoolItem } from '../features/format';
 import { KIND_LABELS, LANDMARK_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Side } from '../features/types';
 import { composeScene, viewBBox, autoValues, featureView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
@@ -10,7 +11,8 @@ import { sceneToSvg } from '../export/svg';
 import { pngSize, sceneToPng } from '../export/png';
 import { loadFonts } from '../export/fonts';
 import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
-import { prepareScene, type ExportMode } from '../export/outlines';
+import { prepareScene, PLOTTER_PEN_MM, type ExportMode } from '../export/outlines';
+import { passCount } from '../export/offset';
 import { PRINT_SIZES, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
 
 const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placement) => void }) => (
@@ -73,6 +75,7 @@ export function App() {
   const [over, setOver] = useState(false);
   const [paperInExport, setPaperInExport] = useState(false);
   const [mode, setMode] = useState<ExportMode>('print');
+  const [penMm, setPenMm] = useState(PLOTTER_PEN_MM);
   const [dpi, setDpi] = useState(150);
   const [pngBusy, setPngBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -106,6 +109,11 @@ export function App() {
     }, 300);
     return () => { live = false; clearTimeout(t); };
   }, [need, p.terrain.enabled, terrain, setTerrain]);
+  // Which line weights in this design become several passes with the chosen pen (plotter export).
+  const passes = useMemo(() => {
+    const widths = new Set(scene.prims.flatMap((x) => (x.kind === 'path' && x.mode === 'stroke' ? [+(x.widthMm ?? 0.5).toFixed(2)] : [])));
+    return [...widths].sort((a, b) => a - b).map((w) => [w, passCount(w, penMm)] as const).filter(([, n]) => n > 1);
+  }, [scene, penMm]);
   const previewSvg = useMemo(() => sceneToSvg(scene, { paper: true }), [scene]);
 
   async function load(file?: File) {
@@ -246,6 +254,31 @@ export function App() {
               </div>
             );
           })}
+          {(['point', 'water'] as const).map((group) => {
+            const open = composed.open?.[group] ?? 0;
+            const items = (composed.pool ?? []).filter((it) => it.group === group);
+            if (open <= 0 || (group === 'water' && !p.features.waterLabels)) return null;
+            const noun = group === 'water' ? 'water name' : 'landmark';
+            return (
+              <div className="slot" key={group}>
+                <div className="hint">
+                  {open} open {noun} slot{open > 1 ? 's' : ''}. {items.length ? 'Choose what to add:' : `No other ${noun}s nearby.`}
+                </div>
+                {items.length > 0 && (
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      if (id) set((x) => { x.features.overrides[id] = { ...x.features.overrides[id], pinned: true, hidden: false }; });
+                    }}
+                  >
+                    <option value="">Add {noun}…</option>
+                    {items.map((it) => <option key={it.id} value={it.id}>{describePoolItem(it, p.units)}</option>)}
+                  </select>
+                )}
+              </div>
+            );
+          })}
         </>)}
 
         <h2>Elevation profile</h2>
@@ -350,10 +383,21 @@ export function App() {
             <option value="live">Live text (needs fonts)</option>
           </select>
         </Row>
+        {mode === 'plotter' && (<>
+          <Row label="Pen width">
+            <select value={penMm} onChange={(e) => setPenMm(+e.target.value)}>
+              {[0.2, 0.25, 0.3, 0.4, 0.5, 0.7, 1].map((w) => <option key={w} value={w}>{w} mm</option>)}
+            </select>
+          </Row>
+          <div className="hint">
+            Every line is drawn with this one pen. Heavier lines are repeated side by side:{' '}
+            {passes.length ? passes.map(([w, n]) => `${w} mm = ${n} passes`).join(', ') : 'none at this pen width'}.
+          </div>
+        </>)}
         <div className="row">
           <button className="primary" onClick={async () => {
             try {
-              const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts());
+              const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { penMm });
               download('hike-poster.svg', sceneToSvg(out, { paper: paperInExport && mode !== 'plotter' }), 'image/svg+xml');
             } catch (e) {
               setErr(e instanceof Error ? e.message : 'SVG export failed');

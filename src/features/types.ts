@@ -54,7 +54,14 @@ export interface OsmData {
 
 export type Side = 'auto' | 'right' | 'left' | 'above' | 'below';
 
-export interface FeatureOverride { name?: string; hidden?: boolean; side?: Side }
+export interface FeatureOverride {
+  name?: string;
+  /** the user removed this label; its slot stays open instead of being refilled */
+  hidden?: boolean;
+  /** the user chose this one from the list, even if its kind is switched off */
+  pinned?: boolean;
+  side?: Side;
+}
 
 export interface FeatureSettings {
   enabled: boolean;
@@ -77,10 +84,14 @@ export interface FeatureSettings {
 
 export const POINT_KINDS: LandmarkKind[] = ['peak', 'pass', 'hut', 'viewpoint', 'trailhead'];
 
-/** The server request implied by the current settings; empty if nothing needs fetching. */
+/**
+ * The server request implied by the current settings. Every point kind is always fetched, even the ones
+ * switched off, because the "add landmark" list offers them; point queries are cheap. Water is the costly
+ * part, so it is only fetched when outlines or names are on.
+ */
 export function wantedRequest(s: FeatureSettings): OsmRequest {
   return {
-    kinds: POINT_KINDS.filter((k) => s.kinds[k]),
+    kinds: [...POINT_KINDS],
     lakes: s.water || s.waterLabels,
     rivers: s.water || s.waterLabels,
   };

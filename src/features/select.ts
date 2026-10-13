@@ -7,6 +7,8 @@ export interface LandmarkEntry {
   name: string;
   kind: LabelKind;
   hidden: boolean;
+  /** chosen from the list, so drawn even if its kind is switched off */
+  pinned: boolean;
   /** false when it was a candidate but no label position fit */
   placed: boolean;
 }
@@ -42,6 +44,8 @@ export interface PlaceInput {
 interface Box { cx: number; cy: number; w: number; h: number; ang: number }
 interface Candidate {
   id: string; name: string; kind: LabelKind; x: number; y: number; score: number; marker: boolean; ele?: number;
+  /** its kind is switched on (otherwise it is only available from the list) */
+  enabled: boolean;
   /** river names: unit direction of the stretch the label follows, in radians, kept upright */
   angle?: number;
   /** river names: other places along the river to try if the best one is taken */
@@ -217,8 +221,40 @@ export function bestStretch(line: XY[], w: number, size: number, bounds: Rect): 
   return r.stretches[0] && { ...r.stretches[0], visible: r.visible };
 }
 
-/** Pick the most important landmarks, then give each a label position that avoids the route and other labels. */
-export function placeLandmarks(inp: PlaceInput): { entries: LandmarkEntry[]; labels: PlacedLabel[] } {
+export type LabelGroup = 'point' | 'water';
+const groupOf = (k: LabelKind): LabelGroup => (k === 'river' || k === 'lake' ? 'water' : 'point');
+
+/** Something nearby that is not drawn right now but could be added from the list. */
+export interface PoolItem {
+  id: string;
+  name: string;
+  kind: LabelKind;
+  group: LabelGroup;
+  ele?: number;
+  /** why it is not drawn */
+  reason: 'kind off' | 'hidden' | 'no room' | 'not chosen';
+}
+
+export interface LandmarkPlacement {
+  entries: LandmarkEntry[];
+  labels: PlacedLabel[];
+  /** candidates that could fill an open slot, best first (includes kinds that are switched off) */
+  pool: PoolItem[];
+  /** free label slots per group: the limit minus what is drawn */
+  open: Record<LabelGroup, number>;
+}
+
+const MAX_POOL = 60;
+
+/**
+ * Pick the most important landmarks, then give each a label position that avoids the route and other labels.
+ *
+ * Slots: each group (point labels, water names) has a limit. Labels the user pinned from the list go first,
+ * then candidates of switched-on kinds in rank order. A label the user hid keeps holding its slot, so the
+ * slot stays open for the user to fill from the list instead of being refilled automatically. A label that
+ * simply has no room does not hold a slot, so the next candidate gets a try.
+ */
+export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
   const { settings: s, fit, frame, route, sizeMm, markerR } = inp;
   const inFrame = ([x, y]: XY) => x >= frame.x && x <= frame.x + frame.w && y >= frame.y && y <= frame.y + frame.h;
 
@@ -235,11 +271,12 @@ export function placeLandmarks(inp: PlaceInput): { entries: LandmarkEntry[]; lab
     cands.push({ ...c, score: c.base * (1 + near) });
   };
 
+  // Every kind becomes a candidate, switched on or not, so the list can offer them.
   for (const l of inp.landmarks) {
-    if (!s.kinds[l.kind] || !l.name.trim()) continue;
+    if (!l.name.trim()) continue;
     const [x, y] = fit.toMm(l.lat, l.lon);
     const eleBonus = l.kind === 'peak' && l.ele !== undefined && eleVals.length > 1 ? 2 * ((l.ele - eMin) / eSpan) : 0;
-    addCand({ id: l.id, name: l.name, kind: l.kind, x, y, marker: true, ele: l.ele, base: KIND_WEIGHT[l.kind] + eleBonus });
+    addCand({ id: l.id, name: l.name, kind: l.kind, x, y, marker: true, ele: l.ele, enabled: s.kinds[l.kind], base: KIND_WEIGHT[l.kind] + eleBonus });
   }
 
   const lb = inp.labelBounds ?? frame;
@@ -251,7 +288,7 @@ export function placeLandmarks(inp: PlaceInput): { entries: LandmarkEntry[]; lab
       if (area < MIN_LAKE_AREA_MM2) continue;
       const cx = mm.reduce((a, p) => a + p[0], 0) / mm.length;
       const cy = mm.reduce((a, p) => a + p[1], 0) / mm.length;
-      addCand({ id: w.id, name: w.name, kind: 'lake', x: cx, y: cy, marker: false, base: KIND_WEIGHT.lake + Math.min(2, area / (frame.w * frame.h * 0.02)) });
+      addCand({ id: w.id, name: w.name, kind: 'lake', x: cx, y: cy, marker: false, enabled: true, base: KIND_WEIGHT.lake + Math.min(2, area / (frame.w * frame.h * 0.02)) });
     }
     const diag = Math.hypot(frame.w, frame.h);
     for (const r of stitchRivers(inp.water)) {
@@ -261,7 +298,7 @@ export function placeLandmarks(inp: PlaceInput): { entries: LandmarkEntry[]; lab
       const first = found.stretches[0];
       if (!first) continue;
       addCand({
-        id: r.id, name: r.name, kind: 'river', x: first.x, y: first.y, angle: first.angle, alts: found.stretches, marker: false,
+        id: r.id, name: r.name, kind: 'river', x: first.x, y: first.y, angle: first.angle, alts: found.stretches, marker: false, enabled: true,
         base: KIND_WEIGHT.river + Math.min(1.5, found.visible / (diag * 0.5)),
       });
     }
@@ -279,34 +316,32 @@ export function placeLandmarks(inp: PlaceInput): { entries: LandmarkEntry[]; lab
 
   // Markers of the candidates most likely to be drawn are reserved up front, so a label placed early
   // can't end up on top of a marker that is placed later.
-  const taken: Box[] = unique
-    .filter((c) => c.marker && !s.overrides[c.id]?.hidden)
+  const likely = unique.filter((c) => c.marker && !s.overrides[c.id]?.hidden && (c.enabled || s.overrides[c.id]?.pinned));
+  const taken: Box[] = likely
     .slice(0, s.maxLabels + 4)
     .map((c) => boxAt(c.x - markerR, c.y - markerR, c.x + markerR, c.y + markerR));
   const entries: LandmarkEntry[] = [];
   const labels: PlacedLabel[] = [];
   const gap = markerR * 0.7;
-  // Point labels and water names have separate quotas, so a crowd of peaks can't push every river out.
-  const placed = { point: 0, water: 0 };
-  const quota = { point: s.maxLabels, water: s.maxWaterLabels };
+  const budget = { point: s.maxLabels, water: s.maxWaterLabels };
+  // Per group: labels the user pinned (P), auto labels drawn (A), and auto labels the user hid (V).
+  // Hidden labels hold their slot open, and pinned labels are what fill it, so promotion of further
+  // candidates stops once A + max(V, P) reaches the limit; the total drawn (A + P) never exceeds it.
+  const P = { point: 0, water: 0 };
+  const A = { point: 0, water: 0 };
+  const V = { point: 0, water: 0 };
+  const full = (g: LabelGroup) => A[g] + Math.max(V[g], P[g]) >= budget[g];
+  const status = new Map<string, PoolItem['reason'] | 'drawn'>();
 
-  for (const c of unique) {
-    const group = c.kind === 'river' || c.kind === 'lake' ? 'water' : 'point';
-    if (entries.length >= MAX_LISTED || (placed.point >= quota.point && placed.water >= quota.water)) break;
-    if (placed[group] >= quota[group]) continue;
-    const ov = s.overrides[c.id] ?? {};
-    const name = (ov.name ?? c.name).trim() || c.name;
-    const entry: LandmarkEntry = { id: c.id, name, kind: c.kind, hidden: !!ov.hidden, placed: false };
-    entries.push(entry);
-    if (entry.hidden) continue;
-
+  /** Find a spot for `c` and record the label. Returns whether it fit. */
+  const place = (c: Candidate, name: string, ov: NonNullable<PlaceInput['settings']['overrides'][string]>): boolean => {
     const w = name.length * sizeMm * CHAR_W;
 
     if (c.kind === 'river') {
       // Write the name along the river, just above it; try below, then other stretches, if taken.
       const h = sizeMm * 0.95;
       const lineGap = sizeMm * 0.25;
-      placing: for (const st of c.alts ?? []) {
+      for (const st of c.alts ?? []) {
         const nx = Math.sin(st.angle);
         const ny = -Math.cos(st.angle);
         for (const side of [1, -1]) {
@@ -318,13 +353,11 @@ export function placeLandmarks(inp: PlaceInput): { entries: LandmarkEntry[]; lab
           if (insideBounds(box, lb) && !routeHits(route, box) && !taken.some((t) => overlap(t, box))) {
             taken.push(box);
             labels.push({ id: c.id, kind: 'river', text: name, x: baseline[0], y: baseline[1], anchor: 'middle', rotate: (st.angle * 180) / Math.PI });
-            entry.placed = true;
-            placed.water++;
-            break placing;
+            return true;
           }
         }
       }
-      continue;
+      return false;
     }
 
     const r = c.marker ? markerR : 0;
@@ -361,11 +394,54 @@ export function placeLandmarks(inp: PlaceInput): { entries: LandmarkEntry[]; lab
         taken.push(box);
         if (c.marker) taken.push(markerBox);
         labels.push(label);
-        entry.placed = true;
-        placed[group]++;
-        break;
+        return true;
       }
     }
+    return false;
+  };
+
+  const consider = (c: Candidate, pinned: boolean) => {
+    const group = groupOf(c.kind);
+    const ov = s.overrides[c.id] ?? {};
+    const name = (ov.name ?? c.name).trim() || c.name;
+    const entry: LandmarkEntry = { id: c.id, name, kind: c.kind, hidden: !!ov.hidden, pinned: !!ov.pinned, placed: false };
+    if (entry.hidden) {
+      entries.push(entry);
+      status.set(c.id, 'hidden');
+      if (!pinned) V[group]++; // a hidden auto label keeps its slot open; a removed pin gives its slot back
+      return;
+    }
+    if (pinned ? P[group] >= budget[group] : full(group)) return;
+    entries.push(entry);
+    if (place(c, name, ov)) {
+      entry.placed = true;
+      (pinned ? P : A)[group]++;
+      status.set(c.id, 'drawn');
+    } else {
+      status.set(c.id, 'no room');
+    }
+  };
+
+  // 1. what the user chose from the list, then 2. ranked candidates of switched-on kinds
+  for (const c of unique) if (s.overrides[c.id]?.pinned) consider(c, true);
+  for (const c of unique) {
+    if (entries.length >= MAX_LISTED) break;
+    if (s.overrides[c.id]?.pinned || !c.enabled) continue;
+    if (full('point') && full('water')) break;
+    consider(c, false);
   }
-  return { entries, labels };
+  const drawn = { point: A.point + P.point, water: A.water + P.water };
+
+  const pool: PoolItem[] = unique
+    .filter((c) => status.get(c.id) !== 'drawn')
+    .map((c): PoolItem => ({
+      id: c.id, name: (s.overrides[c.id]?.name ?? c.name).trim() || c.name, kind: c.kind, group: groupOf(c.kind), ele: c.ele,
+      reason: status.get(c.id) === 'hidden' ? 'hidden' : status.get(c.id) === 'no room' ? 'no room' : c.enabled ? 'not chosen' : 'kind off',
+    }))
+    .slice(0, MAX_POOL);
+
+  return {
+    entries, labels, pool,
+    open: { point: Math.max(0, budget.point - drawn.point), water: Math.max(0, budget.water - drawn.water) },
+  };
 }

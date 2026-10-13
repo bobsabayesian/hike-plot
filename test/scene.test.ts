@@ -28,17 +28,22 @@ describe('scene', () => {
     expect(s).toContain('99 mi');
     expect(s).not.toContain('July');
   });
-  it('one svg layer per distinct color; same colors merge', () => {
-    const p = base(); // route is orange; profile, text, watermark share #1f2a24
-    expect(sceneToSvg(buildScene(p)).match(/inkscape:groupmode="layer"/g)).toHaveLength(2);
-    p.route.color = '#1F2A24'; // different case, same color -> merges
-    expect(sceneToSvg(buildScene(p)).match(/inkscape:groupmode="layer"/g)).toHaveLength(1);
-    p.route.color = '#CC3300';
-    p.profile.fill = '#336699';
-    const svg = sceneToSvg(buildScene(p));
-    expect(svg.match(/inkscape:groupmode="layer"/g)).toHaveLength(3);
+  it('layers are split by color and stroke width; identical ones merge', () => {
+    const count = (p = base()) => sceneToSvg(buildScene(p)).match(/inkscape:groupmode="layer"/g)!.length;
+    // route (orange, 0.9 mm), profile line (ink, 0.4 mm), and the filled profile + text (ink fill)
+    expect(count()).toBe(3);
+    const p = base();
+    p.route.color = '#1F2A24'; // same ink as the profile line (different case), but a different width
+    expect(count(p)).toBe(3);
+    p.route.weightMm = 0.4; // now the same color and width as the profile line -> they merge
+    expect(count(p)).toBe(2);
+    const q = base();
+    q.route.color = '#CC3300';
+    q.profile.fill = '#336699';
+    const svg = sceneToSvg(buildScene(q));
+    expect(svg.match(/inkscape:groupmode="layer"/g)).toHaveLength(4); // + a separate blue fill layer
     expect(svg).not.toContain('id="paper"');
-    expect(sceneToSvg(buildScene(p), { paper: true })).toContain('id="paper"');
+    expect(sceneToSvg(buildScene(q), { paper: true })).toContain('id="paper"');
   });
   it('builds a text-only scene with no track', () => {
     expect(() => buildScene(defaultProject())).not.toThrow();

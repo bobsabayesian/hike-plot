@@ -1,4 +1,5 @@
 import type { PathPrim, Scene, TextPrim } from '../scene/types';
+import { offsetPath, passOffsets } from './offset';
 
 interface PathCommand { type: string; x?: number; y?: number; x1?: number; y1?: number; x2?: number; y2?: number }
 interface GlyphLike {
@@ -56,22 +57,29 @@ function rotatedPathData(commands: PathCommand[], cx: number, cy: number, rot: n
     .join('');
 }
 
-export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet): Scene {
+export interface PrepareOptions {
+  /** plotter pen width in mm; heavier lines are drawn as several passes of this pen */
+  penMm?: number;
+}
+
+export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, opts: PrepareOptions = {}): Scene {
   if (mode === 'live') return scene;
   if (!fonts) throw new Error('Fonts are required to outline text');
   const plotter = mode === 'plotter';
-  const prims = scene.prims.map((p): Scene['prims'][number] => {
+  const pen = opts.penMm ?? PLOTTER_PEN_MM;
+  const prims = scene.prims.flatMap((p): Scene['prims'] => {
     if (p.kind === 'text') {
       const path: PathPrim = plotter
-        ? { kind: 'path', d: textToPath(p, fonts), color: p.color, mode: 'stroke', widthMm: PLOTTER_PEN_MM, round: true }
+        ? { kind: 'path', d: textToPath(p, fonts), color: p.color, mode: 'stroke', widthMm: pen, round: true }
         : { kind: 'path', d: textToPath(p, fonts), color: p.color, mode: 'fill', opacity: p.opacity };
-      return path;
+      return [path];
     }
-    if (!plotter) return p;
-    // Plotters cannot fill or fade: draw the outline instead, at full strength.
-    return p.mode === 'fill'
-      ? { ...p, mode: 'stroke', widthMm: PLOTTER_PEN_MM, opacity: undefined }
-      : { ...p, opacity: undefined };
+    if (!plotter) return [p];
+    // Plotters cannot fill or fade: draw the outline instead, at full strength, with the one pen.
+    const stroke: PathPrim = p.mode === 'fill' ? { ...p, mode: 'stroke', widthMm: pen, opacity: undefined } : { ...p, opacity: undefined };
+    const offsets = passOffsets(stroke.widthMm ?? 0.5, pen);
+    // A heavy line is the same path repeated, shifted sideways, with the thin pen.
+    return offsets.map((o) => ({ ...stroke, d: o === 0 ? stroke.d : offsetPath(stroke.d, o), widthMm: pen }));
   });
   return { ...scene, prims };
 }
