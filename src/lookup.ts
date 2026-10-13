@@ -10,8 +10,11 @@ async function api<T>(path: string): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-export async function geocodeFeature(q: string): Promise<Feature & { location: string }> {
-  return api(`/api/geocode?q=${encodeURIComponent(q)}`);
+export interface GeocodeHit extends Feature { location: string; kind: string }
+
+/** Up to six candidate matches for a typed place or feature name, best first. */
+export async function geocodeFeature(q: string): Promise<GeocodeHit[]> {
+  return (await api<{ results: GeocodeHit[] }>(`/api/geocode?q=${encodeURIComponent(q)}`)).results;
 }
 
 /** Region name (e.g. "Pierce County, Washington") near the track's high point. */

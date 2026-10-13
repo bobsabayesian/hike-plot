@@ -57,6 +57,24 @@ async function overpass(query: string, retries: number): Promise<any[]> {
   }
 }
 
+/** Nominatim search hits -> what the client lists: name, region, OSM type and extent. */
+export function normalizeGeocode(hits: any[]) {
+  return hits
+    .filter((h) => Array.isArray(h.boundingbox) && h.boundingbox.length === 4)
+    .map((h) => {
+      const [s, n, w, e] = h.boundingbox.map(Number) as number[];
+      const parts = String(h.display_name).split(', ');
+      return {
+        name: h.name || parts[0],
+        location: parts.slice(1, 3).join(', '),
+        kind: String(h.type ?? h.category ?? '').replace(/_/g, ' '),
+        lat: +h.lat,
+        lon: +h.lon,
+        bbox: { minLat: s, maxLat: n, minLon: w, maxLon: e },
+      };
+    });
+}
+
 const num = (v: string | null) => (v !== null && v.trim() !== '' && Number.isFinite(+v) ? +v : undefined);
 
 export async function handleApi(req: Request): Promise<Response | null> {
@@ -83,19 +101,10 @@ async function route(url: URL): Promise<Response> {
     case '/api/geocode': {
       const q = url.searchParams.get('q')?.trim();
       if (!q || q.length > 200) return json({ error: 'missing q' }, 400);
-      const r = await fetch(`${NOMINATIM}/search?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`, { headers: { 'user-agent': UA } });
+      const r = await fetch(`${NOMINATIM}/search?format=jsonv2&limit=6&q=${encodeURIComponent(q)}`, { headers: { 'user-agent': UA } });
       if (!r.ok) return json({ error: 'geocoder unavailable' }, 502);
-      const [hit] = (await r.json()) as any[];
-      if (!hit) return json({ error: 'not found' }, 404);
-      const [s, n, w, e] = hit.boundingbox.map(Number) as number[];
-      const parts = String(hit.display_name).split(', ');
-      return json({
-        name: hit.name || parts[0],
-        location: parts.slice(1, 3).join(', '),
-        lat: +hit.lat, lon: +hit.lon,
-        bbox: { minLat: s, maxLat: n, minLon: w, maxLon: e },
-        kind: hit.type,
-      });
+      const results = normalizeGeocode((await r.json()) as any[]);
+      return results.length ? json({ results }) : json({ error: 'not found' }, 404);
     }
     case '/api/reverse': {
       const lat = num(url.searchParams.get('lat'));

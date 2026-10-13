@@ -25,7 +25,9 @@ export type FontKey = 'sans' | 'serif';
 export type ProfilePosition = 'bottom' | 'corner';
 
 export type Placement = 'top' | 'bottom';
-export type InfoKey = 'distance' | 'gain' | 'maxEle' | 'duration' | 'date';
+export type InfoKey = 'distance' | 'gain' | 'maxEle' | 'duration' | 'date' | 'contour';
+export type NorthStyle = 'arrow' | 'circle' | 'compass' | 'rose';
+export type Corner = 'tl' | 'tr' | 'bl' | 'br';
 
 export interface InfoItem {
   key: InfoKey;
@@ -45,7 +47,16 @@ export interface InfoBlock {
   items: InfoItem[];
 }
 
-export interface Feature { name: string; bbox: BBox; lat: number; lon: number }
+export interface Feature {
+  name: string;
+  bbox: BBox;
+  lat: number;
+  lon: number;
+  /** what OpenStreetMap calls it, e.g. "volcano" */
+  kind?: string;
+  /** view width/height in km; undefined = fit the feature's own extent (min ~6 km) */
+  spanKm?: number;
+}
 export interface Lookup { peakName?: string; location?: string }
 
 export interface Project {
@@ -79,6 +90,23 @@ export interface Project {
     fill: string;
     stroke: string;
     opacity: number;
+    labels: {
+      /** label the highest and lowest points */
+      extremes: boolean;
+      /** horizontal gridlines with elevation values */
+      yTicks: boolean;
+      /** distance ticks along the bottom */
+      xTicks: boolean;
+      sizePt: number;
+    };
+  };
+  north: {
+    enabled: boolean;
+    style: NorthStyle;
+    corner: Corner;
+    sizeMm: number;
+    color: string;
+    weightMm: number;
   };
   text: {
     font: FontKey;
@@ -106,7 +134,11 @@ export const defaultProject = (): Project => ({
     enabled: true, intervalM: 0, indexEvery: 5,
     color: '#1f2a24', weightMm: 0.12, indexWeightMm: 0.25, opacity: 0.8,
   },
-  profile: { enabled: true, position: 'bottom', fill: '#1f2a24', stroke: '#1f2a24', opacity: 0.12 },
+  profile: {
+    enabled: true, position: 'bottom', fill: '#1f2a24', stroke: '#1f2a24', opacity: 0.12,
+    labels: { extremes: false, yTicks: false, xTicks: false, sizePt: 9 },
+  },
+  north: { enabled: false, style: 'arrow', corner: 'tr', sizeMm: 22, color: '#1f2a24', weightMm: 0.35 },
   text: {
     font: 'sans',
     color: '#1f2a24',
@@ -122,6 +154,7 @@ export const defaultProject = (): Project => ({
         { key: 'maxEle', visible: false, label: 'High point' },
         { key: 'duration', visible: false, label: 'Time' },
         { key: 'date', visible: true, label: 'Date' },
+        { key: 'contour', visible: false, label: 'Contour interval' },
       ],
     },
   },

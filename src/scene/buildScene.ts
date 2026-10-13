@@ -2,15 +2,16 @@ import { cleanTrack } from '../gpx/clean';
 import { bbox, fitBBox, haversine, type BBox, type Fit } from '../geo/project';
 import type { Rect } from '../geo/clip';
 import {
-  computeStats, formatCoords, formatDuration, formatFeet, formatKm, formatMeters, formatMiles,
+  computeStats, metersToFeet, formatCoords, formatDuration, formatFeet, formatKm, formatMeters, formatMiles,
   type TrackStats,
 } from '../geo/stats';
-import { autoInterval, contourPaths, fieldRange } from '../topo/contours';
+import { contourInterval, contourPaths } from '../topo/contours';
 import type { TerrainField } from '../topo/terrain';
 import { landmarkPrims, waterPrims } from '../features/draw';
 import type { LandmarkEntry } from '../features/select';
 import type { OsmData } from '../features/types';
 import type { XY } from '../geo/clip';
+import { northPrims } from './north';
 import type { Prim, Scene } from './types';
 import { posterMm, type InfoItem, type Placement, type Project, type StrokeStyle } from './project';
 
@@ -24,6 +25,20 @@ export const FONTS = {
 export const MIN_SPAN_DEG = 0.06;
 
 const f = (n: number) => +n.toFixed(3);
+const circle = (cx: number, cy: number, r: number) =>
+  `M${f(cx - r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2 * r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2 * r)} 0Z`;
+
+/** Round-number tick values within [lo, hi], aiming for about `target` ticks. */
+export function niceTicks(lo: number, hi: number, target: number): number[] {
+  const span = hi - lo;
+  if (!(span > 0)) return [];
+  const raw = span / target;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = ([1, 2, 5, 10].find((k) => k * mag >= raw) ?? 10) * mag;
+  const out: number[] = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
 const polyline = (xy: [number, number][]) => xy.map(([x, y], i) => `${i ? 'L' : 'M'}${f(x)} ${f(y)}`).join('');
 
 function dashFor(style: StrokeStyle, w: number): { dash?: number[]; round?: boolean } {
@@ -36,6 +51,22 @@ export function autoDate(t?: number): string {
   return t === undefined
     ? ''
     : new Date(t).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+}
+
+/** The area a typed feature is shown at: `spanKm` square if set, else the feature's own extent (at least ~6 km). */
+export function featureView(f: NonNullable<Project['feature']>): BBox {
+  if (f.spanKm === undefined) return expandMin(f.bbox);
+  const lat = (f.bbox.minLat + f.bbox.maxLat) / 2;
+  const lon = (f.bbox.minLon + f.bbox.maxLon) / 2;
+  const dLat = f.spanKm / 110.57 / 2;
+  const dLon = f.spanKm / (111.32 * Math.max(Math.cos((lat * Math.PI) / 180), 0.05)) / 2;
+  return { minLat: lat - dLat, maxLat: lat + dLat, minLon: lon - dLon, maxLon: lon + dLon };
+}
+
+/** Rough size of a view in km (width, height). */
+export function viewSizeKm(b: BBox): [number, number] {
+  const lat = (b.minLat + b.maxLat) / 2;
+  return [(b.maxLon - b.minLon) * 111.32 * Math.cos((lat * Math.PI) / 180), (b.maxLat - b.minLat) * 110.57];
 }
 
 export function expandMin(b: BBox, minSpan = MIN_SPAN_DEG): BBox {
@@ -54,7 +85,7 @@ export function expandMin(b: BBox, minSpan = MIN_SPAN_DEG): BBox {
 }
 
 /** Values the text blocks auto-fill with. Empty string = nothing to show. */
-export function autoValues(p: Project, stats?: TrackStats) {
+export function autoValues(p: Project, stats?: TrackStats, contourM?: number) {
   const imperial = p.units === 'imperial';
   const dist = (m: number) => (imperial ? formatMiles(m) : formatKm(m));
   const ele = (m: number) => (imperial ? formatFeet(m) : formatMeters(m));
@@ -70,6 +101,7 @@ export function autoValues(p: Project, stats?: TrackStats) {
       maxEle: stats?.maxEleM !== undefined ? ele(stats.maxEleM) : '',
       duration: stats?.durationMs !== undefined ? formatDuration(stats.durationMs) : '',
       date: autoDate(stats?.startTime),
+      contour: contourM ? (imperial ? `${contourM} m (${Math.round(metersToFeet(contourM))} ft)` : `${contourM} m`) : '',
     } as Record<InfoItem['key'], string>,
   };
 }
@@ -89,7 +121,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   const tx = t.align === 'left' ? m : t.align === 'right' ? W - m : W / 2;
   const innerW = W - 2 * m;
   const stats = p.points.length ? computeStats(p.points) : undefined;
-  const auto = autoValues(p, stats);
+  const interval = p.terrain.enabled && terrain ? contourInterval(p.terrain.intervalM, terrain) : undefined;
+  const auto = autoValues(p, stats, interval);
   const text = (s: string, y: number, sizeMm: number, extra: Partial<Extract<Prim, { kind: 'text' }>> = {}, x = tx): Prim => ({
     kind: 'text', text: s, x, y, anchor, sizeMm, trackingMm: sizeMm * t.trackingEm, fontFamily, fontKey: t.font, color: t.color, ...extra,
   });
@@ -175,8 +208,10 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   let landmarks: LandmarkEntry[] | undefined;
   if (hasMap) {
     const profileH = p.profile.enabled && p.profile.position === 'bottom' && p.points.length ? H * 0.09 : 0;
-    const frame: Rect = { x: m, y: topCursor, w: innerW, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) };
-    const focus: BBox = p.points.length >= 2 ? bbox(p.points) : expandMin(p.feature!.bbox);
+    // distance tick labels hang below the profile, so reserve room for them
+    const tickPad = p.profile.enabled && p.profile.labels.xTicks && p.points.length ? p.profile.labels.sizePt * PT * 2.4 : 0;
+    const frame: Rect = { x: m, y: topCursor, w: innerW, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) - tickPad };
+    const focus: BBox = p.points.length >= 2 ? bbox(p.points) : featureView(p.feature!);
     const fit = fitBBox(focus, frame);
     const [la1, lo1] = fit.fromMm(frame.x, frame.y + frame.h);
     const [la2, lo2] = fit.fromMm(frame.x + frame.w, frame.y);
@@ -184,9 +219,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
 
     if (!layoutOnly) {
       if (p.terrain.enabled && terrain) {
-        const [lo, hi] = fieldRange(terrain);
-        const interval = p.terrain.intervalM > 0 ? p.terrain.intervalM : autoInterval(lo, hi);
-        const paths = contourPaths(terrain, fit, frame, interval, p.terrain.indexEvery);
+        const paths = contourPaths(terrain, fit, frame, interval!, p.terrain.indexEvery);
         const tc = p.terrain;
         if (paths.regular) prims.push({ kind: 'path', d: paths.regular, color: tc.color, mode: 'stroke', widthMm: tc.weightMm, opacity: tc.opacity });
         if (paths.index) prims.push({ kind: 'path', d: paths.index, color: tc.color, mode: 'stroke', widthMm: tc.indexWeightMm, opacity: tc.opacity });
@@ -220,6 +253,57 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
             const topLine = polyline(line);
             prims.push({ kind: 'path', d: `${topLine}L${f(px + pw)} ${f(py + ph)}L${f(px)} ${f(py + ph)}Z`, color: p.profile.fill, mode: 'fill', opacity: p.profile.opacity });
             prims.push({ kind: 'path', d: topLine, color: p.profile.stroke, mode: 'stroke', widthMm: 0.4 });
+
+            const lb = p.profile.labels;
+            if (lb.extremes || lb.yTicks || lb.xTicks) {
+              const size = lb.sizePt * PT;
+              const col = p.profile.stroke;
+              const imperial = p.units === 'imperial';
+              const yOf = (e: number) => py + ph - ((e - eMin) / span) * ph * 0.92 - ph * 0.04;
+              const xOf = (dist: number) => px + (dist / (d || 1)) * pw;
+              const txt = (s: string, x: number, y: number, anchor: 'start' | 'middle' | 'end', opacity?: number) =>
+                prims.push({ kind: 'text', text: s, x, y, anchor, sizeMm: size, trackingMm: size * 0.04, fontFamily, fontKey: t.font, color: col, opacity });
+              const grid = (d: string, w: number, opacity?: number) =>
+                prims.push({ kind: 'path', d, color: col, mode: 'stroke', widthMm: w, opacity });
+
+              if (lb.yTicks) {
+                const toDisp = (m: number) => (imperial ? metersToFeet(m) : m);
+                const fromDisp = (v: number) => (imperial ? v / 3.280839895 : v);
+                const lines: string[] = [];
+                for (const v of niceTicks(toDisp(eMin), toDisp(eMax), 4)) {
+                  const y = yOf(fromDisp(v));
+                  lines.push(`M${f(px)} ${f(y)}H${f(px + pw)}`);
+                  txt(Math.round(v).toLocaleString('en-US'), px - size * 0.6, y + size * 0.35, 'end');
+                }
+                if (lines.length) grid(lines.join(''), 0.12, 0.45);
+              }
+              if (lb.xTicks) {
+                const unitM = imperial ? 1609.344 : 1000;
+                const unit = imperial ? 'mi' : 'km';
+                const marks: string[] = [];
+                for (const v of niceTicks(0, d / unitM, 5)) {
+                  if (v <= 0) continue;
+                  const x = xOf(v * unitM);
+                  marks.push(`M${f(x)} ${f(py + ph)}v${f(size * 0.5)}`);
+                  txt(`${v} ${unit}`, x, py + ph + size * 1.5, 'middle');
+                }
+                if (marks.length) grid(marks.join(''), 0.2);
+              }
+              if (lb.extremes) {
+                const fmt = (m: number) => (imperial ? formatFeet(m) : formatMeters(m));
+                const hi = series.reduce((a, b) => (b.e > a.e ? b : a));
+                const lo = series.reduce((a, b) => (b.e < a.e ? b : a));
+                const marks: string[] = [];
+                for (const pt of hi === lo ? [hi] : [hi, lo]) {
+                  const x = xOf(pt.d);
+                  const y = yOf(pt.e);
+                  marks.push(circle(x, y, size * 0.25));
+                  const a = x < px + pw * 0.15 ? 'start' : x > px + pw * 0.85 ? 'end' : 'middle';
+                  txt(fmt(pt.e), x, y - size * 0.8, a);
+                }
+                grid(marks.join(''), 0.3);
+              }
+            }
           }
         }
 
@@ -227,6 +311,10 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           kind: 'path', d: polyline(xy), color: p.route.color, mode: 'stroke', widthMm: p.route.weightMm,
           ...dashFor(p.route.style, p.route.weightMm),
         });
+      }
+
+      if (p.north.enabled) {
+        prims.push(...northPrims(frame, { ...p.north, fontFamily, fontKey: t.font }));
       }
 
       if (p.features.enabled) {

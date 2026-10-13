@@ -3,14 +3,14 @@ import { useStore } from '../store';
 import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
 import { KIND_LABELS, LANDMARK_KINDS, type Side } from '../features/types';
-import { composeScene, viewBBox, autoValues } from '../scene/buildScene';
+import { composeScene, viewBBox, autoValues, featureView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
 import { sceneToSvg } from '../export/svg';
 import { pngSize, sceneToPng } from '../export/png';
 import { loadFonts } from '../export/fonts';
 import { prepareScene, type ExportMode } from '../export/outlines';
-import { PRINT_SIZES, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
+import { PRINT_SIZES, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
 
 const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placement) => void }) => (
   <Row label="Position">
@@ -32,7 +32,7 @@ function download(name: string, data: string | Blob, type: string) {
 }
 
 export function App() {
-  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, osm, osmStatus, osmError, loadOsm, retryOsm, searchFeature, busy, notice } = useStore();
+  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, searchResults, searchIndex, chooseResult, osm, osmStatus, osmError, loadOsm, retryOsm, searchFeature, busy, notice } = useStore();
   const [query, setQuery] = useState('');
   const [err, setErr] = useState('');
   const [over, setOver] = useState(false);
@@ -104,6 +104,30 @@ export function App() {
           <button disabled={!!busy}>{busy || 'Go'}</button>
         </form>
         {notice && <div className="err">{notice}</div>}
+        {searchResults.length > 0 && (
+          <div className="results">
+            {searchResults.map((r, i) => (
+              <button key={`${r.lat},${r.lon},${i}`} className={i === searchIndex && p.feature ? 'res sel' : 'res'} onClick={() => chooseResult(i)}>
+                <b>{r.name}</b>
+                <span>{[r.kind, r.location].filter(Boolean).join(' · ')}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {p.feature && (() => {
+          const [w, h] = viewSizeKm(featureView(p.feature));
+          return (
+            <div className="found">
+              <div>Showing <b>{p.feature.name}</b>{p.feature.kind ? ` (${p.feature.kind})` : ''}</div>
+              <div className="hint">{p.feature.lat.toFixed(4)}°, {p.feature.lon.toFixed(4)}° · view about {Math.round(w)} × {Math.round(h)} km</div>
+              <Row label="View width">
+                <input type="range" min={2} max={150} step={1} value={Math.min(150, Math.max(2, Math.round(w)))}
+                  onChange={(e) => set((x) => { x.feature!.spanKm = +e.target.value; })} />
+                <button disabled={p.feature.spanKm === undefined} onClick={() => set((x) => { x.feature!.spanKm = undefined; })}>Auto</button>
+              </Row>
+            </div>
+          );
+        })()}
 
         <h2>Print size</h2>
         <Row label="Size">
@@ -208,6 +232,30 @@ export function App() {
           <Row label="Fill"><input type="color" value={p.profile.fill} onChange={(e) => set((x) => { x.profile.fill = e.target.value; })} /></Row>
           <Row label="Stroke"><input type="color" value={p.profile.stroke} onChange={(e) => set((x) => { x.profile.stroke = e.target.value; })} /></Row>
           <Row label="Opacity"><input type="range" min={0} max={1} step={0.02} value={p.profile.opacity} onChange={(e) => set((x) => { x.profile.opacity = +e.target.value; })} /></Row>
+                  <Row label="Label peaks"><input type="checkbox" checked={p.profile.labels.extremes} onChange={(e) => set((x) => { x.profile.labels.extremes = e.target.checked; })} /><span>highest and lowest point</span></Row>
+          <Row label="Elevation ticks"><input type="checkbox" checked={p.profile.labels.yTicks} onChange={(e) => set((x) => { x.profile.labels.yTicks = e.target.checked; })} /></Row>
+          <Row label="Distance ticks"><input type="checkbox" checked={p.profile.labels.xTicks} onChange={(e) => set((x) => { x.profile.labels.xTicks = e.target.checked; })} /></Row>
+          <Row label="Label size"><input type="number" min={5} max={30} value={p.profile.labels.sizePt} onChange={(e) => set((x) => { x.profile.labels.sizePt = +e.target.value || 9; })} /></Row>
+        </>)}
+
+        <h2>North arrow</h2>
+        <Row label="Show"><input type="checkbox" checked={p.north.enabled} onChange={(e) => set((x) => { x.north.enabled = e.target.checked; })} /></Row>
+        {p.north.enabled && (<>
+          <Row label="Style">
+            <select value={p.north.style} onChange={(e) => set((x) => { x.north.style = e.target.value as NorthStyle; })}>
+              <option value="arrow">North arrow</option><option value="circle">Circled arrow</option>
+              <option value="compass">Compass (N E S W)</option><option value="rose">Compass rose</option>
+            </select>
+          </Row>
+          <Row label="Position">
+            <select value={p.north.corner} onChange={(e) => set((x) => { x.north.corner = e.target.value as Corner; })}>
+              <option value="tl">Top left</option><option value="tr">Top right</option>
+              <option value="bl">Bottom left</option><option value="br">Bottom right</option>
+            </select>
+          </Row>
+          <Row label="Size"><input type="range" min={8} max={70} step={1} value={p.north.sizeMm} onChange={(e) => set((x) => { x.north.sizeMm = +e.target.value; })} /><span>{p.north.sizeMm} mm</span></Row>
+          <Row label="Color"><input type="color" value={p.north.color} onChange={(e) => set((x) => { x.north.color = e.target.value; })} /></Row>
+          <Row label="Line weight"><input type="range" min={0.1} max={1} step={0.05} value={p.north.weightMm} onChange={(e) => set((x) => { x.north.weightMm = +e.target.value; })} /></Row>
         </>)}
 
         <h2>Typography</h2>

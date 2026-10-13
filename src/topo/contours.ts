@@ -95,3 +95,13 @@ export function contourPaths(
   lastKey = key;
   return (lastOut = { regular: toD(regular), index: toD(index) });
 }
+
+const rangeCache = new WeakMap<TerrainField, [number, number]>();
+
+/** The interval in meters the map will use: the user's choice, or an automatic one for this terrain. */
+export function contourInterval(userIntervalM: number, field: TerrainField): number {
+  if (userIntervalM > 0) return userIntervalM;
+  let r = rangeCache.get(field);
+  if (!r) rangeCache.set(field, (r = fieldRange(field)));
+  return autoInterval(r[0], r[1]);
+}
