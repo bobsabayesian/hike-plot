@@ -12,7 +12,7 @@ import { pngSize, sceneToPng } from '../export/png';
 import { loadFonts } from '../export/fonts';
 import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
 import { prepareScene, PLOTTER_PEN_MM, type ExportMode } from '../export/outlines';
-import { passCount } from '../export/offset';
+import { summarizePasses } from '../export/offset';
 import { PRINT_SIZES, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
 
 const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placement) => void }) => (
@@ -82,6 +82,8 @@ export function App() {
 
   const composed = useMemo(() => composeScene(p, terrain, osm), [p, terrain, osm]);
   const scene = composed.scene;
+  // Route and elevation-profile controls only mean something once a GPX track is loaded.
+  const hasTrack = p.points.length > 0;
   const need = useMemo(() => viewBBox(p), [p]);
   const auto = useMemo(() => autoValues(p, p.points.length ? computeStats(p.points) : undefined), [p]);
 
@@ -110,10 +112,7 @@ export function App() {
     return () => { live = false; clearTimeout(t); };
   }, [need, p.terrain.enabled, terrain, setTerrain]);
   // Which line weights in this design become several passes with the chosen pen (plotter export).
-  const passes = useMemo(() => {
-    const widths = new Set(scene.prims.flatMap((x) => (x.kind === 'path' && x.mode === 'stroke' ? [+(x.widthMm ?? 0.5).toFixed(2)] : [])));
-    return [...widths].sort((a, b) => a - b).map((w) => [w, passCount(w, penMm)] as const).filter(([, n]) => n > 1);
-  }, [scene, penMm]);
+  const passes = useMemo(() => summarizePasses(scene.prims, penMm), [scene, penMm]);
   const previewSvg = useMemo(() => sceneToSvg(scene, { paper: true }), [scene]);
 
   async function load(file?: File) {
@@ -179,6 +178,7 @@ export function App() {
           </select>
         </Row>
 
+        {hasTrack && (<>
         <h2>Route</h2>
         <Row label="Color"><input type="color" value={p.route.color} onChange={(e) => set((x) => { x.route.color = e.target.value; })} /></Row>
         <Row label="Weight">
@@ -190,6 +190,7 @@ export function App() {
             <option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option>
           </select>
         </Row>
+        </>)}
 
         <h2>Contours</h2>
         <Row label="Show"><input type="checkbox" checked={p.terrain.enabled} onChange={(e) => set((x) => { x.terrain.enabled = e.target.checked; })} />
@@ -211,6 +212,24 @@ export function App() {
           <Row label="Color"><input type="color" value={p.terrain.color} onChange={(e) => set((x) => { x.terrain.color = e.target.value; })} /></Row>
           <Row label="Weight"><input type="range" min={0.05} max={0.6} step={0.01} value={p.terrain.weightMm} onChange={(e) => set((x) => { x.terrain.weightMm = +e.target.value; x.terrain.indexWeightMm = +e.target.value * 2; })} /></Row>
           <Row label="Opacity"><input type="range" min={0.1} max={1} step={0.05} value={p.terrain.opacity} onChange={(e) => set((x) => { x.terrain.opacity = +e.target.value; })} /></Row>
+          {p.terrain.indexEvery > 0 && (<>
+            <Row label="Number heavy lines"><input type="checkbox" checked={p.terrain.labels.enabled} onChange={(e) => set((x) => { x.terrain.labels.enabled = e.target.checked; })} /><span>elevation along the line</span></Row>
+            {p.terrain.labels.enabled && (<>
+              <Row label="How many">
+                <select value={p.terrain.labels.density} onChange={(e) => set((x) => { x.terrain.labels.density = e.target.value as typeof p.terrain.labels.density; })}>
+                  <option value="sparse">Few per line</option><option value="normal">Some per line</option><option value="dense">Many per line</option>
+                </select>
+              </Row>
+              <Row label="Which lines">
+                <select value={p.terrain.labels.every} onChange={(e) => set((x) => { x.terrain.labels.every = +e.target.value; })}>
+                  <option value={1}>Every heavy line</option><option value={2}>Every 2nd heavy line</option><option value={3}>Every 3rd heavy line</option>
+                </select>
+              </Row>
+              <Row label="Break the line"><input type="checkbox" checked={p.terrain.labels.gap} onChange={(e) => set((x) => { x.terrain.labels.gap = e.target.checked; })} /><span>gap behind each number</span></Row>
+              <Row label="Number size"><input type="number" min={5} max={30} value={p.terrain.labels.sizePt} onChange={(e) => set((x) => { x.terrain.labels.sizePt = +e.target.value || 8; })} /></Row>
+              <Row label="Number color"><input type="color" value={p.terrain.labels.color} onChange={(e) => set((x) => { x.terrain.labels.color = e.target.value; })} /></Row>
+            </>)}
+          </>)}
         </>)}
 
         <h2>Landmarks</h2>
@@ -281,6 +300,7 @@ export function App() {
           })}
         </>)}
 
+        {hasTrack && (<>
         <h2>Elevation profile</h2>
         <Row label="Show"><input type="checkbox" checked={p.profile.enabled} onChange={(e) => set((x) => { x.profile.enabled = e.target.checked; })} /></Row>
         {p.profile.enabled && (<>
@@ -296,6 +316,7 @@ export function App() {
           <Row label="Elevation ticks"><input type="checkbox" checked={p.profile.labels.yTicks} onChange={(e) => set((x) => { x.profile.labels.yTicks = e.target.checked; })} /></Row>
           <Row label="Distance ticks"><input type="checkbox" checked={p.profile.labels.xTicks} onChange={(e) => set((x) => { x.profile.labels.xTicks = e.target.checked; })} /></Row>
           <Row label="Label size"><input type="number" min={5} max={30} value={p.profile.labels.sizePt} onChange={(e) => set((x) => { x.profile.labels.sizePt = +e.target.value || 9; })} /></Row>
+        </>)}
         </>)}
 
         <h2>North arrow</h2>
@@ -391,7 +412,7 @@ export function App() {
           </Row>
           <div className="hint">
             Every line is drawn with this one pen. Heavier lines are repeated side by side:{' '}
-            {passes.length ? passes.map(([w, n]) => `${w} mm = ${n} passes`).join(', ') : 'none at this pen width'}.
+            {passes.length ? passes.map((x) => `${x.widthMm} mm = ${x.passes} passes${x.forced ? ' (kept heavier than the rest)' : ''}`).join(', ') : 'none at this pen width'}.
           </div>
         </>)}
         <div className="row">

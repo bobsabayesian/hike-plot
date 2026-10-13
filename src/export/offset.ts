@@ -5,19 +5,34 @@
 export type Pt = [number, number];
 export interface Sub { pts: Pt[]; closed: boolean }
 
-/** How many passes of a `penMm` pen it takes to cover a `widthMm` line (at least one). */
-export const passCount = (widthMm: number, penMm: number) => Math.max(1, Math.round(widthMm / penMm));
+/** How many passes of a `penMm` pen it takes to cover a `widthMm` line (at least `minPasses`, and at least one). */
+export const passCount = (widthMm: number, penMm: number, minPasses = 1) => Math.max(1, minPasses, Math.round(widthMm / penMm));
 
 /**
- * Sideways shift of each pass, centered on the original line. The first and last passes sit half a pen
- * inside the original edges, so the result is as wide as the original; the pitch never exceeds the pen width,
- * so there are no gaps.
+ * Sideways shift of each pass, centered on the original line. The passes overlap (the pitch never exceeds the
+ * pen width, so there are no gaps) and are spaced at least 0.6 pen apart, so a forced extra pass on a thin line
+ * still reads as clearly heavier than a single pass.
  */
-export function passOffsets(widthMm: number, penMm: number): number[] {
-  const n = passCount(widthMm, penMm);
+export function passOffsets(widthMm: number, penMm: number, minPasses = 1): number[] {
+  const n = passCount(widthMm, penMm, minPasses);
   if (n === 1) return [0];
-  const pitch = Math.min(penMm, (widthMm - penMm) / (n - 1));
+  const pitch = Math.min(penMm, Math.max(0.6 * penMm, (widthMm - penMm) / (n - 1)));
   return Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * pitch);
+}
+
+/** The line weights in a scene that the plotter export draws as several passes, for the export panel. */
+export function summarizePasses(
+  prims: { kind: string; mode?: string; widthMm?: number; minPasses?: number }[],
+  penMm: number,
+): { widthMm: number; passes: number; forced: boolean }[] {
+  const seen = new Map<string, { widthMm: number; passes: number; forced: boolean }>();
+  for (const p of prims) {
+    if (p.kind !== 'path' || p.mode !== 'stroke') continue;
+    const widthMm = +(p.widthMm ?? 0.5).toFixed(2);
+    const passes = passCount(widthMm, penMm, p.minPasses);
+    if (passes > 1) seen.set(`${widthMm}|${passes}`, { widthMm, passes, forced: passCount(widthMm, penMm) < passes });
+  }
+  return [...seen.values()].sort((a, b) => a.widthMm - b.widthMm);
 }
 
 const ARITY: Record<string, number> = { M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, T: 2, A: 7, Z: 0 };

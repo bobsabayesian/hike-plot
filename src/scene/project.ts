@@ -83,6 +83,18 @@ export interface Project {
     weightMm: number;
     indexWeightMm: number;
     opacity: number;
+    /** elevation numbers written along the heavy contour lines */
+    labels: {
+      enabled: boolean;
+      /** how far apart numbers on the same line are */
+      density: 'sparse' | 'normal' | 'dense';
+      /** label every Nth heavy line (1 = all of them) */
+      every: number;
+      /** leave a gap in the line behind the number (otherwise it sits just above the line) */
+      gap: boolean;
+      sizePt: number;
+      color: string;
+    };
   };
   profile: {
     enabled: boolean;
@@ -133,6 +145,7 @@ export const defaultProject = (): Project => ({
   terrain: {
     enabled: true, intervalM: 0, indexEvery: 5,
     color: '#1f2a24', weightMm: 0.12, indexWeightMm: 0.25, opacity: 0.8,
+    labels: { enabled: false, density: 'normal', every: 1, gap: true, sizePt: 8, color: '#1f2a24' },
   },
   profile: {
     enabled: true, position: 'bottom', fill: '#1f2a24', stroke: '#1f2a24', opacity: 0.12,

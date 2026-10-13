@@ -9,6 +9,8 @@ export interface PathPrim {
   dash?: number[];
   round?: boolean;
   opacity?: number;
+  /** plotter export: draw at least this many passes of the pen, even if the line is thinner than that implies */
+  minPasses?: number;
 }
 
 export interface TextPrim {

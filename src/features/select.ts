@@ -41,7 +41,7 @@ export interface PlaceInput {
 }
 
 /** An oriented rectangle: center, size, and turn in radians (clockwise on screen). */
-interface Box { cx: number; cy: number; w: number; h: number; ang: number }
+export interface Box { cx: number; cy: number; w: number; h: number; ang: number }
 interface Candidate {
   id: string; name: string; kind: LabelKind; x: number; y: number; score: number; marker: boolean; ele?: number;
   /** its kind is switched on (otherwise it is only available from the list) */
@@ -59,9 +59,9 @@ const MAX_CANDIDATES = 80;
 const MAX_LISTED = 30;
 const MIN_LAKE_AREA_MM2 = 6;
 /** average glyph width as a fraction of font size, used because text is measured before fonts load */
-const CHAR_W = 0.56;
+export const CHAR_W = 0.56;
 
-const boxAt = (x0: number, y0: number, x1: number, y1: number): Box => ({ cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, ang: 0 });
+export const boxAt = (x0: number, y0: number, x1: number, y1: number): Box => ({ cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, ang: 0 });
 
 function corners(b: Box): XY[] {
   const c = Math.cos(b.ang);
@@ -74,7 +74,7 @@ function corners(b: Box): XY[] {
 }
 
 /** Separating-axis test for two oriented rectangles. */
-function overlap(a: Box, b: Box): boolean {
+export function overlap(a: Box, b: Box): boolean {
   const axes: XY[] = [[Math.cos(a.ang), Math.sin(a.ang)], [-Math.sin(a.ang), Math.cos(a.ang)], [Math.cos(b.ang), Math.sin(b.ang)], [-Math.sin(b.ang), Math.cos(b.ang)]];
   const ca = corners(a);
   const cb = corners(b);
@@ -109,11 +109,11 @@ function ringArea(r: XY[]): number {
 const sideOrder = (side: Side): Exclude<Side, 'auto'>[] =>
   side === 'auto' ? ['right', 'left', 'above', 'below'] : [side];
 
-const insideBounds = (b: Box, r: Rect) =>
+export const insideBounds = (b: Box, r: Rect) =>
   corners(b).every(([x, y]) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
 
 /** Does the route pass through the box? Turns the route into the box's own frame, then clips against an upright rectangle. */
-function routeHits(route: XY[], b: Box): boolean {
+export function routeHits(route: XY[], b: Box): boolean {
   if (route.length < 2) return false;
   const c = Math.cos(-b.ang);
   const s = Math.sin(-b.ang);
@@ -256,6 +256,8 @@ export interface LandmarkPlacement {
   pool: PoolItem[];
   /** free label slots per group: the limit minus what is drawn */
   open: Record<LabelGroup, number>;
+  /** space the drawn labels and markers take, so other things (contour numbers) can stay clear of them */
+  obstacles: Box[];
 }
 
 const MAX_POOL = 60;
@@ -475,5 +477,6 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
   return {
     entries, labels, pool,
     open: { point: Math.max(0, budget.point - drawn.point), water: Math.max(0, budget.water - drawn.water) },
+    obstacles: taken,
   };
 }

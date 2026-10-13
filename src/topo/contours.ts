@@ -66,13 +66,15 @@ export function fieldRange(field: TerrainField): [number, number] {
   return [lo, hi];
 }
 
-export interface ContourPaths { regular: string; index: string }
+/** One clipped stretch of a contour line, in poster mm. */
+export interface ContourPiece { level: number; heavy: boolean; pts: XY[] }
+export interface ContourPaths { regular: string; index: string; pieces: ContourPiece[] }
 
 const f = (n: number) => +n.toFixed(2);
-const toD = (lines: XY[][]) => lines.map((l) => l.map(([x, y], i) => `${i ? 'L' : 'M'}${f(x)} ${f(y)}`).join('')).join('');
+export const toD = (lines: XY[][]) => lines.map((l) => l.map(([x, y], i) => `${i ? 'L' : 'M'}${f(x)} ${f(y)}`).join('')).join('');
 
 let lastKey = '';
-let lastOut: ContourPaths = { regular: '', index: '' };
+let lastOut: ContourPaths = { regular: '', index: '', pieces: [] };
 
 /** Project contours to poster mm, simplify, and clip to the map frame (real geometry, plotter-safe). */
 export function contourPaths(
@@ -85,15 +87,19 @@ export function contourPaths(
     fit.mercToMm(((field.px0 + gx) / world - 0.5) * WORLD_M, (0.5 - (field.py0 + gy) / world) * WORLD_M);
   const regular: XY[][] = [];
   const index: XY[][] = [];
+  const pieces: ContourPiece[] = [];
   for (const { level, rings } of contourLevels(field, intervalM, smooth)) {
     const isIndex = indexEvery > 0 && Math.round(level / intervalM) % indexEvery === 0;
     for (const ring of rings) {
       const mm = simplifyXY(ring.map(([gx, gy]) => toMm(gx, gy)), 0.08);
-      for (const piece of clipPolyline(mm, frame)) (isIndex ? index : regular).push(piece);
+      for (const piece of clipPolyline(mm, frame)) {
+        (isIndex ? index : regular).push(piece);
+        pieces.push({ level, heavy: isIndex, pts: piece });
+      }
     }
   }
   lastKey = key;
-  return (lastOut = { regular: toD(regular), index: toD(index) });
+  return (lastOut = { regular: toD(regular), index: toD(index), pieces });
 }
 
 const rangeCache = new WeakMap<TerrainField, [number, number]>();

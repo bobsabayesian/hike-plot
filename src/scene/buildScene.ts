@@ -11,11 +11,15 @@ import { landmarkPrims, waterPrims } from '../features/draw';
 import type { LandmarkEntry, LandmarkPlacement } from '../features/select';
 import type { OsmData } from '../features/types';
 import type { XY } from '../geo/clip';
-import { northPrims } from './north';
+import { northBox, northPrims } from './north';
+import { formatLevel, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
+import type { Box } from '../features/select';
 import type { Prim, Scene } from './types';
 import { posterMm, type InfoItem, type Placement, type Project, type StrokeStyle } from './project';
 
 const PT = 25.4 / 72;
+/** Poster title when there is no name to use (no GPX peak name and no searched feature). */
+export const DEFAULT_TITLE = 'Walk of Frame';
 export const WATERMARK_TEXT = 'Generated with hike.bobsabayesian.io · free for non-commercial use';
 export const FONTS = {
   sans: 'Inter, "Helvetica Neue", Helvetica, Arial, sans-serif',
@@ -92,7 +96,7 @@ export function autoValues(p: Project, stats?: TrackStats, contourM?: number) {
   const center = stats?.peak ?? (p.points.length ? p.points[0] : undefined);
   const coordPt = center ?? (p.feature ? { lat: p.feature.lat, lon: p.feature.lon } : undefined);
   return {
-    title: p.lookup.peakName ?? p.feature?.name ?? 'Untitled Hike',
+    title: p.lookup.peakName ?? p.feature?.name ?? DEFAULT_TITLE,
     location: p.lookup.location ?? '',
     coords: coordPt ? formatCoords(coordPt.lat, coordPt.lon) : '',
     info: {
@@ -220,20 +224,63 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     view = { frame, fit, bbox: { minLat: Math.min(la1, la2), maxLat: Math.max(la1, la2), minLon: Math.min(lo1, lo2), maxLon: Math.max(lo1, lo2) } };
 
     if (!layoutOnly) {
+      // The route and the landmark labels are worked out first: contour numbers have to stay clear of both.
+      const clean = p.points.length >= 2 ? cleanTrack(p.points, fit.metersPerMm * 0.1) : [];
+      const routeXY: XY[] = clean.map((q) => fit.toMm(q.lat, q.lon));
+
+      let landmarkOut: ReturnType<typeof landmarkPrims> | undefined;
+      if (p.features.enabled) {
+        const sizeMm = p.features.sizePt * PT;
+        landmarkOut = landmarkPrims({
+          landmarks: [...p.waypoints, ...(osm?.landmarks ?? [])],
+          water: osm?.water ?? [],
+          fit, frame, route: routeXY,
+          labelBounds: { x: frame.x - m * 0.5, y: frame.y - m * 0.5, w: frame.w + m, h: frame.h + m * 0.5 }, settings: p.features, sizeMm,
+          markerR: Math.min(W, H) * 0.0045,
+          fontFamily, fontKey: t.font, trackingMm: sizeMm * 0.05,
+        });
+      }
+
       if (p.terrain.enabled && terrain) {
         const paths = contourPaths(terrain, fit, frame, interval!, p.terrain.indexEvery);
         const tc = p.terrain;
-        if (paths.regular) prims.push({ kind: 'path', d: paths.regular, color: tc.color, mode: 'stroke', widthMm: tc.weightMm, opacity: tc.opacity });
-        if (paths.index) prims.push({ kind: 'path', d: paths.index, color: tc.color, mode: 'stroke', widthMm: tc.indexWeightMm, opacity: tc.opacity });
+        let { regular, index } = paths;
+        let numbers: ReturnType<typeof placeContourLabels> = [];
+        if (tc.labels.enabled && tc.indexEvery > 0) {
+          const avoid: Box[] = [...(landmarkOut?.obstacles ?? [])];
+          if (p.north.enabled) {
+            const nb = northBox(frame, p.north.corner, p.north.sizeMm);
+            avoid.push({ cx: nb.x + p.north.sizeMm / 2, cy: nb.y + p.north.sizeMm / 2, w: p.north.sizeMm, h: p.north.sizeMm, ang: 0 });
+          }
+          if (p.profile.enabled && p.profile.position === 'corner' && p.points.length)
+            avoid.push({ cx: W - m - innerW * 0.2, cy: frame.y + frame.h - H * 0.04, w: innerW * 0.4, h: H * 0.08, ang: 0 });
+          numbers = placeContourLabels(paths.pieces, {
+            intervalM: interval!, indexEvery: tc.indexEvery, every: tc.labels.every, density: tc.labels.density, gap: tc.labels.gap,
+            sizePt: tc.labels.sizePt, format: (lv) => formatLevel(lv, p.units), frame, obstacles: avoid, route: routeXY,
+          });
+          if (numbers.length && tc.labels.gap) ({ regular, index } = pathsWithGaps(paths.pieces, numbers, tc.labels.sizePt));
+        }
+        if (regular) prims.push({ kind: 'path', d: regular, color: tc.color, mode: 'stroke', widthMm: tc.weightMm, opacity: tc.opacity });
+        // heavy lines are drawn as two passes of the pen in the plotter export, so they stay heavier than the rest
+        if (index) prims.push({ kind: 'path', d: index, color: tc.color, mode: 'stroke', widthMm: tc.indexWeightMm, opacity: tc.opacity, minPasses: 2 });
+        const nsize = tc.labels.sizePt * PT;
+        for (const n of numbers) {
+          // text sits centered on its line (gap) or just above it, always upright along the line
+          const nx = Math.sin(n.angle);
+          const ny = -Math.cos(n.angle);
+          const lift = tc.labels.gap ? 0 : nsize * (1.15 / 2 + 0.2); // same offset the placement reserved
+          prims.push({
+            kind: 'text', text: n.text, x: n.x + nx * lift - nx * nsize * 0.36, y: n.y + ny * lift - ny * nsize * 0.36,
+            anchor: 'middle', sizeMm: nsize, trackingMm: nsize * 0.04, fontFamily, fontKey: t.font, color: tc.labels.color,
+            ...(n.angle ? { rotate: (n.angle * 180) / Math.PI } : {}),
+          });
+        }
       }
 
       if (p.features.enabled && p.features.water && osm) prims.push(...waterPrims(osm.water, fit, frame, p.features));
 
-      let routeXY: XY[] = [];
       if (p.points.length >= 2) {
-        const clean = cleanTrack(p.points, fit.metersPerMm * 0.1);
-        const xy = clean.map((q) => fit.toMm(q.lat, q.lon));
-        routeXY = xy;
+        const xy = routeXY;
 
         if (p.profile.enabled) {
           const corner = p.profile.position === 'corner';
@@ -319,20 +366,11 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         prims.push(...northPrims(frame, { ...p.north, fontFamily, fontKey: t.font }));
       }
 
-      if (p.features.enabled) {
-        const sizeMm = p.features.sizePt * PT;
-        const out = landmarkPrims({
-          landmarks: [...p.waypoints, ...(osm?.landmarks ?? [])],
-          water: osm?.water ?? [],
-          fit, frame, route: routeXY,
-          labelBounds: { x: frame.x - m * 0.5, y: frame.y - m * 0.5, w: frame.w + m, h: frame.h + m * 0.5 }, settings: p.features, sizeMm,
-          markerR: Math.min(W, H) * 0.0045,
-          fontFamily, fontKey: t.font, trackingMm: sizeMm * 0.05,
-        });
-        prims.push(...out.prims);
-        landmarks = out.entries;
-        pool = out.pool;
-        open = out.open;
+      if (landmarkOut) {
+        prims.push(...landmarkOut.prims);
+        landmarks = landmarkOut.entries;
+        pool = landmarkOut.pool;
+        open = landmarkOut.open;
       }
     }
   }

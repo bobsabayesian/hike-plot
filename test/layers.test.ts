@@ -93,6 +93,8 @@ describe('a full poster really is one pen per layer', () => {
     p.features.waterLabels = true;
     p.north.enabled = true;
     p.north.style = 'rose';
+    p.terrain.labels.enabled = true;
+    p.terrain.labels.density = 'dense';
     p.profile.labels = { extremes: true, yTicks: true, xTicks: true, sizePt: 9 };
     p.text.info.items.find((i) => i.key === 'contour')!.visible = true;
     const terrain = await loadTerrain(viewBBox(p)!, cone);

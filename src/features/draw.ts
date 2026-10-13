@@ -46,8 +46,8 @@ export interface LandmarkDraw extends PlaceInput {
   trackingMm: number;
 }
 
-export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[] } & Pick<LandmarkPlacement, 'entries' | 'pool' | 'open'> {
-  const { labels, entries, pool, open } = placeLandmarks(inp);
+export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[] } & Pick<LandmarkPlacement, 'entries' | 'pool' | 'open' | 'obstacles'> {
+  const { labels, entries, pool, open, obstacles } = placeLandmarks(inp);
   const prims: Prim[] = [];
   const color = inp.settings.color;
   const markers = labels.filter((l) => l.marker);
@@ -62,5 +62,5 @@ export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[] } & Pick<Landm
       trackingMm: inp.trackingMm, fontFamily: inp.fontFamily, fontKey: inp.fontKey, color,
       ...(l.rotate ? { rotate: l.rotate } : {}),
     });
-  return { prims, entries, pool, open };
+  return { prims, entries, pool, open, obstacles };
 }

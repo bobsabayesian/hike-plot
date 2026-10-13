@@ -77,9 +77,9 @@ export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, op
     if (!plotter) return [p];
     // Plotters cannot fill or fade: draw the outline instead, at full strength, with the one pen.
     const stroke: PathPrim = p.mode === 'fill' ? { ...p, mode: 'stroke', widthMm: pen, opacity: undefined } : { ...p, opacity: undefined };
-    const offsets = passOffsets(stroke.widthMm ?? 0.5, pen);
+    const offsets = passOffsets(stroke.widthMm ?? 0.5, pen, stroke.minPasses);
     // A heavy line is the same path repeated, shifted sideways, with the thin pen.
-    return offsets.map((o) => ({ ...stroke, d: o === 0 ? stroke.d : offsetPath(stroke.d, o), widthMm: pen }));
+    return offsets.map((o) => ({ ...stroke, d: o === 0 ? stroke.d : offsetPath(stroke.d, o), widthMm: pen, minPasses: undefined }));
   });
   return { ...scene, prims };
 }
