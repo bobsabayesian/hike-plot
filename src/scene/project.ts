@@ -5,22 +5,34 @@ import { defaultPens, PEN_INK, PEN_RED, type Pen } from './pens';
 import { defaultBorder, type BorderSettings } from './border';
 import type { HatchDensity } from './types';
 
+export type SizeGroup = 'US (inches)' | 'ISO (A series)' | 'Metric (cm)';
+
 export interface PrintSize {
   id: string;
   label: string;
-  /** portrait inches */
-  wIn: number;
-  hIn: number;
+  group: SizeGroup;
+  /** portrait size in mm (exact for ISO and metric; inches converted for US sizes) */
+  wMm: number;
+  hMm: number;
 }
 
+const inch = (w: number, h: number): PrintSize => ({ id: `${w}x${h}`, label: `${w} × ${h} in`, group: 'US (inches)', wMm: +(w * 25.4).toFixed(3), hMm: +(h * 25.4).toFixed(3) });
+const iso = (n: number, w: number, h: number): PrintSize => ({ id: `a${n}`, label: `A${n} (${w} × ${h} mm)`, group: 'ISO (A series)', wMm: w, hMm: h });
+const cm = (w: number, h: number): PrintSize => ({ id: `cm${w}x${h}`, label: `${w} × ${h} cm`, group: 'Metric (cm)', wMm: w * 10, hMm: h * 10 });
+
 export const PRINT_SIZES: PrintSize[] = [
-  { id: '12x16', label: '12 × 16 in', wIn: 12, hIn: 16 },
-  { id: '16x20', label: '16 × 20 in', wIn: 16, hIn: 20 },
-  { id: '18x24', label: '18 × 24 in', wIn: 18, hIn: 24 },
-  { id: '24x36', label: '24 × 36 in', wIn: 24, hIn: 36 },
-  { id: 'a3', label: 'A3', wIn: 11.693, hIn: 16.535 },
-  { id: 'a2', label: 'A2', wIn: 16.535, hIn: 23.386 },
+  inch(5, 7), inch(8, 10), inch(11, 14), inch(11, 17), inch(12, 16), inch(12, 18), inch(16, 20), inch(16, 24),
+  inch(18, 24), inch(20, 24), inch(20, 30), inch(24, 30), inch(24, 36), inch(27, 40), inch(30, 40), inch(36, 48),
+  iso(5, 148, 210), iso(4, 210, 297), iso(3, 297, 420), iso(2, 420, 594), iso(1, 594, 841), iso(0, 841, 1189),
+  cm(21, 30), cm(30, 40), cm(40, 50), cm(50, 70), cm(60, 90), cm(70, 100),
 ];
+
+/** Id for a size the user types in. */
+export const CUSTOM_SIZE_ID = 'custom';
+/** Limits for a custom size, mm: from a small print to a large format roll. */
+export const CUSTOM_SIZE_MIN_MM = 50;
+export const CUSTOM_SIZE_MAX_MM = 3000;
+export const DEFAULT_CUSTOM_MM = { wMm: 457.2, hMm: 609.6 };
 
 export type Align = 'left' | 'center' | 'right';
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
@@ -102,6 +114,8 @@ export function clampMargins(m: Margins, widthMm: number, heightMm: number): Mar
 
 export interface Project {
   sizeId: string;
+  /** used when sizeId is 'custom'; portrait, mm */
+  customSize: { wMm: number; hMm: number };
   landscape: boolean;
   paper: string;
   page: PageSettings;
@@ -183,6 +197,7 @@ export interface Project {
 
 export const defaultProject = (): Project => ({
   sizeId: '18x24',
+  customSize: { ...DEFAULT_CUSTOM_MM },
   landscape: false,
   paper: '#f6f3ec',
   page: { margins: { top: DEFAULT_MARGIN_MM, right: DEFAULT_MARGIN_MM, bottom: DEFAULT_MARGIN_MM, left: DEFAULT_MARGIN_MM }, linked: true },
@@ -226,8 +241,11 @@ export const defaultProject = (): Project => ({
   watermarkPen: PEN_INK,
 });
 
-export function posterMm(p: Pick<Project, 'sizeId' | 'landscape'>): { w: number; h: number } {
-  const s = PRINT_SIZES.find((x) => x.id === p.sizeId) ?? PRINT_SIZES[0]!;
-  const [w, h] = [s.wIn * 25.4, s.hIn * 25.4];
-  return p.landscape ? { w: h, h: w } : { w, h };
+/** Page size in mm for the chosen size and orientation. A custom size is kept within sensible limits. */
+export function posterMm(p: Pick<Project, 'sizeId' | 'landscape'> & { customSize?: { wMm: number; hMm: number } }): { w: number; h: number } {
+  const clamp = (v: number) => Math.min(CUSTOM_SIZE_MAX_MM, Math.max(CUSTOM_SIZE_MIN_MM, Number.isFinite(v) ? v : CUSTOM_SIZE_MIN_MM));
+  const s = p.sizeId === CUSTOM_SIZE_ID
+    ? { wMm: clamp((p.customSize ?? DEFAULT_CUSTOM_MM).wMm), hMm: clamp((p.customSize ?? DEFAULT_CUSTOM_MM).hMm) }
+    : (PRINT_SIZES.find((x) => x.id === p.sizeId) ?? PRINT_SIZES.find((x) => x.id === '18x24')!);
+  return p.landscape ? { w: s.hMm, h: s.wMm } : { w: s.wMm, h: s.hMm };
 }
