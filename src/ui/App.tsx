@@ -130,7 +130,7 @@ export function App() {
   return (
     <div className="app">
       <aside className="panel">
-        <h1>HIKE PLOT</h1>
+        <h1>WALK OF FRAME</h1>
         <div
           className={`drop${over ? ' over' : ''}`}
           onClick={() => input.current?.click()}
