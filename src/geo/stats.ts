@@ -1,6 +1,9 @@
 import { haversine } from './project';
 import type { TrackPoint } from '../gpx/types';
 
+/** Timestamps implying more than this average speed (125 mph) are treated as bogus. */
+export const MAX_PLAUSIBLE_SPEED_MPS = 125 * 0.44704;
+
 export interface TrackStats {
   distanceM: number;
   /** smoothed cumulative ascent, meters */
@@ -45,15 +48,18 @@ export function computeStats(pts: TrackPoint[]): TrackStats {
     if (!peak || p.ele > peak.ele!) peak = p;
     min = Math.min(min, p.ele);
   }
+  const dist = distanceM(pts);
+  const dur = duration(pts);
+  const plausible = dur !== undefined && dist / (dur / 1000) <= MAX_PLAUSIBLE_SPEED_MPS;
   return {
-    distanceM: distanceM(pts),
+    distanceM: dist,
     gainM: elevationGain(pts),
     minEleM: peak ? min : undefined,
     maxEleM: peak?.ele,
     reliefM: peak ? peak.ele! - min : undefined,
     peak,
     startTime: pts.find((p) => p.time !== undefined)?.time,
-    durationMs: duration(pts),
+    durationMs: plausible ? dur : undefined,
   };
 }
 

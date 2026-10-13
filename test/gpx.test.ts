@@ -78,6 +78,28 @@ describe('stats and projection', () => {
     expect(s.reliefM).toBe(40);
     expect(s.startTime).toBe(5);
   });
+  describe('route time plausibility', () => {
+    // ~11.1 km straight north, timed over `ms`
+    const track = (ms: number) => [
+      { lat: 46, lon: -121, time: 0 },
+      { lat: 46.1, lon: -121, time: ms },
+    ];
+    it('keeps a normal hike duration', () => {
+      expect(computeStats(track(6 * 3600e3)).durationMs).toBe(6 * 3600e3);
+    });
+    it('drops a duration implying faster than 125 mph', () => {
+      expect(computeStats(track(60e3)).durationMs).toBeUndefined();
+    });
+    it('applies the 125 mph boundary', () => {
+      const d = computeStats(track(1e9)).distanceM;
+      const msAt = (mph: number) => (d / (mph * 0.44704)) * 1000;
+      expect(computeStats(track(msAt(120))).durationMs).toBeDefined();
+      expect(computeStats(track(msAt(130))).durationMs).toBeUndefined();
+    });
+    it('still reports the start date when time is dropped', () => {
+      expect(computeStats(track(60e3)).startTime).toBe(0);
+    });
+  });
   it('formats', () => {
     expect(formatMiles(22851.6)).toBe('14.2 mi');
     expect(formatFeet(1036)).toBe('3,399 ft');
