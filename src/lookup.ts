@@ -47,6 +47,6 @@ export async function fetchFeatures(b: BBox): Promise<OsmData> {
   const qs = new URLSearchParams({
     minLat: String(b.minLat), maxLat: String(b.maxLat), minLon: String(b.minLon), maxLon: String(b.maxLon),
   });
-  const d = await api<Pick<OsmData, 'landmarks' | 'water' | 'partial'>>(`/api/features?${qs}`);
+  const d = await api<Pick<OsmData, 'landmarks' | 'water' | 'partial' | 'reason'>>(`/api/features?${qs}`);
   return { ...d, covers: b };
 }

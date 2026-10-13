@@ -233,3 +233,100 @@ describe('/api/features resilience', () => {
     expect((await call(small)).status).toBe(502);
   });
 });
+
+describe('overpass mirrors and diagnostics', () => {
+  const peak = { type: 'node', id: 1, lat: 1, lon: 2, tags: { name: 'A', natural: 'peak' } };
+  const ok = (elements: unknown[]) => new Response(JSON.stringify({ elements }));
+  const small = 'minLat=46&maxLat=46.2&minLon=-121.4&maxLon=-121.2';
+  const call = (path: string) => handleApi(new Request(`http://x${path}`)) as Promise<Response>;
+  const host = (u: unknown) => new URL(String(u)).hostname;
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** `script` maps hostname -> response (or a thrown error) for every Overpass call. */
+  const script = (byHost: Record<string, () => Response | Promise<Response>>) => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (u: unknown) => {
+      calls.push(host(u));
+      const h = byHost[host(u)];
+      if (!h) throw new Error('unexpected host');
+      return h();
+    }));
+    return calls;
+  };
+
+  it('falls through to the next mirror on a 504', async () => {
+    const calls = script({
+      'overpass-api.de': () => new Response('', { status: 504 }),
+      'lz4.overpass-api.de': () => ok([peak]),
+    });
+    const d: any = await (await call(`/api/features?${small}`)).json();
+    expect(d.landmarks[0].name).toBe('A');
+    expect(d.partial).toEqual([]);
+    expect(calls).toContain('lz4.overpass-api.de');
+    expect(calls.filter((c) => c === 'overpass.private.coffee')).toHaveLength(0); // stopped once one worked
+  });
+  it('treats a network error, a 429 and an HTML body as failures and keeps going', async () => {
+    script({
+      'overpass-api.de': () => { throw new TypeError('connection reset'); },
+      'lz4.overpass-api.de': () => new Response('', { status: 429 }),
+      'overpass.private.coffee': () => new Response('<html>busy</html>'),
+      'overpass.kumi.systems': () => ok([peak]),
+    });
+    const d: any = await (await call(`/api/features?${small}`)).json();
+    expect(d.landmarks[0].name).toBe('A');
+  });
+  it('a 200 that only carries a runtime-error remark counts as a failure', async () => {
+    script({
+      'overpass-api.de': () => new Response(JSON.stringify({ elements: [], remark: 'runtime error: Query timed out' })),
+      'lz4.overpass-api.de': () => ok([peak]),
+    });
+    expect(((await (await call(`/api/features?${small}`)).json()) as any).landmarks[0].name).toBe('A');
+  });
+  it('an empty result with no remark is a real answer, not a failure', async () => {
+    const calls = script({ 'overpass-api.de': () => ok([]) });
+    const d: any = await (await call(`/api/features?${small}`)).json();
+    expect(d.landmarks).toEqual([]);
+    expect(new Set(calls)).toEqual(new Set(['overpass-api.de']));
+  });
+  it('when every server fails, the error says what each one answered', async () => {
+    script({
+      'overpass-api.de': () => new Response('', { status: 504 }),
+      'lz4.overpass-api.de': () => new Response('', { status: 429 }),
+      'overpass.private.coffee': () => { throw new TypeError('connection reset'); },
+      'overpass.kumi.systems': () => new Response('', { status: 503 }),
+    });
+    const res = await call(`/api/features?${small}`);
+    const msg = ((await res.json()) as any).error as string;
+    expect(res.status).toBe(502);
+    for (const part of ['overpass-api.de 504', 'lz4.overpass-api.de 429', 'overpass.private.coffee connection reset', 'overpass.kumi.systems 503'])
+      expect(msg).toContain(part);
+  });
+  it('a partial answer carries the reason for the missing part', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_u: unknown, init: any) =>
+      decodeURIComponent(init.body).includes('out geom') ? new Response('', { status: 504 }) : ok([peak])));
+    const d: any = await (await call(`/api/features?${small}`)).json();
+    expect(d.partial).toEqual(['water']);
+    expect(d.reason).toMatch(/water: .*overpass-api\.de 504/);
+  });
+  it('the peak lookup uses the mirrors too', async () => {
+    script({ 'overpass-api.de': () => new Response('', { status: 504 }), 'lz4.overpass-api.de': () => ok([peak]) });
+    const d: any = await (await call(`/api/peaks?${small}`)).json();
+    expect(d.peaks).toHaveLength(1);
+  });
+  it('/api/health reports each server and is never cached', async () => {
+    script({
+      'overpass-api.de': () => ok([]),
+      'lz4.overpass-api.de': () => new Response('', { status: 504 }),
+      'overpass.private.coffee': () => { throw new TypeError('refused'); },
+      'overpass.kumi.systems': () => ok([]),
+    });
+    const res = await call('/api/health');
+    const d: any = await res.json();
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(d.hosts.map((h: any) => [h.host, h.ok])).toEqual([
+      ['overpass-api.de', true], ['lz4.overpass-api.de', false], ['overpass.private.coffee', false], ['overpass.kumi.systems', true],
+    ]);
+    expect(d.hosts[1].status).toBe(504);
+    expect(d.hosts[2].error).toBe('refused');
+  });
+});

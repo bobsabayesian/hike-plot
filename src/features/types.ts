@@ -35,6 +35,8 @@ export interface OsmData {
   covers: BBox;
   /** parts the server could not fetch this time */
   partial?: ('landmarks' | 'water')[];
+  /** why the server could not fetch the missing parts (which Overpass servers said what) */
+  reason?: string;
 }
 
 export type Side = 'auto' | 'right' | 'left' | 'above' | 'below';

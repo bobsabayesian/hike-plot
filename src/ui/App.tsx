@@ -191,6 +191,7 @@ export function App() {
           <div className="hint">
             {osm.partial.includes('water') ? 'Rivers and lakes are unavailable for this area right now' : 'Some landmarks are unavailable right now'}
             {' '}(OpenStreetMap servers are busy or the area is large). <button onClick={retryOsm}>Retry</button>
+            {osm.reason && <div title={osm.reason}>Details: {osm.reason}</div>}
           </div>
         ) : null}
         {p.features.enabled && (<>
