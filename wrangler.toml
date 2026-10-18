@@ -2,6 +2,12 @@ name = "hike-plot"
 main = "worker/index.ts"
 compatibility_date = "2025-01-01"
 
+# keep the custom domain across deploys (a Cloudflare zone on this account)
+routes = [{ pattern = "hike.bobsabayesian.io", custom_domain = true }]
+# also keep the *.workers.dev address working (wrangler turns it off when this line is missing)
+workers_dev = true
+preview_urls = false
+
 [assets]
 directory = "./dist"
 binding = "ASSETS"

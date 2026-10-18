@@ -3,6 +3,7 @@ import type { Project } from '../scene/project';
 import { summarizePasses } from '../export/offset';
 import type { Scene } from '../scene/types';
 import { useStore } from '../store';
+import { Group, type GroupProps } from './Group';
 
 /** A dropdown of the palette's pens, with a swatch of the chosen color. */
 export function PenSelect({ pens, value, onChange, allowDefault }: { pens: Pen[]; value: string | undefined; onChange: (id: string | undefined) => void; allowDefault?: string }) {
@@ -19,13 +20,13 @@ export function PenSelect({ pens, value, onChange, allowDefault }: { pens: Pen[]
 }
 
 /** The pen palette: define the pens, and see which parts of the design draw with which pen. */
-export function PensPanel({ project: p, scene }: { project: Project; scene: Scene }) {
+export function PensPanel({ project: p, scene, group }: { project: Project; scene: Scene; group: GroupProps }) {
   const set = useStore((s) => s.set);
   const usage = penUsage(p);
   const usedBy = (id: string) => usage.filter((u) => u.penId === id).map((u) => u.section);
   return (
     <>
-      <h2>Pens</h2>
+      <Group id="pens" title="Pens" {...group}>
       <div className="hint">Pens are what the plotter draws with. Each part of the design picks one; its color comes from the pen, and the tip width decides how many passes a heavy line needs.</div>
       {p.pens.map((pen, i) => {
         const sections = usedBy(pen.id);
@@ -50,6 +51,7 @@ export function PensPanel({ project: p, scene }: { project: Project; scene: Scen
         <button disabled={p.pens.length >= MAX_PENS} onClick={() => set((x) => { addPen(x); })}>Add pen</button>
         <span className="hint">{p.pens.length} of {MAX_PENS}</span>
       </div>
+      </Group>
     </>
   );
 }

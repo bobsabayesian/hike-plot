@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "npm run build && wrangler deploy",
+    "worker:dev": "npm run build && wrangler dev"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

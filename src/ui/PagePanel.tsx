@@ -1,6 +1,7 @@
 import { clampMargins, posterMm, type Margins, type Project } from '../scene/project';
 import { layoutBorder } from '../scene/border';
 import { PenSelect } from './PensPanel';
+import { Group, type GroupProps } from './Group';
 import { useStore } from '../store';
 
 const SIDES: { key: keyof Margins; label: string }[] = [
@@ -12,7 +13,7 @@ export const marginToUnits = (mm: number, units: Project['units']) => (units ===
 export const marginFromUnits = (v: number, units: Project['units']) => Math.max(0, (units === 'imperial' ? v * 25.4 : v) || 0);
 
 /** Page margins: how far the content stays from the paper edge, per side or all together. */
-export function PagePanel({ project: p }: { project: Project }) {
+export function PagePanel({ project: p, margins, border }: { project: Project; margins: GroupProps; border: GroupProps }) {
   const set = useStore((s) => s.set);
   const { w, h } = posterMm(p);
   const used = clampMargins(p.page.margins, w, h);
@@ -29,7 +30,7 @@ export function PagePanel({ project: p }: { project: Project }) {
 
   return (
     <>
-      <h2>Page margins</h2>
+      <Group id="margins" title="Page margins" {...margins}>
       <div className="row">
         <label><input type="checkbox" checked={p.page.linked} onChange={(e) => set((x) => {
           x.page.linked = e.target.checked;
@@ -47,7 +48,8 @@ export function PagePanel({ project: p }: { project: Project }) {
         Distance from the paper edge to the map and text. Margins stay the same when you change the poster size.
         {clamped ? ' Reduced to leave room for the content (at least 20% of the page each way).' : ''}
       </div>
-      <h2>Border</h2>
+      </Group>
+      <Group id="border" title="Border" {...border}>
       <div className="row">
         <label><input type="checkbox" checked={p.border.enabled} onChange={(e) => set((x) => { x.border.enabled = e.target.checked; })} /> Draw a border</label>
       </div>
@@ -81,6 +83,7 @@ export function PagePanel({ project: p }: { project: Project }) {
           {lay.clamped && <div className="err">Pulled in to fit inside the smallest margin: now {marginToUnits(lay.offsetMm, p.units)} {unit} from the edge{p.border.style === 'double' ? `, ${marginToUnits(lay.gapMm, p.units)} ${unit} apart` : ''}. Widen the margins for more room.</div>}
         </>);
       })()}
+      </Group>
     </>
   );
 }

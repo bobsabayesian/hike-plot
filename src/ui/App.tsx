@@ -15,6 +15,7 @@ import { prepareScene, tipFor, type ExportMode } from '../export/outlines';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
 import { PagePanel } from './PagePanel';
+import { Group, NARROW_QUERY, useGroups, useMediaQuery } from './Group';
 import { FEATURE_PEN_LABELS, penFor } from '../scene/pens';
 import type { FeaturePenKey } from '../features/types';
 import { CUSTOM_SIZE_ID, CUSTOM_SIZE_MAX_MM, CUSTOM_SIZE_MIN_MM, PRINT_SIZES, type SizeGroup, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
@@ -75,6 +76,11 @@ function FeatureStatus({ feature, onSpan }: { feature: NonNullable<ReturnType<ty
 export function App() {
   const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, searchResults, searchIndex, chooseResult, osm, osmStatus, osmError, loadOsm, retryOsm, searchFeature, busy, notice } = useStore();
   const [query, setQuery] = useState('');
+  const narrow = useMediaQuery(NARROW_QUERY);
+  const [tab, setTab] = useState<'settings' | 'poster'>('settings');
+  const gp = useGroups(narrow);
+  // on a phone, show the poster as soon as there is something to look at
+  const showPoster = () => { if (narrow) setTab('poster'); };
   const [err, setErr] = useState('');
   const [over, setOver] = useState(false);
   const [paperInExport, setPaperInExport] = useState(false);
@@ -124,15 +130,35 @@ export function App() {
       const xml = await file.text();
       loadPoints(parseGpx(xml), true, parseWaypoints(xml));
       setErr('');
+      showPoster();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not read file');
     }
   }
 
   return (
-    <div className="app">
-      <aside className="panel">
-        <h1>WALK OF FRAME</h1>
+    <div className={`app${narrow ? ' narrow' : ''}`}>
+      {narrow ? (
+        <div className="tabs" role="tablist" aria-label="View"
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            const next = tab === 'settings' ? 'poster' : 'settings';
+            setTab(next);
+            document.getElementById(`tab-${next}`)?.focus();
+            e.preventDefault();
+          }}>
+          {(['settings', 'poster'] as const).map((t) => (
+            <button key={t} type="button" role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls={t === 'settings' ? 'panel-settings' : 'preview'} tabIndex={tab === t ? 0 : -1}
+              className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
+              {t === 'settings' ? 'Settings' : 'Poster'}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <a className="skip-link" href="#preview">Skip to the poster</a>
+      )}
+      <div className="side" id="panel-settings" hidden={narrow && tab !== 'settings'} {...(narrow ? { role: 'tabpanel', 'aria-labelledby': 'tab-settings' } : {})}>
+        <h1>Walk of Frame</h1>
         <div
           className={`drop${over ? ' over' : ''}`}
           onClick={() => input.current?.click()}
@@ -143,9 +169,9 @@ export function App() {
           Drop a .gpx file here, or click to browse
           <input ref={input} type="file" accept=".gpx" hidden onChange={(e) => load(e.target.files?.[0])} />
         </div>
-        <div className="row"><button onClick={() => { const t = sampleTrack(); loadPoints(t, false, sampleWaypoints(t)); }}>Use sample route</button></div>
+        <div className="row"><button type="button" onClick={() => { const t = sampleTrack(); loadPoints(t, false, sampleWaypoints(t)); showPoster(); }}>Use sample route</button></div>
         {err && <div className="err">{err}</div>}
-        <h2>Or search a feature</h2>
+        <Group id="search" title="Or search for a place" {...gp('search')}>
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (query.trim()) searchFeature(query.trim()); }}>
           <input type="text" placeholder="e.g. Mount Rainier" value={query} onChange={(e) => setQuery(e.target.value)} />
           <button disabled={!!busy}>{busy || 'Go'}</button>
@@ -163,7 +189,9 @@ export function App() {
         )}
         {p.feature && <FeatureStatus feature={p.feature} onSpan={(km) => set((x) => { x.feature!.spanKm = km; })} />}
 
-        <h2>Print size</h2>
+        </Group>
+
+        <Group id="size" title="Print size" {...gp('size')}>
         <Row label="Size">
           <select value={p.sizeId} onChange={(e) => set((x) => { x.sizeId = e.target.value; })}>
             {(['US (inches)', 'ISO (A series)', 'Metric (cm)'] as SizeGroup[]).map((g) => (
@@ -198,12 +226,13 @@ export function App() {
           </select>
         </Row>
 
-        <PagePanel project={p} />
+        </Group>
 
-        <PensPanel project={p} scene={scene} />
+        <PagePanel project={p} margins={gp('margins')} border={gp('border')} />
 
-        {hasTrack && (<>
-        <h2>Route</h2>
+        <PensPanel project={p} scene={scene} group={gp('pens')} />
+
+        {hasTrack && (<Group id="route" title="Route" {...gp('route')}>
         <Row label="Pen"><PenSelect pens={p.pens} value={p.route.pen} onChange={(id) => set((x) => { x.route.pen = id!; })} /></Row>
         <Row label="Weight">
           <input type="range" min={0.2} max={3} step={0.1} value={p.route.weightMm} onChange={(e) => set((x) => { x.route.weightMm = +e.target.value; })} />
@@ -214,9 +243,9 @@ export function App() {
             <option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option>
           </select>
         </Row>
-        </>)}
+        </Group>)}
 
-        <h2>Contours</h2>
+        <Group id="contours" title="Contours" {...gp('contours')}>
         <Row label="Show"><input type="checkbox" checked={p.terrain.enabled} onChange={(e) => set((x) => { x.terrain.enabled = e.target.checked; })} />
           <span>{terrainStatus === 'loading' ? 'Loading terrain…' : ''}</span></Row>
         {terrainError && <div className="err">{terrainError}</div>}
@@ -255,7 +284,9 @@ export function App() {
           </>)}
         </>)}
 
-        <h2>Landmarks</h2>
+        </Group>
+
+        <Group id="landmarks" title="Landmarks" {...gp('landmarks')}>
         <Row label="Show">
           <input type="checkbox" checked={p.features.enabled} onChange={(e) => set((x) => { x.features.enabled = e.target.checked; })} />
           <span>{osmStatus === 'loading' ? 'Loading landmarks…' : ''}</span>
@@ -335,8 +366,9 @@ export function App() {
           })}
         </>)}
 
-        {hasTrack && (<>
-        <h2>Elevation profile</h2>
+        </Group>
+
+        {hasTrack && (<Group id="profile" title="Elevation profile" {...gp('profile')}>
         <Row label="Show"><input type="checkbox" checked={p.profile.enabled} onChange={(e) => set((x) => { x.profile.enabled = e.target.checked; })} /></Row>
         {p.profile.enabled && (<>
           <Row label="Position">
@@ -356,9 +388,9 @@ export function App() {
           <Row label="Distance ticks"><input type="checkbox" checked={p.profile.labels.xTicks} onChange={(e) => set((x) => { x.profile.labels.xTicks = e.target.checked; })} /></Row>
           <Row label="Label size"><input type="number" min={5} max={30} value={p.profile.labels.sizePt} onChange={(e) => set((x) => { x.profile.labels.sizePt = +e.target.value || 9; })} /></Row>
         </>)}
-        </>)}
+        </Group>)}
 
-        <h2>North arrow</h2>
+        <Group id="north" title="North arrow" {...gp('north')}>
         <Row label="Show"><input type="checkbox" checked={p.north.enabled} onChange={(e) => set((x) => { x.north.enabled = e.target.checked; })} /></Row>
         {p.north.enabled && (<>
           <Row label="Style">
@@ -378,7 +410,9 @@ export function App() {
           <Row label="Line weight"><input type="range" min={0.1} max={1} step={0.05} value={p.north.weightMm} onChange={(e) => set((x) => { x.north.weightMm = +e.target.value; })} /></Row>
         </>)}
 
-        <h2>Typography</h2>
+        </Group>
+
+        <Group id="typography" title="Typography" {...gp('typography')}>
         <Row label="Font">
           <select value={p.text.font} onChange={(e) => set((x) => { x.text.font = e.target.value as FontKey; })}>
             <option value="sans">Sans-serif</option><option value="serif">Serif</option>
@@ -456,7 +490,9 @@ export function App() {
           ))}
         </div>
 
-        <h2>Export</h2>
+        </Group>
+
+        <Group id="export" title="Export" {...gp('export')}>
         <Row label="Watermark">
           <label><input type="checkbox" checked={p.showWatermark} onChange={(e) => set((x) => { x.showWatermark = e.target.checked; })} /> Include attribution</label>
         </Row>
@@ -514,10 +550,14 @@ export function App() {
           const s = pngSize(scene.widthMm, scene.heightMm, dpi);
           return <div className="hint">{s.width} × {s.height} px{s.capped ? ` (reduced to ${s.dpi} dpi, the largest this browser can render)` : ''}</div>;
         })()}
-      </aside>
-      <main className="stage">
-        <div className="sheet" dangerouslySetInnerHTML={{ __html: previewSvg }} />
+        </Group>
+      </div>
+      <main className="main" id="preview" tabIndex={-1} hidden={narrow && tab !== 'poster'} {...(narrow ? { role: 'tabpanel', 'aria-labelledby': 'tab-poster' } : {})}>
+        <div className="sheet" role="img" aria-label="Preview of the poster" dangerouslySetInnerHTML={{ __html: previewSvg }} />
       </main>
+      <footer className="notice">
+        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL). Place search by Nominatim. Elevation: Terrain Tiles on AWS (SRTM, GMTED and other sources).
+      </footer>
     </div>
   );
 }
