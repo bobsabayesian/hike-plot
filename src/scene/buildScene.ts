@@ -272,6 +272,13 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const clean = p.points.length >= 2 ? cleanTrack(p.points, fit.metersPerMm * 0.1) : [];
       const routeXY: XY[] = clean.map((q) => mapFit.toMm(q.lat, q.lon));
 
+      const labelObstacles: Box[] = [];
+      if (p.north.enabled) {
+        const nb = northBox(frame, p.north.corner, p.north.sizeMm);
+        labelObstacles.push({ cx: nb.x + p.north.sizeMm / 2, cy: nb.y + p.north.sizeMm / 2, w: p.north.sizeMm, h: p.north.sizeMm, ang: 0 });
+      }
+      if (p.profile.enabled && p.profile.position === 'corner' && p.points.length)
+        labelObstacles.push({ cx: contentR - innerW * 0.2, cy: frame.y + frame.h - H * 0.04, w: innerW * 0.4, h: H * 0.08, ang: 0 });
       let landmarkOut: ReturnType<typeof landmarkPrims> | undefined;
       if (p.features.enabled) {
         const sizeMm = p.features.sizePt * PT;
@@ -283,6 +290,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           visible: vis ? (la, lo) => { const q = onSurface(la, lo); return vis.isVisible(q[0], q[1], q[2]); } : undefined,
           labelBounds: withinBorder({ x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }), settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,
+          obstacles: labelObstacles,
           penFor: (kind) => penFor(p.pens, featurePenId(p.features, penKeyOf(kind))),
           fontFamily, fontKey: t.font, trackingMm: sizeMm * 0.05,
         });

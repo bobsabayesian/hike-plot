@@ -42,6 +42,8 @@ export interface PlaceInput {
   settings: FeatureSettings;
   sizeMm: number;
   markerR: number;
+  /** other things on the poster labels must keep clear of (north arrow, corner profile) */
+  obstacles?: Box[];
 }
 
 /** An oriented rectangle: center, size, and turn in radians (clockwise on screen). */
@@ -346,12 +348,17 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
   // Markers of the candidates most likely to be drawn are reserved up front, so a label placed early
   // can't end up on top of a marker that is placed later.
   const likely = unique.filter((c) => c.marker && !s.overrides[c.id]?.hidden && (c.enabled || s.overrides[c.id]?.pinned));
-  const taken: Box[] = likely
+  const taken: Box[] = [...(inp.obstacles ?? [])];
+  taken.push(...likely
     .slice(0, s.maxLabels + 4)
-    .map((c) => boxAt(c.x - markerR, c.y - markerR, c.x + markerR, c.y + markerR));
+    .map((c) => boxAt(c.x - markerR, c.y - markerR, c.x + markerR, c.y + markerR)));
   const entries: LandmarkEntry[] = [];
   const labels: PlacedLabel[] = [];
   const gap = markerR * 0.7;
+  // keep a little air between labels so they don't read as one block of text
+  const pad = sizeMm * 0.35;
+  const labelBoxes: Box[] = [];
+  const padded = (b: Box): Box => ({ ...b, w: b.w + 2 * pad, h: b.h + 2 * pad });
   const budget = { point: s.maxLabels, water: s.maxWaterLabels };
   // Per group: labels the user pinned (P), auto labels drawn (A), and auto labels the user hid (V).
   // Hidden labels hold their slot open, and pinned labels are what fill it, so promotion of further
@@ -426,10 +433,11 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
         box = boxAt(c.x - w / 2, c.y - sizeMm * 0.55, c.x + w / 2, c.y + sizeMm * 0.45);
       }
       const inside = insideBounds(box, lb);
-      const labelsFree = !taken.some((t) => overlap(t, box)) && !(c.marker && side !== 'middle' && overlap(box, markerBox));
+      const labelsFree = !taken.some((t) => overlap(t, box)) && !labelBoxes.some((t) => overlap(t, padded(box))) && !(c.marker && side !== 'middle' && overlap(box, markerBox));
       const crossesRoute = routeHits(route, box);
       if ((inside && labelsFree && !crossesRoute) || forced) {
         taken.push(box);
+        labelBoxes.push(box);
         if (c.marker) taken.push(markerBox);
         labels.push(label);
         return true;
@@ -440,6 +448,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
     if (relax && fallbacks.length) {
       const best = fallbacks.reduce((p, q) => (q.crossing < p.crossing ? q : p));
       taken.push(best.box);
+      labelBoxes.push(best.box);
       if (c.marker) taken.push(markerBox);
       labels.push(best.label);
       return true;

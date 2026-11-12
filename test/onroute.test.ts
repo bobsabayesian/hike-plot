@@ -118,3 +118,26 @@ describe('a forced side is still honored exactly', () => {
     expect(l.anchor).toBe('start');
   });
 });
+
+describe('labels keep clear of other things on the poster', () => {
+  it('a label does not sit on an obstacle such as the north arrow', () => {
+    const open = placeLandmarks(input([trailhead], [])).labels[0]!;
+    const w = trailhead.name.length * 4 * 0.6;
+    // put an obstacle exactly where the label would go
+    const hit = { cx: open.anchor === 'start' ? open.x + w / 2 : open.anchor === 'end' ? open.x - w / 2 : open.x, cy: open.y - 1.4, w: w + 2, h: 6, ang: 0 };
+    const moved = placeLandmarks(input([trailhead], [], { obstacles: [hit] })).labels[0];
+    expect(moved === undefined || moved.x !== open.x || moved.y !== open.y || moved.anchor !== open.anchor).toBe(true);
+  });
+  it('two close landmarks get labels with air between them', () => {
+    const a: Landmark = { id: 'a', name: 'South Kaibab Trailhead', kind: 'trailhead', lat: 46.1, lon: -121.2 };
+    const [x2, y2] = [mx, my + 6];
+    const [lat2, lon2] = fit.fromMm(x2, y2);
+    const b: Landmark = { id: 'b', name: 'Rim Trailhead', kind: 'trailhead', lat: lat2, lon: lon2 };
+    const labels = placeLandmarks(input([a, b], [])).labels;
+    for (const l of labels) expect(l.text.length).toBeGreaterThan(0);
+    if (labels.length === 2) {
+      const [p, q] = labels;
+      expect(Math.abs(p!.y - q!.y) >= 4 * 0.95 || Math.abs(p!.x - q!.x) > 10).toBe(true);
+    }
+  });
+});
