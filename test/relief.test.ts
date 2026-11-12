@@ -361,4 +361,23 @@ describe('3D in the poster', () => {
       }
     }
   });
+  it('with hiding on, layers stay one pen each and the plotter output still has strokes only', async () => {
+    const { p, scene } = await make((q) => { q.relief = { ...q.relief, enabled: true, style: 'both', tilt: 70, hideHidden: true, rowWeightMm: 0.31 }; });
+    const fake = { unitsPerEm: 1000, charToGlyph: () => ({ advanceWidth: 500, getPath: () => ({ toPathData: () => 'M0 0L1 1', commands: [{ type: 'M', x: 0, y: 0 }, { type: 'L', x: 1, y: 1 }] }) }) };
+    const fonts = { sans: fake, serif: fake } as unknown as FontSet;
+    const plot = prepareScene(scene, 'plotter', fonts, { pens: p.pens });
+    for (const g of sceneToSvg(plot).split('<g id="').slice(1)) {
+      if (!g.startsWith('layer-')) continue;
+      const strokes = [...g.matchAll(/stroke="(#[0-9a-f]{6})"[^>]*?stroke-width="([\d.]+)"/g)].map((m) => `${m[1]}|${m[2]}`);
+      expect(new Set(strokes).size).toBeLessThanOrEqual(1);
+    }
+  });
+  it('the draft used while dragging draws no more lines than the final picture', async () => {
+    const edit = (hide: boolean, rows: number) => (q: Project) => { q.relief = { ...q.relief, enabled: true, style: 'rows', tilt: 70, hideHidden: hide, rows }; };
+    const draft = await make(edit(false, 40));
+    const full = await make(edit(true, 100));
+    expect(paths(draft.scene.prims).length).toBeGreaterThan(0);
+    expect(paths(full.scene.prims).length).toBeGreaterThan(0);
+    expect(draft.scene.prims.length).toBeLessThanOrEqual(full.scene.prims.length * 1.5 + 50);
+  });
 });

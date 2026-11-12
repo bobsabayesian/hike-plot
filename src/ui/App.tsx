@@ -89,7 +89,17 @@ export function App() {
   const [pngBusy, setPngBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const composed = useMemo(() => composeScene(p, terrain, osm), [p, terrain, osm]);
+  // While a 3D slider is held, draw a lighter version (no hidden-line cut, fewer rows) so dragging stays smooth.
+  const [draft, setDraft] = useState(false);
+  useEffect(() => {
+    if (!draft) return;
+    const end = () => setDraft(false);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => { window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
+  }, [draft]);
+  const shown = useMemo(() => (draft && p.relief.enabled ? { ...p, relief: { ...p.relief, hideHidden: false, rows: Math.min(p.relief.rows, 40) } } : p), [p, draft]);
+  const composed = useMemo(() => composeScene(shown, terrain, osm), [shown, terrain, osm]);
   const scene = composed.scene;
   // Route and elevation-profile controls only mean something once a GPX track is loaded.
   const hasTrack = p.points.length > 0;
@@ -289,7 +299,7 @@ export function App() {
         <Group id="relief" title="3D relief" {...gp('relief')}>
           <Row label="Show in 3D"><input type="checkbox" checked={p.relief.enabled} onChange={(e) => set((x) => { x.relief.enabled = e.target.checked; })} />
             <span>{p.relief.enabled && terrainStatus === 'loading' ? 'Loading terrain…' : ''}</span></Row>
-          {p.relief.enabled && (<>
+          {p.relief.enabled && (<div onPointerDownCapture={(e) => { if ((e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type === 'range') setDraft(true); }}>
             <div className="row">
               {([['Top-down', { turn: 0, tilt: 0, perspective: 0 }], ['Oblique', { turn: 0, tilt: 55, perspective: 35 }], ['Angled', { turn: 35, tilt: 62, perspective: 40 }]] as const).map(([name, v]) => (
                 <button key={name} type="button" onClick={() => set((x) => { Object.assign(x.relief, v); })}>{name}</button>
@@ -313,8 +323,8 @@ export function App() {
               <Row label="Row weight"><input type="number" min={0.05} max={2} step={0.05} value={p.relief.rowWeightMm} onChange={(e) => set((x) => { x.relief.rowWeightMm = Math.max(0.05, +e.target.value || 0.18); })} /><span className="unit">mm</span></Row>
             )}
             <Row label="Hide behind hills"><input type="checkbox" checked={p.relief.hideHidden} onChange={(e) => set((x) => { x.relief.hideHidden = e.target.checked; })} /><span>cut lines a hill would hide</span></Row>
-            <div className="hint">Tilt 0 is the flat map. Height is how much the hills are exaggerated (100% is true proportions). Lines use the Contours pen. The route always stays visible; landmarks behind a hill are left out.</div>
-          </>)}
+            <div className="hint">Tilt 0 is the flat map. Height is how much the hills are exaggerated (100% is true proportions). Lines use the Contours pen. The route always stays visible; landmarks behind a hill are left out. While you drag a slider the preview is simplified and fills in when you let go.</div>
+          </div>)}
         </Group>
 
         <Group id="landmarks" title="Landmarks" {...gp('landmarks')}>
