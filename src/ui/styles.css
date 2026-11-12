@@ -110,3 +110,10 @@ h3 { font-size: 13px; margin: 14px 0 4px; }
 .sheet svg text[data-lm]:hover { text-decoration: underline; }
 .lm input[type=text]:focus { outline: 2px solid var(--accent, #2a6df4); }
 .code { font-family: ui-monospace, monospace; letter-spacing: 0.08em; font-size: 15px; }
+.custom { margin: 10px 0; }
+.custom .row { gap: 6px; }
+.lm.custom-row { grid-template-columns: 22px 1fr 1fr 64px; }
+.lm.custom-row input[type=text]:first-of-type { grid-column: 2 / 5; }
+.lm.custom-row select { grid-column: 2 / 5 !important; }
+.lm .x { padding: 0; line-height: 1; height: 22px; }
+.lm input.bad { outline: 2px solid #c0392b; }

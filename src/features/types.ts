@@ -22,6 +22,8 @@ export interface Landmark {
   lon: number;
   /** meters */
   ele?: number;
+  /** added by hand: drawn whether or not its kind is switched on */
+  custom?: boolean;
 }
 
 export interface WaterLine {

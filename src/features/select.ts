@@ -305,7 +305,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
     if (!l.name.trim() || (inp.visible && !inp.visible(l.lat, l.lon))) continue;
     const [x, y] = fit.toMm(l.lat, l.lon);
     const eleBonus = l.kind === 'peak' && l.ele !== undefined && eleVals.length > 1 ? 2 * ((l.ele - eMin) / eSpan) : 0;
-    addCand({ id: l.id, name: l.name, kind: l.kind, x, y, marker: true, ele: l.ele, enabled: s.kinds[l.kind], base: KIND_WEIGHT[l.kind] + eleBonus });
+    addCand({ id: l.id, name: l.name, kind: l.kind, x, y, marker: true, ele: l.ele, enabled: s.kinds[l.kind] || !!l.custom, base: KIND_WEIGHT[l.kind] + eleBonus });
   }
 
   const lb = inp.labelBounds ?? frame;

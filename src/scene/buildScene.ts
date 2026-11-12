@@ -6,6 +6,7 @@ import {
   type TrackStats,
 } from '../geo/stats';
 import { contourInterval, contourPaths, toD } from '../topo/contours';
+import { resolveCustom } from '../features/custom';
 import { cutOutHalos } from '../features/halo';
 import { buildRelief, liftContours, needsHiding, ridgeRows, type Relief } from '../relief/relief';
 import { buildVisibility, visibleRuns, type P3 } from '../relief/visibility';
@@ -284,7 +285,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       if (p.features.enabled) {
         const sizeMm = p.features.sizePt * PT;
         landmarkOut = landmarkPrims({
-          landmarks: [...p.waypoints, ...(osm?.landmarks ?? [])],
+          landmarks: [...resolveCustom(p.customLandmarks ?? [], p.points), ...p.waypoints, ...(osm?.landmarks ?? [])],
           water: osm?.water ?? [],
           waterNames: osm?.waterNames ?? [],
           fit: mapFit, frame, route: routeXY,

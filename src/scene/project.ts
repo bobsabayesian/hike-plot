@@ -1,3 +1,4 @@
+import type { CustomLandmark } from '../features/custom';
 import type { TrackPoint } from '../gpx/types';
 import type { BBox } from '../geo/project';
 import { defaultFeatures, type FeatureSettings, type Landmark } from '../features/types';
@@ -129,6 +130,8 @@ export interface Project {
   feature?: Feature;
   /** named <wpt> entries from the GPX */
   waypoints: Landmark[];
+  /** landmarks added by hand (start or end of the track, or a latitude and longitude) */
+  customLandmarks: CustomLandmark[];
   /** names found online for the loaded GPX */
   lookup: Lookup;
   features: FeatureSettings;
@@ -208,6 +211,7 @@ export const defaultProject = (): Project => ({
   relief: defaultRelief(),
   points: [],
   waypoints: [],
+  customLandmarks: [],
   lookup: {},
   features: defaultFeatures(),
   units: 'imperial',

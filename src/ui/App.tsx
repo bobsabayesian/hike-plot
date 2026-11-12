@@ -5,6 +5,8 @@ import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
 import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
 import { SaveGroup } from './SaveGroup';
+import { CustomRow } from './CustomRow';
+import { newCustomId } from '../features/custom';
 import { composeScene, viewBBox, autoValues, featureView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
@@ -400,6 +402,22 @@ export function App() {
               </Row>
             ))}
           </details>
+          <div className="custom">
+            <div className="hint">Your own landmarks</div>
+            {(p.customLandmarks ?? []).map((c) => (
+              <CustomRow key={c.id} c={c} hasTrack={p.points.length > 0}
+                onChange={(patch) => set((x) => { x.customLandmarks = x.customLandmarks.map((q) => (q.id === c.id ? { ...q, ...patch } : q)); if ('name' in patch && x.features.overrides[c.id]) delete x.features.overrides[c.id]!.name; })}
+                onRemove={() => set((x) => { x.customLandmarks = x.customLandmarks.filter((q) => q.id !== c.id); delete x.features.overrides[c.id]; })} />
+            ))}
+            <div className="row">
+              <button type="button" disabled={!p.points.length} title={p.points.length ? '' : 'Load a GPX first'} onClick={() => set((x) => { x.customLandmarks = [...(x.customLandmarks ?? []), { id: newCustomId(x.customLandmarks ?? []), name: 'Start', at: 'start' }]; })}>+ Start</button>
+              <button type="button" disabled={!p.points.length} title={p.points.length ? '' : 'Load a GPX first'} onClick={() => set((x) => { x.customLandmarks = [...(x.customLandmarks ?? []), { id: newCustomId(x.customLandmarks ?? []), name: 'Finish', at: 'end' }]; })}>+ End</button>
+              <button type="button" onClick={() => set((x) => {
+                const mid = need ? { lat: +((need.minLat + need.maxLat) / 2).toFixed(5), lon: +((need.minLon + need.maxLon) / 2).toFixed(5) } : { lat: 0, lon: 0 };
+                x.customLandmarks = [...(x.customLandmarks ?? []), { id: newCustomId(x.customLandmarks ?? []), name: 'My place', at: 'latlon', ...mid }];
+              })}>+ Lat/lon</button>
+            </div>
+          </div>
           {composed.landmarks?.map((l) => {
             const ov = p.features.overrides[l.id] ?? {};
             const edit = (patch: Partial<typeof ov>) => set((x) => { x.features.overrides[l.id] = { ...x.features.overrides[l.id], ...patch }; });
