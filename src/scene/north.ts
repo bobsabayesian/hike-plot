@@ -12,12 +12,14 @@ export interface NorthOpts {
   weightMm: number;
   fontFamily: string;
   fontKey: 'sans' | 'serif';
+  /** clockwise degrees the map is turned; the indicator turns with it (text stays upright) */
+  rotateDeg?: number;
 }
 
 const f = (n: number) => +n.toFixed(2);
-const poly = (pts: [number, number][], close = true) =>
+const polyD = (pts: [number, number][], close = true) =>
   pts.map(([x, y], i) => `${i ? 'L' : 'M'}${f(x)} ${f(y)}`).join('') + (close ? 'Z' : '');
-const circle = (cx: number, cy: number, r: number) =>
+const circleD = (cx: number, cy: number, r: number) =>
   `M${f(cx - r)} ${f(cy)}a${f(r)} ${f(r)} 0 1 0 ${f(2 * r)} 0a${f(r)} ${f(r)} 0 1 0 ${f(-2 * r)} 0Z`;
 
 /** Top-left of the s x s box for a corner of the frame (inset so it doesn't sit on the frame edge). */
@@ -40,13 +42,26 @@ export function northPrims(frame: Rect, o: NorthOpts): Prim[] {
   const { x: x0, y: y0 } = northBox(frame, o.corner, s);
   const cx = x0 + s / 2;
   const prims: Prim[] = [];
+  const cyBox = y0 + s / 2;
+  const a = ((o.rotateDeg ?? 0) * Math.PI) / 180;
+  const rot = ([x, y]: [number, number]): [number, number] => {
+    if (!a) return [x, y];
+    const dx = x - cx, dy = y - cyBox;
+    return [cx + dx * Math.cos(a) - dy * Math.sin(a), cyBox + dx * Math.sin(a) + dy * Math.cos(a)];
+  };
+  const poly = (pts: [number, number][], close = true) => polyD(pts.map(rot), close);
+  const circle = (x: number, y: number, r: number) => circleD(...rot([x, y]), r);
   const line = (d: string) => prims.push({ kind: 'path', d, color: o.color, pen: o.pen, mode: 'stroke', widthMm: o.weightMm, round: true });
   const fill = (d: string) => prims.push({ kind: 'path', d, color: o.color, pen: o.pen, mode: 'fill' });
-  const label = (t: string, x: number, baseline: number, size: number) =>
+  const label = (t: string, x0_: number, baseline0: number, size: number) => {
+    // rotate the label's center, keep the glyphs upright
+    const [x, cyL] = rot([x0_, baseline0 - size * 0.36]);
+    const baseline = cyL + size * 0.36;
     prims.push({
       kind: 'text', text: t, x, y: baseline, anchor: 'middle', sizeMm: size, trackingMm: 0,
       fontFamily: o.fontFamily, fontKey: o.fontKey, color: o.color, pen: o.pen,
     });
+  };
 
   switch (o.style) {
     case 'arrow': {

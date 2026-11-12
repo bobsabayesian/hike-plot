@@ -431,7 +431,14 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       }
 
       if (p.north.enabled) {
-        prims.push(...northPrims(frame, { ...p.north, color: colorOf(p.north.pen), fontFamily, fontKey: t.font }));
+        let northAngle = 0;
+        if (relief) {
+          const cx = frame.x + frame.w / 2, cy = frame.y + frame.h / 2;
+          const [ax, ay] = relief.camera.project(cx, cy, 0);
+          const [bx, by] = relief.camera.project(cx, cy - 10, 0);
+          northAngle = (Math.atan2(bx - ax, -(by - ay)) * 180) / Math.PI;
+        }
+        prims.push(...northPrims(frame, { ...p.north, rotateDeg: northAngle, color: colorOf(p.north.pen), fontFamily, fontKey: t.font }));
       }
 
       if (landmarkOut) {
