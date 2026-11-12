@@ -3,7 +3,7 @@ import { defaultProject, type Project } from './scene/project';
 import type { TrackPoint } from './gpx/types';
 import type { Landmark, OsmData, OsmRequest } from './features/types';
 import type { TerrainField } from './topo/terrain';
-import { fetchFeatures, geocodeFeature, type GeocodeHit, nearestPeakName, reverseLocation } from './lookup';
+import { geocodeFeature, type GeocodeHit, nearestPeakName, reverseLocation } from './lookup';
 
 interface Store {
   project: Project;
@@ -48,7 +48,9 @@ export const useStore = create<Store>((setState, get) => ({
   loadOsm: async (b, req) => {
     setState({ osmStatus: 'loading', osmError: undefined });
     try {
-      setState({ osm: await fetchFeatures(b, req), osmStatus: 'idle' });
+      // the tile decoder is only loaded when landmarks are first needed
+      const { loadFeatures } = await import('./features/hybrid');
+      setState({ osm: await loadFeatures(b, req), osmStatus: 'idle' });
     } catch (e) {
       setState({ osm: undefined, osmStatus: 'error', osmError: e instanceof Error ? e.message : 'Landmarks failed' });
     }

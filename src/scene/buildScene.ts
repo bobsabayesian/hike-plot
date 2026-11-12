@@ -268,6 +268,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         landmarkOut = landmarkPrims({
           landmarks: [...p.waypoints, ...(osm?.landmarks ?? [])],
           water: osm?.water ?? [],
+          waterNames: osm?.waterNames ?? [],
           fit, frame, route: routeXY,
           labelBounds: withinBorder({ x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }), settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,

@@ -42,9 +42,18 @@ export interface OsmRequest {
   rivers: boolean;
 }
 
+/** A lake's name and where to write it, from the map tiles (which give names as points, not outlines). */
+export interface WaterName { id: string; name: string; lat: number; lon: number }
+
 export interface OsmData {
   landmarks: Landmark[];
   water: WaterLine[];
+  /** lake names as points (from map tiles) */
+  waterNames?: WaterName[];
+  /** where the data came from: OpenFreeMap vector tiles (plus Overpass for trailheads), or Overpass alone */
+  source?: 'tiles' | 'overpass';
+  /** something the user should know about this data, e.g. a closer view shows more */
+  note?: string;
   /** area this data was fetched for */
   covers: BBox;
   requested?: OsmRequest;

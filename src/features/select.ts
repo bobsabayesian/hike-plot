@@ -1,6 +1,6 @@
 import { clipPolyline, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
-import type { FeatureSettings, LabelKind, Landmark, Side, WaterLine } from './types';
+import type { FeatureSettings, LabelKind, Landmark, Side, WaterLine, WaterName } from './types';
 
 export interface LandmarkEntry {
   id: string;
@@ -29,6 +29,8 @@ export interface PlacedLabel {
 export interface PlaceInput {
   landmarks: Landmark[];
   water: WaterLine[];
+  /** lake names given as points, from the map tiles */
+  waterNames?: WaterName[];
   fit: Fit;
   frame: Rect;
   /** where label text may go; defaults to the frame. Routes often touch the frame edge, so callers allow some margin. */
@@ -147,9 +149,13 @@ export function routeLengthIn(route: XY[], b: Box): number {
  * OpenStreetMap splits a long river into many ways. Join pieces of the same name that share an end point so a
  * river is labeled once, and along its longest clear stretch.
  */
+/** How close (degrees, about 3 m) two river ends must be to count as joined. */
+export const JOIN_TOLERANCE_DEG = 3e-5;
+
 export function stitchRivers(water: WaterLine[]): { id: string; name: string; coords: [number, number][] }[] {
   const byName = new Map<string, { name: string; chains: [number, number][][] }>();
-  const key = (p: [number, number]) => `${p[0]},${p[1]}`;
+  // pieces cut at a tile border meet within a few meters of each other, not exactly
+  const same = (p: [number, number], q: [number, number]) => Math.abs(p[0] - q[0]) <= JOIN_TOLERANCE_DEG && Math.abs(p[1] - q[1]) <= JOIN_TOLERANCE_DEG;
   for (const w of water) {
     if (w.kind !== 'river' || !w.name?.trim() || w.coords.length < 2) continue;
     const g = byName.get(w.name.toLowerCase()) ?? { name: w.name, chains: [] };
@@ -160,13 +166,13 @@ export function stitchRivers(water: WaterLine[]): { id: string; name: string; co
       merged = false;
       for (let i = 0; i < g.chains.length; i++) {
         const c = g.chains[i]!;
-        const [cs, ce] = [key(c[0]!), key(c[c.length - 1]!)];
-        const [ps, pe] = [key(piece[0]!), key(piece[piece.length - 1]!)];
+        const [cs, ce] = [c[0]!, c[c.length - 1]!];
+        const [ps, pe] = [piece[0]!, piece[piece.length - 1]!];
         let joined: [number, number][] | undefined;
-        if (ce === ps) joined = [...c, ...piece.slice(1)];
-        else if (pe === cs) joined = [...piece, ...c.slice(1)];
-        else if (ce === pe) joined = [...c, ...[...piece].reverse().slice(1)];
-        else if (cs === ps) joined = [...[...c].reverse(), ...piece.slice(1)];
+        if (same(ce, ps)) joined = [...c, ...piece.slice(1)];
+        else if (same(pe, cs)) joined = [...piece, ...c.slice(1)];
+        else if (same(ce, pe)) joined = [...c, ...[...piece].reverse().slice(1)];
+        else if (same(cs, ps)) joined = [...[...c].reverse(), ...piece.slice(1)];
         if (joined) {
           g.chains.splice(i, 1);
           piece = joined;
@@ -305,6 +311,10 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
       const cx = mm.reduce((a, p) => a + p[0], 0) / mm.length;
       const cy = mm.reduce((a, p) => a + p[1], 0) / mm.length;
       addCand({ id: w.id, name: w.name, kind: 'lake', x: cx, y: cy, marker: false, enabled: true, base: KIND_WEIGHT.lake + Math.min(2, area / (frame.w * frame.h * 0.02)) });
+    }
+    for (const wn of inp.waterNames ?? []) {
+      const [x, y] = fit.toMm(wn.lat, wn.lon);
+      addCand({ id: wn.id, name: wn.name, kind: 'lake', x, y, marker: false, enabled: true, base: KIND_WEIGHT.lake + 0.8 });
     }
     const diag = Math.hypot(frame.w, frame.h);
     for (const r of stitchRivers(inp.water)) {

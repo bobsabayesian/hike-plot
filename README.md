@@ -11,6 +11,17 @@ npm run dev        # the editor at http://localhost:5173, with the /api routes s
 npm test           # unit tests
 ```
 
+## Where the data comes from
+
+- **Peaks, passes, viewpoints, shelters, rivers, lakes:** OpenStreetMap data served as vector tiles by [OpenFreeMap](https://openfreemap.org)
+  (OpenMapTiles schema), read in the user's browser (`src/topo/vector.ts`). Tiles are static files, so this is fast and steady.
+- **Trailheads (and huts and passes the tiles miss):** one small Overpass lookup through the Worker (`worker/api.ts`), because
+  trailheads are not in the map tiles. If the tiles cannot be fetched at all, everything comes from Overpass instead.
+- **Place search:** Nominatim, through the Worker. **Elevation:** Terrain Tiles on AWS.
+- OpenFreeMap's terms do not allow automated data collection, so tiles are fetched only from the user's browser (never from
+  the Worker), at most four at a time, and a view is limited to about 150 tiles (a wider view uses a lower zoom).
+- `test/fixtures/tiles/` holds a few real tiles (OpenStreetMap contributors, ODbL) so the decoder is tested without a network.
+
 ## Deploy (from this computer, with wrangler)
 
 The site is one Cloudflare Worker (`hike-plot`) that serves the built app and the `/api/*` routes. It is deployed with

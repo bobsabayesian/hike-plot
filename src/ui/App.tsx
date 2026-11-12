@@ -292,6 +292,7 @@ export function App() {
           <span>{osmStatus === 'loading' ? 'Loading landmarks…' : ''}</span>
         </Row>
         {osmError && <div className="err">{osmError} <button onClick={retryOsm}>Retry</button></div>}
+        {osm?.note && <div className="hint">{osm.note}</div>}
         {osm?.partial?.length ? (
           <div className="hint">
             {osm.partial.includes('water') ? 'Rivers and lakes are unavailable for this area right now' : 'Some landmarks are unavailable right now'}
@@ -556,7 +557,7 @@ export function App() {
         <div className="sheet" role="img" aria-label="Preview of the poster" dangerouslySetInnerHTML={{ __html: previewSvg }} />
       </main>
       <footer className="notice">
-        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL). Place search by Nominatim. Elevation: Terrain Tiles on AWS (SRTM, GMTED and other sources).
+        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL), served as vector tiles by <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> (© <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a>). Place search by Nominatim. Elevation: Terrain Tiles on AWS (SRTM, GMTED and other sources).
       </footer>
     </div>
   );
