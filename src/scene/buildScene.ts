@@ -6,9 +6,11 @@ import {
   type TrackStats,
 } from '../geo/stats';
 import { contourInterval, contourPaths, toD } from '../topo/contours';
-import { buildRelief, liftContours, ridgeRows, type Relief } from '../relief/relief';
+import { buildRelief, liftContours, needsHiding, ridgeRows, type Relief } from '../relief/relief';
+import { buildVisibility, visibleRuns, type P3 } from '../relief/visibility';
 import type { TerrainField } from '../topo/terrain';
-import { landmarkPrims, waterPrims } from '../features/draw';
+import { landmarkPrims, waterLinesPrim, waterPrims } from '../features/draw';
+import { clipPolyline } from '../geo/clip';
 import type { LandmarkEntry, LandmarkPlacement } from '../features/select';
 import { penKeyOf, type OsmData } from '../features/types';
 import type { XY } from '../geo/clip';
@@ -264,6 +266,9 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       // In 3D, every place on the map is found through a fit that follows the terrain; the flat fit still frames the view.
       const relief: Relief | undefined = p.relief.enabled && terrain ? buildRelief(terrain, fit, frame, p.relief) : undefined;
       const mapFit = relief?.fit ?? fit;
+      // hills hide what is behind them (the route stays on top)
+      const vis = relief && needsHiding(p.relief) ? buildVisibility(relief) : undefined;
+      const onSurface = (lat: number, lon: number): P3 => { const [x, y] = fit.toMm(lat, lon); return [x, y, relief!.heightMm(relief!.surface.sample(x, y))]; };
       const clean = p.points.length >= 2 ? cleanTrack(p.points, fit.metersPerMm * 0.1) : [];
       const routeXY: XY[] = clean.map((q) => mapFit.toMm(q.lat, q.lon));
 
@@ -275,6 +280,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           water: osm?.water ?? [],
           waterNames: osm?.waterNames ?? [],
           fit: mapFit, frame, route: routeXY,
+          visible: vis ? (la, lo) => { const q = onSurface(la, lo); return vis.isVisible(q[0], q[1], q[2]); } : undefined,
           labelBounds: withinBorder({ x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }), settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,
           penFor: (kind) => penFor(p.pens, featurePenId(p.features, penKeyOf(kind))),
@@ -288,11 +294,11 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const style = p.relief.style;
         const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
         if (style === 'contours' || style === 'both') {
-          const lifted = liftContours(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces);
+          const lifted = liftContours(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces, vis);
           if (lifted.regular.length) prims.push({ kind: 'path', d: toD(lifted.regular), widthMm: tc.weightMm, ...paint });
           if (lifted.index.length) prims.push({ kind: 'path', d: toD(lifted.index), widthMm: tc.indexWeightMm, minPasses: 2, ...paint });
         }
-        if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(ridgeRows(relief, p.relief.rows)), widthMm: p.relief.rowWeightMm, ...paint });
+        if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(ridgeRows(relief, p.relief.rows, vis)), widthMm: p.relief.rowWeightMm, ...paint });
       } else if (p.terrain.enabled && terrain) {
         const paths = contourPaths(terrain, fit, frame, interval!, p.terrain.indexEvery);
         const tc = p.terrain;
@@ -329,7 +335,17 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         }
       }
 
-      if (p.features.enabled && p.features.water && osm) prims.push(...waterPrims(osm.water, mapFit, frame, p.features, penFor(p.pens, featurePenId(p.features, 'waterOutline'))));
+      if (p.features.enabled && p.features.water && osm) {
+        const waterPen = penFor(p.pens, featurePenId(p.features, 'waterOutline'));
+        if (relief && vis) {
+          // water follows the ground, so a stream behind a hill is cut away like any other line
+          const lines: P3[][] = [];
+          for (const w of osm.water) for (const piece of clipPolyline(w.coords.map(([la, lo]) => fit.toMm(la, lo)), frame)) {
+            lines.push(piece.map(([x, y]): P3 => [x, y, relief.heightMm(relief.surface.sample(x, y))]));
+          }
+          prims.push(...waterLinesPrim(visibleRuns(relief, vis, lines), p.features, waterPen));
+        } else prims.push(...waterPrims(osm.water, mapFit, frame, p.features, waterPen));
+      }
 
       if (p.points.length >= 2) {
         const xy = routeXY;

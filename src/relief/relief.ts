@@ -4,6 +4,7 @@ import type { ContourPiece } from '../topo/contours';
 import type { TerrainField } from '../topo/terrain';
 import { makeCamera, type Camera, type ViewSettings } from './camera';
 import { buildSurface, type Surface } from './surface';
+import { visibleRuns, type P3, type Visibility } from './visibility';
 
 export type ReliefStyle = 'contours' | 'rows' | 'both';
 
@@ -16,10 +17,12 @@ export interface ReliefSettings extends ViewSettings {
   depth: number;
   /** line weight of the rows, mm */
   rowWeightMm: number;
+  /** cut away the parts of lines that are behind a hill */
+  hideHidden: boolean;
 }
 
 export const defaultRelief = (): ReliefSettings => ({
-  enabled: false, style: 'contours', rows: 70, turn: 0, tilt: 55, perspective: 35, depth: 130, rowWeightMm: 0.18,
+  enabled: false, style: 'contours', rows: 70, turn: 0, tilt: 55, perspective: 35, depth: 130, rowWeightMm: 0.18, hideHidden: true,
 });
 
 export interface Relief {
@@ -57,30 +60,48 @@ export function buildRelief(field: TerrainField, flat: Fit, frame: Rect, s: Reli
   return { camera, surface, heightMm, fit, frame };
 }
 
-/** Evenly spaced slices across the terrain (west to east), each following the surface. */
-export function ridgeRows(r: Relief, count: number): XY[][] {
+/** Hidden-line removal only does anything when the map is seen at an angle or with perspective. */
+export const needsHiding = (s: Pick<ReliefSettings, 'tilt' | 'perspective' | 'hideHidden'>) => s.hideHidden && (s.tilt > 0 || s.perspective > 0);
+
+/** The 3D points of evenly spaced slices across the terrain (west to east), each following the surface. */
+export function ridgeRowLines(r: Relief, count: number): P3[][] {
   const { surface, frame } = r;
   const n = Math.max(2, Math.round(count));
-  const out: XY[][] = [];
+  const out: P3[][] = [];
   for (let k = 0; k < n; k++) {
     const y = frame.y + (k / (n - 1)) * frame.h;
-    const line: XY[] = [];
+    const line: P3[] = [];
     for (let i = 0; i < surface.cols; i++) {
       const x = frame.x + i * surface.stepX;
-      line.push(r.camera.project(x, y, r.heightMm(surface.sample(x, y))));
+      line.push([x, y, r.heightMm(surface.sample(x, y))]);
     }
-    out.push(simplifyXY(line, 0.04));
+    out.push(line);
   }
   return out;
 }
 
-/** Contour pieces (flat poster mm, with their level) lifted to their elevation and projected. */
-export function liftContours(r: Relief, pieces: ContourPiece[]): { regular: XY[][]; index: XY[][] } {
-  const regular: XY[][] = [];
-  const index: XY[][] = [];
+/** Evenly spaced slices across the terrain as page lines; with `vis`, the parts behind hills are cut away. */
+export function ridgeRows(r: Relief, count: number, vis?: Visibility): XY[][] {
+  const lines = ridgeRowLines(r, count);
+  if (vis) return visibleRuns(r, vis, lines);
+  return lines.map((line) => simplifyXY(line.map(([x, y, z]) => r.camera.project(x, y, z)), 0.04));
+}
+
+/** Contour pieces lifted to their elevation (3D points), regular and heavy apart. */
+export function contourLines(r: Relief, pieces: ContourPiece[]): { regular: P3[][]; index: P3[][] } {
+  const regular: P3[][] = [];
+  const index: P3[][] = [];
   for (const pc of pieces) {
     const z = r.heightMm(pc.level);
-    (pc.heavy ? index : regular).push(pc.pts.map(([x, y]) => r.camera.project(x, y, z)));
+    (pc.heavy ? index : regular).push(pc.pts.map(([x, y]): P3 => [x, y, z]));
   }
   return { regular, index };
+}
+
+/** Contour pieces as page lines; with `vis`, the parts behind hills are cut away. */
+export function liftContours(r: Relief, pieces: ContourPiece[], vis?: Visibility): { regular: XY[][]; index: XY[][] } {
+  const lines = contourLines(r, pieces);
+  const flat = (ls: P3[][]) => ls.map((l) => l.map(([x, y, z]) => r.camera.project(x, y, z)));
+  if (vis) return { regular: visibleRuns(r, vis, lines.regular), index: visibleRuns(r, vis, lines.index) };
+  return { regular: flat(lines.regular), index: flat(lines.index) };
 }

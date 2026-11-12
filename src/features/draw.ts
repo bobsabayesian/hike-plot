@@ -15,6 +15,11 @@ export function waterPrims(water: WaterLine[], fit: Fit, frame: Rect, s: Feature
     const mm = simplifyXY(w.coords.map(([la, lo]) => fit.toMm(la, lo)), 0.08);
     lines.push(...clipPolyline(mm, frame));
   }
+  return waterLinesPrim(lines, s, pen);
+}
+
+/** Water lines that are already page polylines, as one stroked path in the water pen. */
+export function waterLinesPrim(lines: XY[][], s: FeatureSettings, pen: Pen): Prim[] {
   return lines.length
     ? [{ kind: 'path', d: toD(lines), color: pen.color, pen: pen.id, mode: 'stroke', widthMm: s.waterWeightMm }]
     : [];

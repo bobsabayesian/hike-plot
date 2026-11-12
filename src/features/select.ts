@@ -31,6 +31,8 @@ export interface PlaceInput {
   water: WaterLine[];
   /** lake names given as points, from the map tiles */
   waterNames?: WaterName[];
+  /** in 3D: is this place in view, or hidden behind a hill? Hidden places get no label. */
+  visible?: (lat: number, lon: number) => boolean;
   fit: Fit;
   frame: Rect;
   /** where label text may go; defaults to the frame. Routes often touch the frame edge, so callers allow some margin. */
@@ -295,7 +297,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
 
   // Every kind becomes a candidate, switched on or not, so the list can offer them.
   for (const l of inp.landmarks) {
-    if (!l.name.trim()) continue;
+    if (!l.name.trim() || (inp.visible && !inp.visible(l.lat, l.lon))) continue;
     const [x, y] = fit.toMm(l.lat, l.lon);
     const eleBonus = l.kind === 'peak' && l.ele !== undefined && eleVals.length > 1 ? 2 * ((l.ele - eMin) / eSpan) : 0;
     addCand({ id: l.id, name: l.name, kind: l.kind, x, y, marker: true, ele: l.ele, enabled: s.kinds[l.kind], base: KIND_WEIGHT[l.kind] + eleBonus });
@@ -313,6 +315,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
       addCand({ id: w.id, name: w.name, kind: 'lake', x: cx, y: cy, marker: false, enabled: true, base: KIND_WEIGHT.lake + Math.min(2, area / (frame.w * frame.h * 0.02)) });
     }
     for (const wn of inp.waterNames ?? []) {
+      if (inp.visible && !inp.visible(wn.lat, wn.lon)) continue;
       const [x, y] = fit.toMm(wn.lat, wn.lon);
       addCand({ id: wn.id, name: wn.name, kind: 'lake', x, y, marker: false, enabled: true, base: KIND_WEIGHT.lake + 0.8 });
     }
