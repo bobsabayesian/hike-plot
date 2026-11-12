@@ -65,7 +65,17 @@ export interface OsmData {
 
 export type Side = 'auto' | 'right' | 'left' | 'above' | 'below';
 
+/** The little drawing beside a label. `default` is the kind's own shape; `none` leaves only the text. */
+export const ICONS = ['default', 'none', 'crosshair', 'circle', 'dot', 'triangle', 'diamond', 'square', 'star', 'pin'] as const;
+export type Icon = (typeof ICONS)[number];
+export const ICON_LABELS: Record<Icon, string> = {
+  default: 'Default', none: 'None', crosshair: '⌖ Crosshair', circle: '○ Circle', dot: '◉ Dot', triangle: '△ Triangle',
+  diamond: '◇ Diamond', square: '□ Square', star: '☆ Star', pin: '⌂ Pin',
+};
+
 export interface FeatureOverride {
+  /** this one's icon, instead of its kind's */
+  icon?: Icon;
   name?: string;
   /** the user removed this label; its slot stays open instead of being refilled */
   hidden?: boolean;
@@ -88,6 +98,8 @@ export interface FeatureSettings {
   sizePt: number;
   /** pens: one default for markers and labels, with per-kind overrides (water defaults to blue) */
   pens: { default: string; overrides: Partial<Record<FeaturePenKey, string>> };
+  /** icon for each kind (default: the kind's own shape) */
+  icons: Partial<Record<LandmarkKind, Icon>>;
   waterWeightMm: number;
   overrides: Record<string, FeatureOverride>;
 }
@@ -123,6 +135,7 @@ export const defaultFeatures = (): FeatureSettings => ({
   waterLabels: false,
   sizePt: 11,
   pens: { default: 'ink', overrides: { waterOutline: 'blue', waterLabel: 'blue' } },
+  icons: {},
   waterWeightMm: 0.2,
   overrides: {},
 });

@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
-import { KIND_LABELS, LANDMARK_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Side } from '../features/types';
+import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
 import { composeScene, viewBBox, autoValues, featureView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
@@ -386,6 +386,16 @@ export function App() {
               </Row>
             ))}
           </details>
+          <details className="overrides">
+            <summary>Icon for each kind</summary>
+            {[...POINT_KINDS, 'waypoint' as const].map((k) => (
+              <Row key={k} label={KIND_LABELS[k]}>
+                <select value={p.features.icons?.[k] ?? 'default'} onChange={(e) => set((x) => { x.features.icons = { ...x.features.icons, [k]: e.target.value as Icon }; })}>
+                  {ICONS.map((i) => <option key={i} value={i}>{ICON_LABELS[i]}</option>)}
+                </select>
+              </Row>
+            ))}
+          </details>
           {composed.landmarks?.map((l) => {
             const ov = p.features.overrides[l.id] ?? {};
             const edit = (patch: Partial<typeof ov>) => set((x) => { x.features.overrides[l.id] = { ...x.features.overrides[l.id], ...patch }; });
@@ -396,6 +406,9 @@ export function App() {
                 <select title="Label side" value={ov.side ?? 'auto'} disabled={l.kind === 'lake' || l.kind === 'river'} onChange={(e) => edit({ side: e.target.value as Side })}>
                   <option value="auto">Auto</option><option value="right">Right</option><option value="left">Left</option>
                   <option value="above">Above</option><option value="below">Below</option>
+                </select>
+                <select title="Icon" value={ov.icon ?? 'default'} onChange={(e) => edit({ icon: e.target.value as Icon })}>
+                  {ICONS.map((i) => <option key={i} value={i}>{i === 'default' ? 'Icon' : ICON_LABELS[i]}</option>)}
                 </select>
                 {!l.placed && !l.hidden && <span className="hint" title="No room for this label">no room</span>}
               </div>

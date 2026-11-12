@@ -24,3 +24,33 @@ describe('click to edit labels', () => {
     expect(sceneToSvg(scene)).not.toContain('data-lm');
   });
 });
+
+import { markerPath } from '../src/features/draw';
+import { ICONS } from '../src/features/types';
+
+describe('landmark icons', () => {
+  it('every icon draws something, except none', () => {
+    for (const i of ICONS) {
+      const d = markerPath('trailhead', 10, 10, 2, i);
+      if (i === 'none') expect(d).toBe('');
+      else if (i !== 'default') expect(d.length).toBeGreaterThan(5);
+    }
+  });
+  it('default keeps the kind\'s own shape, and the crosshair differs from the trailhead plus', () => {
+    expect(markerPath('peak', 10, 10, 2)).toBe(markerPath('peak', 10, 10, 2, 'default'));
+    expect(markerPath('trailhead', 10, 10, 2, 'crosshair')).not.toBe(markerPath('trailhead', 10, 10, 2));
+  });
+  it('a per-landmark icon beats the kind\'s icon, which beats the default', () => {
+    const pens = defaultPens();
+    const run = (over: Partial<ReturnType<typeof defaultFeatures>>) => landmarkPrims({
+      landmarks: [peak], water: [], fit, frame, route: [], settings: { ...defaultFeatures(), ...over }, sizeMm: 4, markerR: 2,
+      penFor: () => pens[0]!, fontFamily: 'x', fontKey: 'sans', trackingMm: 0,
+    }).prims.filter((p) => p.kind === 'path').map((p) => (p as { d: string }).d).join('');
+    const base = run({});
+    const kindIcon = run({ icons: { peak: 'star' } });
+    const own = run({ icons: { peak: 'star' }, overrides: { [peak.id]: { icon: 'crosshair' } } });
+    const none = run({ overrides: { [peak.id]: { icon: 'none' } } });
+    expect(new Set([base, kindIcon, own]).size).toBe(3);
+    expect(none).toBe('');
+  });
+});

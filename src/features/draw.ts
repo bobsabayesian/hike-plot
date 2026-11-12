@@ -3,7 +3,7 @@ import type { Fit } from '../geo/project';
 import type { Prim } from '../scene/types';
 import { placeLandmarks, type LandmarkPlacement, type PlaceInput } from './select';
 import type { Pen } from '../scene/pens';
-import type { FeatureSettings, LabelKind, LandmarkKind, WaterLine } from './types';
+import type { FeatureSettings, Icon, LabelKind, LandmarkKind, WaterLine } from './types';
 
 const f = (n: number) => +n.toFixed(2);
 const toD = (lines: XY[][]) => lines.map((l) => l.map(([x, y], i) => `${i ? 'L' : 'M'}${f(x)} ${f(y)}`).join('')).join('');
@@ -26,8 +26,27 @@ export function waterLinesPrim(lines: XY[][], s: FeatureSettings, pen: Pen): Pri
 }
 
 /** Simple outline glyph per kind, centered on (x, y); strokes only so it plots. */
-export function markerPath(kind: LandmarkKind, x: number, y: number, r: number): string {
+export function markerPath(kind: LandmarkKind, x: number, y: number, r: number, icon: Icon = 'default'): string {
   const circle = (rr: number) => `M${f(x - rr)} ${f(y)}a${f(rr)} ${f(rr)} 0 1 0 ${f(2 * rr)} 0a${f(rr)} ${f(rr)} 0 1 0 ${f(-2 * rr)} 0Z`;
+  switch (icon) {
+    case 'none': return '';
+    case 'crosshair': return circle(r * 0.62) + `M${f(x - r * 1.25)} ${f(y)}h${f(r * 2.5)}M${f(x)} ${f(y - r * 1.25)}v${f(r * 2.5)}`;
+    case 'circle': return circle(r);
+    case 'dot': return circle(r) + circle(r * 0.5);
+    case 'triangle': return `M${f(x)} ${f(y - r)}L${f(x + r * 0.95)} ${f(y + r * 0.7)}L${f(x - r * 0.95)} ${f(y + r * 0.7)}Z`;
+    case 'diamond': return `M${f(x)} ${f(y - r)}L${f(x + r)} ${f(y)}L${f(x)} ${f(y + r)}L${f(x - r)} ${f(y)}Z`;
+    case 'square': return `M${f(x - r * 0.8)} ${f(y - r * 0.8)}h${f(r * 1.6)}v${f(r * 1.6)}h${f(-r * 1.6)}Z`;
+    case 'star': {
+      let d = '';
+      for (let i = 0; i < 10; i++) {
+        const a = (i * Math.PI) / 5 - Math.PI / 2;
+        const rr = i % 2 ? r * 0.42 : r * 1.05;
+        d += `${i ? 'L' : 'M'}${f(x + Math.cos(a) * rr)} ${f(y + Math.sin(a) * rr)}`;
+      }
+      return d + 'Z';
+    }
+    case 'pin': return `M${f(x - r * 0.9)} ${f(y + r * 0.8)}V${f(y - r * 0.1)}L${f(x)} ${f(y - r)}L${f(x + r * 0.9)} ${f(y - r * 0.1)}V${f(y + r * 0.8)}Z`;
+  }
   switch (kind) {
     case 'peak':
       return `M${f(x)} ${f(y - r)}L${f(x + r * 0.95)} ${f(y + r * 0.7)}L${f(x - r * 0.95)} ${f(y + r * 0.7)}Z`;
@@ -63,7 +82,7 @@ export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[] } & Pick<Landm
   for (const l of markers) {
     const pen = inp.penFor(l.kind);
     const g = byPen.get(pen.id) ?? { pen, ds: [] };
-    g.ds.push(markerPath(l.kind as LandmarkKind, l.marker![0], l.marker![1], inp.markerR));
+    g.ds.push(markerPath(l.kind as LandmarkKind, l.marker![0], l.marker![1], inp.markerR, inp.settings.overrides[l.id]?.icon ?? inp.settings.icons?.[l.kind as LandmarkKind]));
     byPen.set(pen.id, g);
   }
   for (const { pen, ds } of byPen.values())
