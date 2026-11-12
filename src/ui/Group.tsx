@@ -31,7 +31,10 @@ export function useGroups(narrow: boolean) {
   useEffect(() => {
     if (narrow && firstOpen) document.getElementById(`group-${firstOpen}`)?.scrollIntoView({ block: 'start' });
   }, [narrow, firstOpen]);
-  return (id: string): GroupProps => ({ open: isOpen(id), onToggle: () => toggle(id) });
+  const gp = (id: string): GroupProps => ({ open: isOpen(id), onToggle: () => toggle(id) });
+  /** open a group (and leave it open if it already is) */
+  gp.show = (id: string) => setOpenGroups((prev) => (narrow ? [id] : prev.includes(id) ? prev : [...prev, id]));
+  return gp;
 }
 
 /** A section of settings that opens and closes: the heading holds a button that shows or hides the body. */

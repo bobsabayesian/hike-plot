@@ -80,6 +80,26 @@ export function App() {
   const [tab, setTab] = useState<'settings' | 'poster'>('settings');
   const gp = useGroups(narrow);
   // on a phone, show the poster as soon as there is something to look at
+  // Click a landmark label on the poster to edit it: open the Landmarks group and focus that name box.
+  const [pendingEdit, setPendingEdit] = useState<string | null>(null);
+  const editLabel = (e: React.MouseEvent) => {
+    const id = (e.target as Element).closest?.('[data-lm]')?.getAttribute('data-lm');
+    if (!id) return;
+    setTab('settings');
+    gp.show('landmarks');
+    setPendingEdit(id);
+  };
+  useEffect(() => {
+    if (!pendingEdit) return;
+    const t = setTimeout(() => {
+      const box = Array.from(document.querySelectorAll<HTMLInputElement>('[data-lm-input]')).find((n) => n.dataset.lmInput === pendingEdit);
+      box?.scrollIntoView({ block: 'center' });
+      box?.focus();
+      box?.select();
+      setPendingEdit(null);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [pendingEdit]);
   const showPoster = () => { if (narrow) setTab('poster'); };
   const [err, setErr] = useState('');
   const [over, setOver] = useState(false);
@@ -132,7 +152,7 @@ export function App() {
   }, [need, p.terrain.enabled, p.relief.enabled, terrain, setTerrain]);
   // Which line weights in this design become several passes with the chosen pen (plotter export).
   const passes = useMemo(() => summarizePasses(scene.prims, (x) => tipFor(x as { pen?: string }, { pens: p.pens })), [scene, p.pens]);
-  const previewSvg = useMemo(() => sceneToSvg(scene, { paper: true }), [scene]);
+  const previewSvg = useMemo(() => sceneToSvg(scene, { paper: true, ids: true }), [scene]);
 
   async function load(file?: File) {
     if (!file) return;
@@ -372,7 +392,7 @@ export function App() {
             return (
               <div className="lm" key={l.id}>
                 <input type="checkbox" title="Show" checked={!l.hidden} onChange={(e) => edit({ hidden: !e.target.checked })} />
-                <input type="text" title={KIND_LABELS[l.kind]} value={ov.name ?? l.name} onChange={(e) => edit({ name: e.target.value })} />
+                <input type="text" data-lm-input={l.id} title={KIND_LABELS[l.kind]} value={ov.name ?? l.name} onChange={(e) => edit({ name: e.target.value })} />
                 <select title="Label side" value={ov.side ?? 'auto'} disabled={l.kind === 'lake' || l.kind === 'river'} onChange={(e) => edit({ side: e.target.value as Side })}>
                   <option value="auto">Auto</option><option value="right">Right</option><option value="left">Left</option>
                   <option value="above">Above</option><option value="below">Below</option>
@@ -595,7 +615,7 @@ export function App() {
         </Group>
       </div>
       <main className="main" id="preview" tabIndex={-1} hidden={narrow && tab !== 'poster'} {...(narrow ? { role: 'tabpanel', 'aria-labelledby': 'tab-poster' } : {})}>
-        <div className="sheet" role="img" aria-label="Preview of the poster" dangerouslySetInnerHTML={{ __html: previewSvg }} />
+        <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editLabel} dangerouslySetInnerHTML={{ __html: previewSvg }} />
       </main>
       <footer className="notice">
         Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL), served as vector tiles by <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> (© <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a>). Place search by Nominatim. Elevation: Terrain Tiles on AWS (SRTM, GMTED and other sources).

@@ -100,3 +100,7 @@ h3 { font-size: 13px; margin: 14px 0 4px; }
   button { min-height: 36px; }
   .group-title button { min-height: 44px; }
 }
+
+.sheet svg text[data-lm] { cursor: pointer; }
+.sheet svg text[data-lm]:hover { text-decoration: underline; }
+.lm input[type=text]:focus { outline: 2px solid var(--accent, #2a6df4); }

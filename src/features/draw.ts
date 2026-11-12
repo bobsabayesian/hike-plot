@@ -73,6 +73,7 @@ export function landmarkPrims(inp: LandmarkDraw): { prims: Prim[] } & Pick<Landm
     prims.push({
       kind: 'text', text: l.text, x: l.x, y: l.y, anchor: l.anchor, sizeMm: inp.sizeMm,
       trackingMm: inp.trackingMm, fontFamily: inp.fontFamily, fontKey: inp.fontKey, color: pen.color, pen: pen.id,
+      ref: l.id,
       ...(l.rotate ? { rotate: l.rotate } : {}),
     });
   }

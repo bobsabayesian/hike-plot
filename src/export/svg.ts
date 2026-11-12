@@ -17,7 +17,7 @@ function pathEl(p: PathPrim): string {
   return `<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${f(p.widthMm ?? 0.5)}" stroke-linejoin="round" stroke-linecap="${p.round ? 'round' : 'butt'}"${dash}${op}/>`;
 }
 
-function textEl(t: TextPrim): string {
+function textEl(t: TextPrim, ids = false): string {
   const op = t.opacity !== undefined && t.opacity < 1 ? ` opacity="${f(t.opacity)}"` : '';
   const rot = t.rotate ? ` transform="rotate(${f(t.rotate)} ${f(t.x)} ${f(t.y)})"` : '';
   // justified text: let the viewer spread the letters to the width
@@ -25,15 +25,18 @@ function textEl(t: TextPrim): string {
   const paint = t.mode === 'stroke'
     ? `fill="none" stroke="${normColor(t.color)}" stroke-width="${f(t.strokeMm ?? 0.35)}" stroke-linejoin="round"`
     : `fill="${normColor(t.color)}"`;
-  return `<text x="${f(t.x)}" y="${f(t.y)}"${rot}${fit} text-anchor="${t.anchor}" font-size="${f(t.sizeMm)}" letter-spacing="${f(t.trackingMm)}" font-family="${esc(t.fontFamily)}" ${paint}${op}>${esc(t.text)}</text>`;
+  const ref = ids && t.ref ? ` data-lm="${esc(t.ref)}"` : '';
+  return `<text${ref} x="${f(t.x)}" y="${f(t.y)}"${rot}${fit} text-anchor="${t.anchor}" font-size="${f(t.sizeMm)}" letter-spacing="${f(t.trackingMm)}" font-family="${esc(t.fontFamily)}" ${paint}${op}>${esc(t.text)}</text>`;
 }
 
-const el = (p: Prim) => (p.kind === 'path' ? pathEl(p) : textEl(p));
+const el = (p: Prim, ids = false) => (p.kind === 'path' ? pathEl(p) : textEl(p, ids));
 const colorOf = (p: Prim) => normColor(p.color);
 
 export interface SvgOptions {
   /** include the paper-colored background rect (omit for plotting) */
   paper?: boolean;
+  /** tag landmark labels with their id (the editor preview uses it for click to edit; exports leave it off) */
+  ids?: boolean;
 }
 
 /**
@@ -65,7 +68,7 @@ export function sceneToSvg(scene: Scene, opts: SvgOptions = {}): string {
       groups.set(id, { label, els: [] });
       order.push(id);
     }
-    groups.get(id)!.els.push(el(p));
+    groups.get(id)!.els.push(el(p, opts.ids));
   }
   const { widthMm: w, heightMm: h } = scene;
   const layers = order

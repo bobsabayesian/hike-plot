@@ -35,6 +35,8 @@ export interface TextPrim {
   rotate?: number;
   /** id of the pen this is written with */
   pen?: string;
+  /** landmark this text labels; lets the preview open it for editing when clicked */
+  ref?: string;
   /** 'stroke' draws only the outline of the letters, `strokeMm` wide; the default is a filled letter */
   mode?: 'fill' | 'stroke';
   strokeMm?: number;
