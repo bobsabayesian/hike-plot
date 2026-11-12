@@ -4,6 +4,7 @@ import { defaultFeatures, type FeatureSettings, type Landmark } from '../feature
 import { defaultPens, PEN_INK, PEN_RED, type Pen } from './pens';
 import { defaultBorder, type BorderSettings } from './border';
 import type { HatchDensity } from './types';
+import { defaultRelief, type ReliefSettings } from '../relief/relief';
 
 export type SizeGroup = 'US (inches)' | 'ISO (A series)' | 'Metric (cm)';
 
@@ -121,6 +122,8 @@ export interface Project {
   page: PageSettings;
   /** a single or double frame inside the page margin */
   border: BorderSettings;
+  /** the terrain drawn in 3D: turned and tipped back, with hills standing up */
+  relief: ReliefSettings;
   points: TrackPoint[];
   /** typed-in geographic feature; used for the map view when there is no GPX */
   feature?: Feature;
@@ -202,6 +205,7 @@ export const defaultProject = (): Project => ({
   paper: '#f6f3ec',
   page: { margins: { top: DEFAULT_MARGIN_MM, right: DEFAULT_MARGIN_MM, bottom: DEFAULT_MARGIN_MM, left: DEFAULT_MARGIN_MM }, linked: true },
   border: defaultBorder(PEN_INK),
+  relief: defaultRelief(),
   points: [],
   waypoints: [],
   lookup: {},

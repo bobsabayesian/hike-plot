@@ -109,7 +109,7 @@ export function App() {
 
   // Fetch terrain whenever the visible map area is not covered by what we already have.
   useEffect(() => {
-    if (!p.terrain.enabled || !need) return;
+    if (!(p.terrain.enabled || p.relief.enabled) || !need) return;
     if (terrain && covers(terrain, need)) return;
     let live = true;
     const t = setTimeout(() => {
@@ -119,7 +119,7 @@ export function App() {
         .catch((e) => live && setTerrain(undefined, 'error', e instanceof Error ? e.message : 'Terrain failed'));
     }, 300);
     return () => { live = false; clearTimeout(t); };
-  }, [need, p.terrain.enabled, terrain, setTerrain]);
+  }, [need, p.terrain.enabled, p.relief.enabled, terrain, setTerrain]);
   // Which line weights in this design become several passes with the chosen pen (plotter export).
   const passes = useMemo(() => summarizePasses(scene.prims, (x) => tipFor(x as { pen?: string }, { pens: p.pens })), [scene, p.pens]);
   const previewSvg = useMemo(() => sceneToSvg(scene, { paper: true }), [scene]);
@@ -284,6 +284,36 @@ export function App() {
           </>)}
         </>)}
 
+        </Group>
+
+        <Group id="relief" title="3D relief" {...gp('relief')}>
+          <Row label="Show in 3D"><input type="checkbox" checked={p.relief.enabled} onChange={(e) => set((x) => { x.relief.enabled = e.target.checked; })} />
+            <span>{p.relief.enabled && terrainStatus === 'loading' ? 'Loading terrain…' : ''}</span></Row>
+          {p.relief.enabled && (<>
+            <div className="row">
+              {([['Top-down', { turn: 0, tilt: 0, perspective: 0 }], ['Oblique', { turn: 0, tilt: 55, perspective: 35 }], ['Angled', { turn: 35, tilt: 62, perspective: 40 }]] as const).map(([name, v]) => (
+                <button key={name} type="button" onClick={() => set((x) => { Object.assign(x.relief, v); })}>{name}</button>
+              ))}
+            </div>
+            <Row label="Lines">
+              <select value={p.relief.style} onChange={(e) => set((x) => { x.relief.style = e.target.value as typeof p.relief.style; })}>
+                <option value="contours">Contours on the surface</option>
+                <option value="rows">Ridge rows (slices)</option>
+                <option value="both">Both</option>
+              </select>
+            </Row>
+            {p.relief.style !== 'contours' && (
+              <Row label="Rows"><input type="range" min={20} max={200} step={1} value={p.relief.rows} onChange={(e) => set((x) => { x.relief.rows = +e.target.value; })} /><span>{p.relief.rows}</span></Row>
+            )}
+            <Row label="Turn"><input type="range" min={-180} max={180} step={1} value={p.relief.turn} onChange={(e) => set((x) => { x.relief.turn = +e.target.value; })} /><span>{p.relief.turn}°</span></Row>
+            <Row label="Tilt"><input type="range" min={0} max={85} step={1} value={p.relief.tilt} onChange={(e) => set((x) => { x.relief.tilt = +e.target.value; })} /><span>{p.relief.tilt}°</span></Row>
+            <Row label="Perspective"><input type="range" min={0} max={100} step={1} value={p.relief.perspective} onChange={(e) => set((x) => { x.relief.perspective = +e.target.value; })} /><span>{p.relief.perspective}</span></Row>
+            <Row label="Height"><input type="range" min={50} max={400} step={5} value={p.relief.depth} onChange={(e) => set((x) => { x.relief.depth = +e.target.value; })} /><span>{p.relief.depth}%</span></Row>
+            {p.relief.style !== 'contours' && (
+              <Row label="Row weight"><input type="number" min={0.05} max={2} step={0.05} value={p.relief.rowWeightMm} onChange={(e) => set((x) => { x.relief.rowWeightMm = Math.max(0.05, +e.target.value || 0.18); })} /><span className="unit">mm</span></Row>
+            )}
+            <div className="hint">Tilt 0 is the flat map. Height is how much the hills are exaggerated (100% is true proportions). Lines use the Contours pen. Parts hidden behind hills are not removed yet.</div>
+          </>)}
         </Group>
 
         <Group id="landmarks" title="Landmarks" {...gp('landmarks')}>

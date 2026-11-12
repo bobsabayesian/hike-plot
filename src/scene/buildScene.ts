@@ -5,7 +5,8 @@ import {
   computeStats, metersToFeet, formatCoords, formatDuration, formatFeet, formatKm, formatMeters, formatMiles,
   type TrackStats,
 } from '../geo/stats';
-import { contourInterval, contourPaths } from '../topo/contours';
+import { contourInterval, contourPaths, toD } from '../topo/contours';
+import { buildRelief, liftContours, ridgeRows, type Relief } from '../relief/relief';
 import type { TerrainField } from '../topo/terrain';
 import { landmarkPrims, waterPrims } from '../features/draw';
 import type { LandmarkEntry, LandmarkPlacement } from '../features/select';
@@ -133,7 +134,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   const tx = t.align === 'left' ? contentL : t.align === 'right' ? contentR : (contentL + contentR) / 2;
   const innerW = contentR - contentL;
   const stats = p.points.length ? computeStats(p.points) : undefined;
-  const interval = p.terrain.enabled && terrain ? contourInterval(p.terrain.intervalM, terrain) : undefined;
+  const wantsTerrain = p.terrain.enabled || p.relief.enabled;
+  const interval = wantsTerrain && terrain ? contourInterval(p.terrain.intervalM, terrain) : undefined;
   const auto = autoValues(p, stats, interval);
   const text = (penId: string, s: string, y: number, sizeMm: number, extra: Partial<Extract<Prim, { kind: 'text' }>> = {}, x = tx): Prim => ({
     kind: 'text', text: s, x, y, anchor, sizeMm, trackingMm: sizeMm * t.trackingEm, fontFamily, fontKey: t.font, color: colorOf(penId), pen: penId, ...extra,
@@ -259,8 +261,11 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const y0 = Math.max(r.y, innerBorder);
         return { x: x0, y: y0, w: Math.min(r.x + r.w, W - innerBorder) - x0, h: Math.min(r.y + r.h, H - innerBorder) - y0 };
       };
+      // In 3D, every place on the map is found through a fit that follows the terrain; the flat fit still frames the view.
+      const relief: Relief | undefined = p.relief.enabled && terrain ? buildRelief(terrain, fit, frame, p.relief) : undefined;
+      const mapFit = relief?.fit ?? fit;
       const clean = p.points.length >= 2 ? cleanTrack(p.points, fit.metersPerMm * 0.1) : [];
-      const routeXY: XY[] = clean.map((q) => fit.toMm(q.lat, q.lon));
+      const routeXY: XY[] = clean.map((q) => mapFit.toMm(q.lat, q.lon));
 
       let landmarkOut: ReturnType<typeof landmarkPrims> | undefined;
       if (p.features.enabled) {
@@ -269,7 +274,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           landmarks: [...p.waypoints, ...(osm?.landmarks ?? [])],
           water: osm?.water ?? [],
           waterNames: osm?.waterNames ?? [],
-          fit, frame, route: routeXY,
+          fit: mapFit, frame, route: routeXY,
           labelBounds: withinBorder({ x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }), settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,
           penFor: (kind) => penFor(p.pens, featurePenId(p.features, penKeyOf(kind))),
@@ -277,7 +282,18 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         });
       }
 
-      if (p.terrain.enabled && terrain) {
+      if (relief && terrain) {
+        // the terrain in 3D: contours lifted onto the surface, and/or evenly spaced slices across it
+        const tc = p.terrain;
+        const style = p.relief.style;
+        const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
+        if (style === 'contours' || style === 'both') {
+          const lifted = liftContours(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces);
+          if (lifted.regular.length) prims.push({ kind: 'path', d: toD(lifted.regular), widthMm: tc.weightMm, ...paint });
+          if (lifted.index.length) prims.push({ kind: 'path', d: toD(lifted.index), widthMm: tc.indexWeightMm, minPasses: 2, ...paint });
+        }
+        if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(ridgeRows(relief, p.relief.rows)), widthMm: p.relief.rowWeightMm, ...paint });
+      } else if (p.terrain.enabled && terrain) {
         const paths = contourPaths(terrain, fit, frame, interval!, p.terrain.indexEvery);
         const tc = p.terrain;
         let { regular, index } = paths;
@@ -313,7 +329,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         }
       }
 
-      if (p.features.enabled && p.features.water && osm) prims.push(...waterPrims(osm.water, fit, frame, p.features, penFor(p.pens, featurePenId(p.features, 'waterOutline'))));
+      if (p.features.enabled && p.features.water && osm) prims.push(...waterPrims(osm.water, mapFit, frame, p.features, penFor(p.pens, featurePenId(p.features, 'waterOutline'))));
 
       if (p.points.length >= 2) {
         const xy = routeXY;
