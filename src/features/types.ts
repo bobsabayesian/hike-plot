@@ -76,6 +76,8 @@ export const ICON_LABELS: Record<Icon, string> = {
 export interface FeatureOverride {
   /** this one's icon, instead of its kind's */
   icon?: Icon;
+  /** clear the terrain lines this many mm around this label (instead of the general setting) */
+  clearMm?: number;
   name?: string;
   /** the user removed this label; its slot stays open instead of being refilled */
   hidden?: boolean;
@@ -100,6 +102,8 @@ export interface FeatureSettings {
   pens: { default: string; overrides: Partial<Record<FeaturePenKey, string>> };
   /** icon for each kind (default: the kind's own shape) */
   icons: Partial<Record<LandmarkKind, Icon>>;
+  /** terrain lines are cut this many mm around every label (0 = leave them) */
+  clearMm: number;
   waterWeightMm: number;
   overrides: Record<string, FeatureOverride>;
 }
@@ -136,6 +140,7 @@ export const defaultFeatures = (): FeatureSettings => ({
   sizePt: 11,
   pens: { default: 'ink', overrides: { waterOutline: 'blue', waterLabel: 'blue' } },
   icons: {},
+  clearMm: 0,
   waterWeightMm: 0.2,
   overrides: {},
 });

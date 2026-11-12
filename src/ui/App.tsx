@@ -371,6 +371,7 @@ export function App() {
             <label title="Draw rivers and lake shapes"><input type="checkbox" checked={p.features.water} onChange={(e) => set((x) => { x.features.water = e.target.checked; })} /> Water outlines</label>
             <label title="Write river and lake names"><input type="checkbox" checked={p.features.waterLabels} onChange={(e) => set((x) => { x.features.waterLabels = e.target.checked; })} /> Water labels</label>
           </div>
+          <Row label="Clear around labels"><input type="range" min={0} max={20} step={0.5} value={p.features.clearMm ?? 0} onChange={(e) => set((x) => { x.features.clearMm = +e.target.value; })} /><span>{p.features.clearMm ? `${p.features.clearMm} mm` : 'off'}</span></Row>
           <Row label="Size (pt)"><input type="number" min={6} max={60} value={p.features.sizePt} onChange={(e) => set((x) => { x.features.sizePt = +e.target.value || 11; })} /></Row>
           <Row label="Pen"><PenSelect pens={p.pens} value={p.features.pens.default} onChange={(id) => set((x) => { x.features.pens.default = id!; })} /></Row>
           <details className="overrides">
@@ -410,6 +411,8 @@ export function App() {
                 <select title="Icon" value={ov.icon ?? 'default'} onChange={(e) => edit({ icon: e.target.value as Icon })}>
                   {ICONS.map((i) => <option key={i} value={i}>{i === 'default' ? 'Icon' : ICON_LABELS[i]}</option>)}
                 </select>
+                <input type="number" min={0} max={40} step={0.5} title="Clear the terrain lines this many mm around this label (blank: use the general setting)" placeholder="clear" value={ov.clearMm ?? ''}
+                  onChange={(e) => edit({ clearMm: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} />
                 {!l.placed && !l.hidden && <span className="hint" title="No room for this label">no room</span>}
               </div>
             );

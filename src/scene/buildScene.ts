@@ -6,6 +6,7 @@ import {
   type TrackStats,
 } from '../geo/stats';
 import { contourInterval, contourPaths, toD } from '../topo/contours';
+import { cutOutHalos } from '../features/halo';
 import { buildRelief, liftContours, needsHiding, ridgeRows, type Relief } from '../relief/relief';
 import { buildVisibility, visibleRuns, type P3 } from '../relief/visibility';
 import type { TerrainField } from '../topo/terrain';
@@ -296,6 +297,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         });
       }
 
+      const halos = landmarkOut?.halos ?? [];
       if (relief && terrain) {
         // the terrain in 3D: contours lifted onto the surface, and/or evenly spaced slices across it
         const tc = p.terrain;
@@ -303,15 +305,24 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
         if (style === 'contours' || style === 'both') {
           const lifted = liftContours(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces, vis);
+          lifted.regular = cutOutHalos(lifted.regular, halos);
+          lifted.index = cutOutHalos(lifted.index, halos);
           // with rows underneath, only the heavy index lines are kept: they read as elevation marks on the slices
           if (style === 'contours' && lifted.regular.length) prims.push({ kind: 'path', d: toD(lifted.regular), widthMm: tc.weightMm, ...paint });
           if (lifted.index.length) prims.push({ kind: 'path', d: toD(lifted.index), widthMm: tc.indexWeightMm, minPasses: 2, ...paint });
         }
-        if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(ridgeRows(relief, p.relief.rows, vis)), widthMm: p.relief.rowWeightMm, ...paint });
+        if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(cutOutHalos(ridgeRows(relief, p.relief.rows, vis), halos)), widthMm: p.relief.rowWeightMm, ...paint });
       } else if (p.terrain.enabled && terrain) {
         const paths = contourPaths(terrain, fit, frame, interval!, p.terrain.indexEvery);
         const tc = p.terrain;
         let { regular, index } = paths;
+        let pieces = paths.pieces;
+        if (halos.length) {
+          // room around labels: cut the contours there (the pieces stay consistent for the numbers below)
+          pieces = pieces.flatMap((pc) => cutOutHalos([pc.pts], halos).map((pts) => ({ ...pc, pts })));
+          regular = toD(pieces.filter((x) => !x.heavy).map((x) => x.pts));
+          index = toD(pieces.filter((x) => x.heavy).map((x) => x.pts));
+        }
         let numbers: ReturnType<typeof placeContourLabels> = [];
         if (tc.labels.enabled && tc.indexEvery > 0) {
           const avoid: Box[] = [...(landmarkOut?.obstacles ?? [])];
@@ -321,11 +332,11 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           }
           if (p.profile.enabled && p.profile.position === 'corner' && p.points.length)
             avoid.push({ cx: contentR - innerW * 0.2, cy: frame.y + frame.h - H * 0.04, w: innerW * 0.4, h: H * 0.08, ang: 0 });
-          numbers = placeContourLabels(paths.pieces, {
+          numbers = placeContourLabels(pieces, {
             intervalM: interval!, indexEvery: tc.indexEvery, every: tc.labels.every, density: tc.labels.density, gap: tc.labels.gap,
             sizePt: tc.labels.sizePt, format: (lv) => formatLevel(lv, p.units), frame, obstacles: avoid, route: routeXY,
           });
-          if (numbers.length && tc.labels.gap) ({ regular, index } = pathsWithGaps(paths.pieces, numbers, tc.labels.sizePt));
+          if (numbers.length && tc.labels.gap) ({ regular, index } = pathsWithGaps(pieces, numbers, tc.labels.sizePt));
         }
         if (regular) prims.push({ kind: 'path', d: regular, color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke', widthMm: tc.weightMm, opacity: tc.opacity });
         // heavy lines are drawn as two passes of the pen in the plotter export, so they stay heavier than the rest

@@ -1,5 +1,6 @@
 import { clipPolyline, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
+import type { Halo } from './halo';
 import type { FeatureSettings, LabelKind, Landmark, Side, WaterLine, WaterName } from './types';
 
 export interface LandmarkEntry {
@@ -268,6 +269,8 @@ export interface LandmarkPlacement {
   open: Record<LabelGroup, number>;
   /** space the drawn labels and markers take, so other things (contour numbers) can stay clear of them */
   obstacles: Box[];
+  /** zones around placed labels where terrain lines should be cut away (empty unless clearing is on) */
+  halos: Halo[];
 }
 
 const MAX_POOL = 60;
@@ -358,6 +361,13 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
   // keep a little air between labels so they don't read as one block of text
   const pad = sizeMm * 0.35;
   const labelBoxes: Box[] = [];
+  const halos: Halo[] = [];
+  const addHalo = (c: Candidate, box: Box, marker?: Box) => {
+    const r = s.overrides[c.id]?.clearMm ?? s.clearMm ?? 0;
+    if (r <= 0) return;
+    halos.push({ box, r });
+    if (marker) halos.push({ box: marker, r });
+  };
   const padded = (b: Box): Box => ({ ...b, w: b.w + 2 * pad, h: b.h + 2 * pad });
   const budget = { point: s.maxLabels, water: s.maxWaterLabels };
   // Per group: labels the user pinned (P), auto labels drawn (A), and auto labels the user hid (V).
@@ -438,6 +448,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
       if ((inside && labelsFree && !crossesRoute) || forced) {
         taken.push(box);
         labelBoxes.push(box);
+        addHalo(c, box, c.marker ? markerBox : undefined);
         if (c.marker) taken.push(markerBox);
         labels.push(label);
         return true;
@@ -449,6 +460,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
       const best = fallbacks.reduce((p, q) => (q.crossing < p.crossing ? q : p));
       taken.push(best.box);
       labelBoxes.push(best.box);
+      addHalo(c, best.box, c.marker ? markerBox : undefined);
       if (c.marker) taken.push(markerBox);
       labels.push(best.label);
       return true;
@@ -500,5 +512,6 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
     entries, labels, pool,
     open: { point: Math.max(0, budget.point - drawn.point), water: Math.max(0, budget.water - drawn.water) },
     obstacles: taken,
+    halos,
   };
 }
