@@ -23,6 +23,8 @@ interface Store {
   loadPoints: (pts: TrackPoint[], lookups?: boolean, waypoints?: Landmark[]) => void;
   loadOsm: (b: import('./geo/project').BBox, req: OsmRequest) => Promise<void>;
   retryOsm: () => void;
+  /** replace everything with a saved project (its track and waypoints included) */
+  openProject: (p: Project) => void;
   searchFeature: (q: string) => Promise<void>;
   chooseResult: (i: number) => void;
 }
@@ -57,6 +59,11 @@ export const useStore = create<Store>((setState, get) => ({
   },
 
   retryOsm: () => setState({ osm: undefined, osmError: undefined }),
+
+  openProject: (project) => {
+    loadId++;
+    setState({ project, terrain: undefined, terrainStatus: 'idle', terrainError: undefined, osm: undefined, osmStatus: 'idle', osmError: undefined, searchResults: [], searchIndex: 0, notice: '' });
+  },
 
   loadPoints: (pts, lookups = true, waypoints = []) => {
     const id = ++loadId;

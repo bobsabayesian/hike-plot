@@ -4,6 +4,7 @@ import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
 import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
+import { SaveGroup } from './SaveGroup';
 import { composeScene, viewBBox, autoValues, featureView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
@@ -74,7 +75,7 @@ function FeatureStatus({ feature, onSpan }: { feature: NonNullable<ReturnType<ty
 }
 
 export function App() {
-  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, searchResults, searchIndex, chooseResult, osm, osmStatus, osmError, loadOsm, retryOsm, searchFeature, busy, notice } = useStore();
+  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, searchResults, searchIndex, chooseResult, osm, osmStatus, osmError, loadOsm, retryOsm, searchFeature, busy, notice, openProject } = useStore();
   const [query, setQuery] = useState('');
   const narrow = useMediaQuery(NARROW_QUERY);
   const [tab, setTab] = useState<'settings' | 'poster'>('settings');
@@ -220,6 +221,8 @@ export function App() {
         {p.feature && <FeatureStatus feature={p.feature} onSpan={(km) => set((x) => { x.feature!.spanKm = km; })} />}
 
         </Group>
+
+        <SaveGroup gp={gp('saved')} project={p} openProject={openProject} />
 
         <Group id="size" title="Print size" {...gp('size')}>
         <Row label="Size">
