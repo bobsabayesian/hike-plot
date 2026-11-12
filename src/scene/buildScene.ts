@@ -295,7 +295,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
         if (style === 'contours' || style === 'both') {
           const lifted = liftContours(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces, vis);
-          if (lifted.regular.length) prims.push({ kind: 'path', d: toD(lifted.regular), widthMm: tc.weightMm, ...paint });
+          // with rows underneath, only the heavy index lines are kept: they read as elevation marks on the slices
+          if (style === 'contours' && lifted.regular.length) prims.push({ kind: 'path', d: toD(lifted.regular), widthMm: tc.weightMm, ...paint });
           if (lifted.index.length) prims.push({ kind: 'path', d: toD(lifted.index), widthMm: tc.indexWeightMm, minPasses: 2, ...paint });
         }
         if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(ridgeRows(relief, p.relief.rows, vis)), widthMm: p.relief.rowWeightMm, ...paint });

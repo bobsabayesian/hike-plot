@@ -299,11 +299,11 @@ describe('3D in the poster', () => {
   it('the line style chooses contours, rows or both', async () => {
     const weights = async (style: 'contours' | 'rows' | 'both') => {
       const { p, scene } = await make((q) => { q.relief = { ...q.relief, enabled: true, style, tilt: 50, rowWeightMm: 0.31 }; });
-      return { contour: paths(scene.prims).some((x) => x.widthMm === p.terrain.weightMm), row: paths(scene.prims).some((x) => x.widthMm === 0.31) };
+      return { contour: paths(scene.prims).some((x) => x.widthMm === p.terrain.weightMm), index: paths(scene.prims).some((x) => x.widthMm === p.terrain.indexWeightMm), row: paths(scene.prims).some((x) => x.widthMm === 0.31) };
     };
-    expect(await weights('contours')).toEqual({ contour: true, row: false });
-    expect(await weights('rows')).toEqual({ contour: false, row: true });
-    expect(await weights('both')).toEqual({ contour: true, row: true });
+    expect(await weights('contours')).toEqual({ contour: true, index: true, row: false });
+    expect(await weights('rows')).toEqual({ contour: false, index: false, row: true });
+    expect(await weights('both')).toEqual({ contour: false, index: true, row: true }); // rows plus only the heavy contour lines
   });
   it('3D works with the flat contours switched off, and needs no terrain to avoid breaking', async () => {
     const { scene } = await make((p) => { p.terrain.enabled = false; p.relief = { ...p.relief, enabled: true, style: 'rows', tilt: 50, rowWeightMm: 0.31 }; });
