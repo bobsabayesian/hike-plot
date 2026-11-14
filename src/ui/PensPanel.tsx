@@ -1,4 +1,5 @@
-import { addPen, MAX_PENS, penFor, penUsage, removePen, type Pen } from '../scene/pens';
+import { useState } from 'react';
+import { addPen, applySavedPen, contrast, inkWidth, isDarkPaper, loadSavedPens, MAX_PENS, MIN_INK_CONTRAST, PEN_KINDS, penFor, penKind, penUsage, removePen, savedFromPen, storeSavedPens, withKind, withSavedPen, type Pen, type SavedPen } from '../scene/pens';
 import type { Project } from '../scene/project';
 import { summarizePasses } from '../export/offset';
 import type { Scene } from '../scene/types';
@@ -24,13 +25,20 @@ export function PensPanel({ project: p, scene, group }: { project: Project; scen
   const set = useStore((s) => s.set);
   const usage = penUsage(p);
   const usedBy = (id: string) => usage.filter((u) => u.penId === id).map((u) => u.section);
+  const [library, setLibrary] = useState<SavedPen[]>(() => loadSavedPens());
+  const keep = (next: SavedPen[]) => { setLibrary(next); storeSavedPens(next); };
+  const dark = isDarkPaper(p.paper);
   return (
     <>
       <Group id="pens" title="Pens" {...group}>
-      <div className="hint">Pens are what the plotter draws with. Each part of the design picks one; its color comes from the pen, and the tip width decides how many passes a heavy line needs.</div>
+      <div className="hint">Pens are what the plotter draws with. Each part of the design picks one; its color comes from the pen, and the width one pass leaves (the tip plus the ink's spread) decides how many passes a heavy line needs and how close hatch lines sit.</div>
       {p.pens.map((pen, i) => {
         const sections = usedBy(pen.id);
-        const passes = summarizePasses(scene.prims.filter((x) => (x as { pen?: string }).pen === pen.id), pen.tipMm);
+        const kind = penKind(pen.kind);
+        const ink = inkWidth(pen);
+        const passes = summarizePasses(scene.prims.filter((x) => (x as { pen?: string }).pen === pen.id), ink);
+        const faint = sections.length > 0 && contrast(pen.color, p.paper) < MIN_INK_CONTRAST;
+        const update = (fn: (x: Pen) => Pen) => set((x) => { x.pens[i] = fn(x.pens[i]!); });
         return (
           <div className="field pen" key={pen.id}>
             <div className="penrow">
@@ -40,9 +48,28 @@ export function PensPanel({ project: p, scene, group }: { project: Project; scen
               <span className="unit">mm</span>
               <button title="Remove this pen (its parts move to the first pen)" disabled={p.pens.length <= 1} onClick={() => set((x) => { removePen(x, pen.id); })}>×</button>
             </div>
+            <div className="row">
+              <select title="Kind of pen" value={pen.kind ?? 'custom'} onChange={(e) => update((x) => withKind(x, e.target.value))}>
+                {PEN_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+              </select>
+              {kind.tipsMm.length > 0 && (
+                <select title="Common tip sizes" value={kind.tipsMm.includes(pen.tipMm) ? String(pen.tipMm) : ''} onChange={(e) => e.target.value && update((x) => ({ ...x, tipMm: +e.target.value }))}>
+                  {!kind.tipsMm.includes(pen.tipMm) && <option value="">{pen.tipMm} mm</option>}
+                  {kind.tipsMm.map((t) => <option key={t} value={t}>{t} mm</option>)}
+                </select>
+              )}
+            </div>
+            <div className="row">
+              <label title="How far the ink spreads past the tip on paper, each side">Spread <input type="number" min={0} max={2} step={0.01} value={pen.gainMm ?? 0} onChange={(e) => update((x) => ({ ...x, gainMm: Math.max(0, +e.target.value || 0) }))} /> mm</label>
+              <span className="hint">line on paper {ink} mm</span>
+            </div>
             <div className="hint">
               {sections.length ? sections.join(', ') : 'Not used by anything'}
               {passes.length ? ` · heavy lines: ${passes.map((q) => `${q.widthMm} mm = ${q.passes} passes`).join(', ')}` : ''}
+            </div>
+            {faint && <div className="hint warn">This ink is hard to see on {dark ? 'this dark' : 'this'} paper; try a {dark ? 'lighter' : 'darker'} color.</div>}
+            <div className="row">
+              <button title="Keep this pen in this browser, to use in any project" onClick={() => keep(withSavedPen(library, savedFromPen(pen.name, pen)))}>Save to library</button>
             </div>
           </div>
         );
@@ -51,6 +78,26 @@ export function PensPanel({ project: p, scene, group }: { project: Project; scen
         <button disabled={p.pens.length >= MAX_PENS} onClick={() => set((x) => { addPen(x); })}>Add pen</button>
         <span className="hint">{p.pens.length} of {MAX_PENS}</span>
       </div>
+      {library.length > 0 && (
+        <div className="field">
+          <div className="hint">Saved pens (kept in this browser). Choose one to put it into a pen of this project:</div>
+          {p.pens.map((pen, i) => (
+            <div className="row" key={pen.id}>
+              <label>{pen.name}</label>
+              <select value="" onChange={(e) => { const s = library.find((x) => x.name === e.target.value); if (s) set((x) => { x.pens[i] = applySavedPen(x.pens[i]!, s); }); }}>
+                <option value="">use saved pen…</option>
+                {library.map((s) => <option key={s.name} value={s.name}>{s.name} ({s.tipMm} mm)</option>)}
+              </select>
+            </div>
+          ))}
+          <div className="row">
+            <select value="" onChange={(e) => e.target.value && keep(library.filter((x) => x.name !== e.target.value))}>
+              <option value="">remove a saved pen…</option>
+              {library.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
       </Group>
     </>
   );

@@ -117,3 +117,8 @@ h3 { font-size: 13px; margin: 14px 0 4px; }
 .lm.custom-row select { grid-column: 2 / 5 !important; }
 .lm .x { padding: 0; line-height: 1; height: 22px; }
 .lm input.bad { outline: 2px solid #c0392b; }
+
+.swatches { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.swatches .chip { width: 20px; height: 20px; padding: 0; border-radius: 4px; border: 1px solid var(--line); cursor: pointer; }
+.swatches .chip.active { outline: 2px solid var(--accent, #2f6f9f); outline-offset: 1px; }
+.hint.warn { color: #b4441f; }

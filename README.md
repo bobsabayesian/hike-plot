@@ -59,6 +59,12 @@ site, the cause is on the phone or its network: a DNS answer cached before the d
 and on, or turn airplane mode on and off), a private DNS or VPN, iCloud Private Relay, or a content blocker. Try another
 network, or open the address in a private tab.
 
+## Pens and paper
+
+Each pen has a kind (technical pen, fineliner such as Micron, gel, marker such as Molotow, or custom), a tip, and a spread: how far the ink bleeds past the tip on paper. The plotter export uses the width one pass leaves (tip plus spread on both sides) to decide how many passes a heavy line needs and how far apart hatch lines sit, so a Molotow fills solid without the lines merging. The kind's numbers are starting estimates; adjust the spread from your own swatches. Pens can be saved by name to a library kept in this browser (not in the project file) and put into any project. Pens without a kind (older projects) draw exactly as before.
+
+The paper has color swatches (white to black, kraft, navy) and a custom picker, and is saved with the project. A pen whose ink is too close to the paper's color gets a warning in the Pens panel. The preview does not yet draw ink transparency or overlap darkening.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.

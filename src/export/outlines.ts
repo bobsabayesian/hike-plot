@@ -1,7 +1,7 @@
 import type { PathPrim, Scene, TextPrim } from '../scene/types';
 import { offsetPath, passOffsets } from './offset';
 import { HATCH_FACTOR, hatchPath } from './hatch';
-import { penFor, type Pen } from '../scene/pens';
+import { inkWidth, penFor, type Pen } from '../scene/pens';
 
 interface PathCommand { type: string; x?: number; y?: number; x1?: number; y1?: number; x2?: number; y2?: number }
 interface GlyphLike {
@@ -78,9 +78,9 @@ export interface PrepareOptions {
   penMm?: number;
 }
 
-/** The tip width the plotter export uses for a primitive. */
+/** The width one pass leaves on paper for a primitive's pen (tip plus ink spread); heavy lines and hatch spacing follow it. */
 export function tipFor(p: { pen?: string }, opts: PrepareOptions): number {
-  return opts.pens && p.pen !== undefined ? penFor(opts.pens, p.pen).tipMm : (opts.penMm ?? PLOTTER_PEN_MM);
+  return opts.pens && p.pen !== undefined ? inkWidth(penFor(opts.pens, p.pen)) : (opts.penMm ?? PLOTTER_PEN_MM);
 }
 
 export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, opts: PrepareOptions = {}): Scene {

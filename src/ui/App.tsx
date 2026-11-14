@@ -18,6 +18,7 @@ import { pngSize, sceneToPng } from '../export/png';
 const THUMB_PX = 480;
 import { loadFonts } from '../export/fonts';
 import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
+import { PAPER_COLORS, isDarkPaper } from '../scene/pens';
 import { prepareScene, tipFor, type ExportMode } from '../export/outlines';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
@@ -274,7 +275,16 @@ export function App() {
             <option value="p">Portrait</option><option value="l">Landscape</option>
           </select>
         </Row>
-        <Row label="Paper"><input type="color" value={p.paper} onChange={(e) => set((x) => { x.paper = e.target.value; })} /></Row>
+        <Row label="Paper">
+          <span className="swatches" role="radiogroup" aria-label="Paper color">
+            {PAPER_COLORS.map((c) => (
+              <button key={c.color} type="button" role="radio" aria-checked={c.color === p.paper.toLowerCase()} aria-label={c.name} title={c.name}
+                className={c.color === p.paper.toLowerCase() ? 'chip active' : 'chip'} style={{ background: c.color }} onClick={() => set((x) => { x.paper = c.color; })} />
+            ))}
+          </span>
+          <input type="color" title="Any paper color" value={p.paper} onChange={(e) => set((x) => { x.paper = e.target.value; })} />
+        </Row>
+        {isDarkPaper(p.paper) && <div className="hint">Dark paper: check each pen's color under Pens (a light ink or a paint marker shows up; a dark one will not).</div>}
         <Row label="Units">
           <select value={p.units} onChange={(e) => set((x) => { x.units = e.target.value as typeof p.units; })}>
             <option value="imperial">mi / ft</option><option value="metric">km / m</option>
