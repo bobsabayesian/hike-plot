@@ -71,6 +71,9 @@ function rotatedPathData(commands: PathCommand[], cx: number, cy: number, rot: n
     .join('') + (commands.length ? 'Z' : '');
 }
 
+/** A letter's stem is about 9% of its size; when that is under 2.5 pen widths, outlining the letter leaves no room inside it. */
+export const isSmallText = (sizeMm: number, tipMm: number) => sizeMm * 0.09 < 2.5 * tipMm;
+
 export interface PrepareOptions {
   /** the pen palette: each primitive is drawn with the tip width of its pen */
   pens?: Pen[];
@@ -108,6 +111,13 @@ export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, op
         // a pen cannot fill: hatch the letters with parallel lines of the pen
         const lines = hatchPath(d, pen * HATCH_FACTOR[p.hatch]);
         return lines ? [{ kind: 'path', d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }] : [];
+      }
+      if (isSmallText(p.sizeMm, pen)) {
+        // letters this small are about as thick as the pen: an outline alone merges into a blob, so outline and fill them solid
+        const lines = hatchPath(d, pen * HATCH_FACTOR.solid);
+        const out: PathPrim[] = [{ kind: 'path', d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }];
+        if (lines) out.push({ kind: 'path', d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
+        return out;
       }
       return [{ kind: 'path', d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }];
     }

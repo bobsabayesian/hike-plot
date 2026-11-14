@@ -215,10 +215,12 @@ describe('title styles in the exports', () => {
     };
     expect(count(0.9)).toBe(3 * count(0.3));
   });
-  it('plotter: a plain filled title is still just its outline (no hatching unless asked)', () => {
+  it('plotter: a plain filled title is still just its outline (no hatching unless asked); only small text is filled in', () => {
+    const hatched = (o: ReturnType<typeof run>['out']) => paths(o).filter((x) => (x.d.match(/M/g) ?? []).length > 100).length;
     const { out } = run(() => {}, 'plotter');
+    const without = run((q) => { q.text.title.visible = false; }, 'plotter').out;
     expect(paths(out).some((x) => x.d.length > 1500 && x.d.includes('Z') && x.widthMm === 0.3)).toBe(true);
-    expect(paths(out).filter((x) => (x.d.match(/M/g) ?? []).length > 100)).toHaveLength(0);
+    expect(hatched(out)).toBe(hatched(without)); // the title adds no hatching of its own
   });
   it('plotter layers: the hatch and the outline each land in one layer per color and tip', () => {
     const { out } = run((q) => { q.text.title.style = 'outlineFill'; q.text.title.fillPen = 'blue'; q.text.title.pen = 'red'; }, 'plotter');

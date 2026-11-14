@@ -1,4 +1,5 @@
 import type { PathPrim, Prim, Scene, TextPrim } from '../scene/types';
+import type { Pen } from '../scene/pens';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const f = (n: number) => +n.toFixed(3);
@@ -37,6 +38,13 @@ export interface SvgOptions {
   paper?: boolean;
   /** tag landmark labels with their id (the editor preview uses it for click to edit; exports leave it off) */
   ids?: boolean;
+  /**
+   * 'style' (the default): one layer per color and stroke width, which is what a design file wants.
+   * 'pen': one layer per pen of the palette, named after it, in palette order, which is what a plotter wants: a layer is a pen.
+   */
+  layers?: 'style' | 'pen';
+  /** the pen palette, for `layers: 'pen'` */
+  pens?: Pen[];
 }
 
 /**
@@ -59,11 +67,25 @@ export function layerOf(p: Prim): { id: string; label: string } {
  * One <g> per distinct (color, stroke width), flagged as an Inkscape layer so each pen gets its own layer.
  * Layers are ordered by first appearance, which keeps painter's order for fills under lines.
  */
+/** The layer a primitive belongs to when layers follow pens. Anything without a pen of the palette falls back to its color and width. */
+export function penLayerOf(p: Prim, pens: Pen[]): { id: string; label: string; rank: number } {
+  const i = p.pen === undefined ? -1 : pens.findIndex((x) => x.id === p.pen);
+  if (i >= 0) {
+    const pen = pens[i]!;
+    return { id: `pen-${i + 1}-${pen.id}`, label: `Pen ${i + 1}: ${pen.name} (${+pen.tipMm.toFixed(2)} mm, ${normColor(pen.color)})`, rank: i };
+  }
+  const l = layerOf(p);
+  return { id: l.id, label: `No pen: ${l.label}`, rank: pens.length };
+}
+
 export function sceneToSvg(scene: Scene, opts: SvgOptions = {}): string {
+  const byPen = opts.layers === 'pen' && !!opts.pens;
   const order: string[] = [];
+  const rank = new Map<string, number>();
   const groups = new Map<string, { label: string; els: string[] }>();
   for (const p of scene.prims) {
-    const { id, label } = layerOf(p);
+    const { id, label, rank: r } = byPen ? penLayerOf(p, opts.pens!) : { ...layerOf(p), rank: 0 };
+    rank.set(id, r);
     if (!groups.has(id)) {
       groups.set(id, { label, els: [] });
       order.push(id);
@@ -71,10 +93,12 @@ export function sceneToSvg(scene: Scene, opts: SvgOptions = {}): string {
     groups.get(id)!.els.push(el(p, opts.ids));
   }
   const { widthMm: w, heightMm: h } = scene;
+  // pen layers follow the palette's order (the order the pens are swapped in); style layers keep first appearance
+  if (byPen) order.sort((a, b) => rank.get(a)! - rank.get(b)!);
   const layers = order
     .map((id, i) => {
       const g = groups.get(id)!;
-      return `<g id="${id}" inkscape:groupmode="layer" inkscape:label="Layer ${i + 1} ${g.label}">${g.els.join('')}</g>`;
+      return `<g id="${id}" inkscape:groupmode="layer" inkscape:label="${byPen ? esc(g.label) : `Layer ${i + 1} ${g.label}`}">${g.els.join('')}</g>`;
     })
     .join('\n');
   const paper = opts.paper ? `<rect id="paper" width="${f(w)}" height="${f(h)}" fill="${normColor(scene.paper)}"/>\n` : '';

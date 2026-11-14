@@ -107,7 +107,7 @@ export function App() {
   const [err, setErr] = useState('');
   const [over, setOver] = useState(false);
   const [paperInExport, setPaperInExport] = useState(false);
-  const [mode, setMode] = useState<ExportMode>('print');
+  const [mode, setMode] = useState<ExportMode>('plotter');
   const [dpi, setDpi] = useState(150);
   const [pngBusy, setPngBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -599,16 +599,16 @@ export function App() {
         <Row label="Paper color">
           <label><input type="checkbox" checked={paperInExport} onChange={(e) => setPaperInExport(e.target.checked)} /> Include in SVG</label>
         </Row>
-        <Row label="SVG text">
+        <Row label="SVG for">
           <select value={mode} onChange={(e) => setMode(e.target.value as ExportMode)}>
-            <option value="print">Outlined, filled (print)</option>
-            <option value="plotter">Outlined, single-line pen (plotter)</option>
-            <option value="live">Live text (needs fonts)</option>
+            <option value="plotter">Pen plotter: a layer per pen, lines only</option>
+            <option value="print">Print or design: filled shapes, a layer per color</option>
+            <option value="live">Design with live text (needs fonts)</option>
           </select>
         </Row>
         {mode === 'plotter' && (<>
           <div className="hint">
-            Every line is drawn with its pen's tip width. Heavier lines are repeated side by side:{' '}
+            One layer per pen, named after it and in the order of the Pens list, so a layer is a pen to load. Nothing is filled: letters and shapes are outlined, and filled with hatch lines in the same pen. Every line is drawn with its pen's tip width. Heavier lines are repeated side by side:{' '}
             {passes.length ? passes.map((x) => `${x.widthMm} mm = ${x.passes} passes${x.forced ? ' (kept heavier than the rest)' : ''}`).join(', ') : 'none with these pens'}.
           </div>
         </>)}
@@ -616,12 +616,12 @@ export function App() {
           <button className="primary" onClick={async () => {
             try {
               const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { pens: p.pens });
-              download('hike-poster.svg', sceneToSvg(out, { paper: paperInExport && mode !== 'plotter' }), 'image/svg+xml');
+              download('hike-poster.svg', sceneToSvg(out, { paper: paperInExport && mode !== 'plotter', ...(mode === 'plotter' ? { layers: 'pen' as const, pens: p.pens } : {}) }), 'image/svg+xml');
             } catch (e) {
               setErr(e instanceof Error ? e.message : 'SVG export failed');
             }
           }}>
-            Download SVG (layer per color)
+            {mode === 'plotter' ? 'Download plotter SVG (layer per pen)' : 'Download SVG (layer per color)'}
           </button>
         </div>
         <Row label="PNG">
