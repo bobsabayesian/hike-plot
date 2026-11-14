@@ -21,7 +21,7 @@ import { borderPrims, layoutBorder } from './border';
 import { featurePenId, penFor } from './pens';
 import { formatLevel, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
 import type { Box } from '../features/select';
-import type { Prim, Scene } from './types';
+import type { Part, Prim, Scene } from './types';
 import { clampMargins, posterMm, type InfoItem, type Placement, type Project, type StrokeStyle } from './project';
 
 const PT = 25.4 / 72;
@@ -117,7 +117,7 @@ export function autoValues(p: Project, stats?: TrackStats, contourM?: number) {
   };
 }
 
-interface Block { height: number; gapAfter: number; draw: (yTop: number) => Prim[] }
+interface Block { part: Part; height: number; gapAfter: number; draw: (yTop: number) => Prim[] }
 
 export interface View { frame: Rect; fit: Fit; bbox: BBox }
 export interface Composed { scene: Scene; view?: View; landmarks?: LandmarkEntry[]; pool?: LandmarkPlacement['pool']; open?: LandmarkPlacement['open'] }
@@ -129,8 +129,10 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   const minMargin = Math.min(mg.top, mg.right, mg.bottom, mg.left);
   const t = p.text;
   const colorOf = (penId: string) => penFor(p.pens, penId).color;
+  /** mark everything added since `start` as drawing `part` (what the preview opens when it is clicked) */
+  const tagFrom = (start: number, part: Part) => { for (let i = start; i < prims.length; i++) prims[i]!.part ??= part; };
   // the border goes first so it is drawn under everything else
-  if (!layoutOnly) prims.push(...borderPrims(W, H, p.border, mg, colorOf(p.border.pen)));
+  if (!layoutOnly) { prims.push(...borderPrims(W, H, p.border, mg, colorOf(p.border.pen))); tagFrom(0, 'border'); }
   const fontFamily = FONTS[t.font];
   const anchor = t.align === 'left' ? 'start' : t.align === 'right' ? 'end' : 'middle';
   const contentL = mg.left;
@@ -161,7 +163,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     };
     const { x: titleX, ...place } = where;
     blocks[ts.placement].push({
-      height: size * 0.75, gapAfter: size * 0.4,
+      part: 'title', height: size * 0.75, gapAfter: size * 0.4,
       draw: (y) => {
         const base = y + size * 0.72;
         const outline = { ...place, mode: 'stroke' as const, strokeMm: ts.outlineMm };
@@ -182,7 +184,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     const size = t.location.sizePt * PT;
     const small = size * 0.75;
     blocks[t.location.placement].push({
-      height: (loc ? size * 0.75 : 0) + (loc && coords ? size * 0.5 : 0) + (coords ? small * 0.75 : 0),
+      part: 'location', height: (loc ? size * 0.75 : 0) + (loc && coords ? size * 0.5 : 0) + (coords ? small * 0.75 : 0),
       gapAfter: size * 0.8,
       draw: (y) => {
         const out: Prim[] = [];
@@ -209,7 +211,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       text(t.info.pen, it.value, y + ls * 1.5 + size * 0.72, size, { trackingMm: size * t.trackingEm * 0.6 }, x),
     ];
     blocks[t.info.placement].push({
-      height: column ? items.length * cell + (items.length - 1) * colGap : cell,
+      part: 'info', height: column ? items.length * cell + (items.length - 1) * colGap : cell,
       gapAfter: size * 0.6,
       draw: (y) => {
         if (column) return items.flatMap((it, i) => cellDraw(it, y + i * (cell + colGap), tx));
@@ -223,18 +225,18 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   }
 
   let topCursor = mg.top;
-  if (!layoutOnly) for (const b of blocks.top) { prims.push(...b.draw(topCursor)); topCursor += b.height + b.gapAfter; }
+  if (!layoutOnly) for (const b of blocks.top) { const at = prims.length; prims.push(...b.draw(topCursor)); tagFrom(at, b.part); topCursor += b.height + b.gapAfter; }
   else for (const b of blocks.top) topCursor += b.height + b.gapAfter;
 
   let bottomCursor = H - mg.bottom;
   if (p.showWatermark) {
     const size = 7 * PT;
-    if (!layoutOnly) prims.push(text(p.watermarkPen, WATERMARK_TEXT, bottomCursor, size, { trackingMm: size * 0.04, opacity: 0.55 }));
+    if (!layoutOnly) prims.push(text(p.watermarkPen, WATERMARK_TEXT, bottomCursor, size, { trackingMm: size * 0.04, opacity: 0.55, part: 'watermark' }));
     bottomCursor -= size * 2.4;
   }
   for (const b of [...blocks.bottom].reverse()) {
     bottomCursor -= b.height;
-    if (!layoutOnly) prims.push(...b.draw(bottomCursor));
+    if (!layoutOnly) { const at = prims.length; prims.push(...b.draw(bottomCursor)); tagFrom(at, b.part); }
     bottomCursor -= b.gapAfter;
   }
 
@@ -299,6 +301,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       }
 
       const halos = landmarkOut?.halos ?? [];
+      const terrainAt = prims.length;
       if (relief && terrain) {
         // the terrain in 3D: contours lifted onto the surface, and/or evenly spaced slices across it
         const tc = p.terrain;
@@ -356,6 +359,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         }
       }
 
+      tagFrom(terrainAt, relief ? 'relief' : 'contours');
+      const waterAt = prims.length;
       if (p.features.enabled && p.features.water && osm) {
         const waterPen = penFor(p.pens, featurePenId(p.features, 'waterOutline'));
         if (relief && vis) {
@@ -368,8 +373,10 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         } else prims.push(...waterPrims(osm.water, mapFit, frame, p.features, waterPen));
       }
 
+      tagFrom(waterAt, 'water');
       if (p.points.length >= 2) {
         const xy = routeXY;
+        const profileAt = prims.length;
 
         if (p.profile.enabled) {
           const corner = p.profile.position === 'corner';
@@ -445,8 +452,9 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           }
         }
 
+        tagFrom(profileAt, 'profile');
         prims.push({
-          kind: 'path', d: polyline(xy), color: colorOf(p.route.pen), pen: p.route.pen, mode: 'stroke', widthMm: p.route.weightMm,
+          kind: 'path', part: 'route', d: polyline(xy), color: colorOf(p.route.pen), pen: p.route.pen, mode: 'stroke', widthMm: p.route.weightMm,
           ...dashFor(p.route.style, p.route.weightMm),
         });
       }
@@ -459,11 +467,15 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           const [bx, by] = relief.camera.project(cx, cy - 10, 0);
           northAngle = (Math.atan2(bx - ax, -(by - ay)) * 180) / Math.PI;
         }
+        const northAt = prims.length;
         prims.push(...northPrims(frame, { ...p.north, rotateDeg: northAngle, color: colorOf(p.north.pen), fontFamily, fontKey: t.font }));
+        tagFrom(northAt, 'north');
       }
 
       if (landmarkOut) {
+        const landmarksAt = prims.length;
         prims.push(...landmarkOut.prims);
+        tagFrom(landmarksAt, 'landmarks');
         landmarks = landmarkOut.entries;
         pool = landmarkOut.pool;
         open = landmarkOut.open;

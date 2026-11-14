@@ -26,6 +26,7 @@ import { PagePanel } from './PagePanel';
 import { Group, NARROW_QUERY, useGroups, useMediaQuery } from './Group';
 import { FEATURE_PEN_LABELS, penFor } from '../scene/pens';
 import type { FeaturePenKey } from '../features/types';
+import type { Part } from '../scene/types';
 import { CUSTOM_SIZE_ID, CUSTOM_SIZE_MAX_MM, CUSTOM_SIZE_MIN_MM, PRINT_SIZES, type SizeGroup, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
 
 const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placement) => void }) => (
@@ -45,6 +46,37 @@ function download(name: string, data: string | Blob, type: string) {
   const a = Object.assign(document.createElement('a'), { href: url, download: name });
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * What clicking each part of the poster opens: its group, a name for the action bar, and the control to focus there
+ * (by default the group's header button).
+ */
+const PARTS: Record<Part, { group: string; label: string; focus?: string }> = {
+  border: { group: 'border', label: 'Border' },
+  title: { group: 'typography', label: 'Title', focus: '[data-edit="title"]' },
+  location: { group: 'typography', label: 'Location', focus: '[data-edit="location"]' },
+  info: { group: 'typography', label: 'Route info', focus: '[data-edit="info"]' },
+  watermark: { group: 'export', label: 'Watermark', focus: '[data-edit="watermark"]' },
+  contours: { group: 'contours', label: 'Contours' },
+  relief: { group: 'relief', label: '3D relief' },
+  water: { group: 'landmarks', label: 'Rivers and lakes', focus: '[data-edit="water"]' },
+  profile: { group: 'profile', label: 'Elevation profile' },
+  route: { group: 'route', label: 'Route' },
+  north: { group: 'north', label: 'North arrow' },
+  landmarks: { group: 'landmarks', label: 'Landmarks' },
+};
+
+/** The part of the poster under the pointer, if any: a landmark's own label first, then the part an element draws. */
+function clickTarget(target: EventTarget | null): { group: string; label: string; focus: string } | undefined {
+  const el = target instanceof Element ? target : null;
+  const lm = el?.closest('[data-lm]');
+  const id = lm?.getAttribute('data-lm');
+  if (id) return { group: 'landmarks', label: `Landmark: ${lm!.textContent ?? ''}`, focus: `[data-lm-input="${CSS.escape(id)}"]` };
+  const part = el?.closest('[data-part]')?.getAttribute('data-part') as Part | null | undefined;
+  const info = part ? PARTS[part] : undefined;
+  if (!info) return undefined;
+  return { group: info.group, label: info.label, focus: info.focus ?? `#group-${info.group} .group-title button` };
 }
 
 /** Search for a place by name, and the list of matches to choose from (the first is chosen straight away). */
@@ -141,22 +173,25 @@ export function App() {
   /** the GPX file's name, when the route came from a file in this session */
   const [srcName, setSrcName] = useState('');
   const [searching, setSearching] = useState(false);
-  // Click a landmark label on the poster to edit it: open the Landmarks group and focus that name box.
+  // Click any part of the poster to edit it: open its group and focus the most useful control there (a landmark
+  // label focuses its own name box). Hovering names what a click would open, in the action bar.
   const [pendingEdit, setPendingEdit] = useState<string | null>(null);
-  const editLabel = (e: React.MouseEvent) => {
-    const id = (e.target as Element).closest?.('[data-lm]')?.getAttribute('data-lm');
-    if (!id) return;
+  const [hovered, setHovered] = useState('');
+  const editAt = (e: React.MouseEvent) => {
+    const hit = clickTarget(e.target);
+    if (!hit) return;
     setTab('settings');
-    gp.show('landmarks');
-    setPendingEdit(id);
+    gp.show(hit.group);
+    setPendingEdit(hit.focus);
   };
   useEffect(() => {
     if (!pendingEdit) return;
+    // wait a moment for the group to open (and on a phone, for the Settings tab to show)
     const t = setTimeout(() => {
-      const box = Array.from(document.querySelectorAll<HTMLInputElement>('[data-lm-input]')).find((n) => n.dataset.lmInput === pendingEdit);
-      box?.scrollIntoView({ block: 'center' });
-      box?.focus();
-      box?.select();
+      const el = document.querySelector<HTMLElement>(pendingEdit);
+      el?.scrollIntoView({ block: 'center' });
+      el?.focus();
+      if (el instanceof HTMLInputElement && el.type === 'text') el.select();
       setPendingEdit(null);
     }, 50);
     return () => clearTimeout(t);
@@ -464,7 +499,7 @@ export function App() {
             {LANDMARK_KINDS.map((k) => (
               <label key={k}><input type="checkbox" checked={p.features.kinds[k]} onChange={(e) => set((x) => { x.features.kinds[k] = e.target.checked; })} /> {KIND_LABELS[k]}</label>
             ))}
-            <label title="Draw rivers and lake shapes"><input type="checkbox" checked={p.features.water} onChange={(e) => set((x) => { x.features.water = e.target.checked; })} /> Water outlines</label>
+            <label title="Draw rivers and lake shapes"><input type="checkbox" data-edit="water" checked={p.features.water} onChange={(e) => set((x) => { x.features.water = e.target.checked; })} /> Water outlines</label>
             <label title="Write river and lake names"><input type="checkbox" checked={p.features.waterLabels} onChange={(e) => set((x) => { x.features.waterLabels = e.target.checked; })} /> Water labels</label>
           </div>
           <Row label="Clear around labels"><input type="range" min={0} max={20} step={0.5} value={p.features.clearMm ?? 0} onChange={(e) => set((x) => { x.features.clearMm = +e.target.value; })} /><span>{p.features.clearMm ? `${p.features.clearMm} mm` : 'off'}</span></Row>
@@ -618,7 +653,7 @@ export function App() {
 
         <h3>Title</h3>
         <div className="field">
-          <Row label="Text"><input type="text" placeholder={auto.title} value={p.text.title.value ?? ''} onChange={(e) => set((x) => { x.text.title.value = e.target.value || undefined; })} />
+          <Row label="Text"><input type="text" data-edit="title" placeholder={auto.title} value={p.text.title.value ?? ''} onChange={(e) => set((x) => { x.text.title.value = e.target.value || undefined; })} />
             <input type="checkbox" title="Show" checked={p.text.title.visible} onChange={(e) => set((x) => { x.text.title.visible = e.target.checked; })} /></Row>
           <Row label="Size (pt)"><input type="number" min={6} max={200} value={p.text.title.sizePt} onChange={(e) => set((x) => { x.text.title.sizePt = +e.target.value || 12; })} /></Row>
           <Row label="Align">
@@ -652,7 +687,7 @@ export function App() {
 
         <h3>Location</h3>
         <div className="field">
-          <Row label="Text"><input type="text" placeholder={auto.location || 'e.g. Washington, USA'} value={p.text.location.value ?? ''} onChange={(e) => set((x) => { x.text.location.value = e.target.value || undefined; })} />
+          <Row label="Text"><input type="text" data-edit="location" placeholder={auto.location || 'e.g. Washington, USA'} value={p.text.location.value ?? ''} onChange={(e) => set((x) => { x.text.location.value = e.target.value || undefined; })} />
             <input type="checkbox" title="Show" checked={p.text.location.visible} onChange={(e) => set((x) => { x.text.location.visible = e.target.checked; })} /></Row>
           <Row label="Coordinates"><input type="checkbox" checked={p.text.location.showCoords} onChange={(e) => set((x) => { x.text.location.showCoords = e.target.checked; })} /></Row>
           <Row label="Size (pt)"><input type="number" min={6} max={120} value={p.text.location.sizePt} onChange={(e) => set((x) => { x.text.location.sizePt = +e.target.value || 12; })} /></Row>
@@ -662,7 +697,7 @@ export function App() {
 
         <h3>Route info</h3>
         <div className="field">
-          <Row label="Show"><input type="checkbox" checked={p.text.info.visible} onChange={(e) => set((x) => { x.text.info.visible = e.target.checked; })} /></Row>
+          <Row label="Show"><input type="checkbox" data-edit="info" checked={p.text.info.visible} onChange={(e) => set((x) => { x.text.info.visible = e.target.checked; })} /></Row>
           <Row label="Layout">
             <select value={p.text.info.layout} onChange={(e) => set((x) => { x.text.info.layout = e.target.value as 'row' | 'column'; })}>
               <option value="row">Row</option><option value="column">Column</option>
@@ -737,7 +772,7 @@ export function App() {
 
         <Group id="export" title="Export" {...gp('export')}>
         <Row label="Watermark">
-          <label><input type="checkbox" checked={p.showWatermark} onChange={(e) => set((x) => { x.showWatermark = e.target.checked; })} /> Include attribution</label>
+          <label><input type="checkbox" data-edit="watermark" checked={p.showWatermark} onChange={(e) => set((x) => { x.showWatermark = e.target.checked; })} /> Include attribution</label>
         </Row>
         {p.showWatermark && <Row label="Watermark pen"><PenSelect pens={p.pens} value={p.watermarkPen} onChange={(id) => set((x) => { x.watermarkPen = id!; })} /></Row>}
         <Row label="Paper color">
@@ -790,7 +825,7 @@ export function App() {
               <button type="button" role="radio" aria-checked={!plotPreview} className={plotPreview ? '' : 'on'} title="The design, with click-to-edit labels" onClick={() => setPlotPreview(false)}>Design</button>
               <button type="button" role="radio" aria-checked={plotPreview} className={plotPreview ? 'on' : ''} title="How the pens will draw it: hatched fills, passes, ink width and translucency" onClick={() => setPlotPreview(true)}>Plotter</button>
             </span>
-            <span className="bar-status hint">{plotPreview ? (plotSvg ? 'Click-to-edit is off here' : 'Drawing…') : 'Click a label to edit it'}</span>
+            <span className="bar-status hint" aria-live="polite">{plotPreview ? (plotSvg ? 'Click-to-edit is off here' : 'Drawing…') : hovered ? `Click to edit: ${hovered}` : 'Click any part of the poster to edit it'}</span>
             <span className="bar-actions">
               <button type="button" disabled={!!saver.busy} onClick={() => void saver.save()} title="Save the whole poster under a code you can open again">
                 {saver.busy === 'Saving…' ? 'Saving…' : saver.changed ? 'Save*' : 'Save'}
@@ -813,7 +848,8 @@ export function App() {
           )}
         </div>
         <div className="stage">
-          <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editLabel} dangerouslySetInnerHTML={{ __html: previewSvg }} />
+          <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editAt}
+            onMouseOver={(e) => setHovered(plotPreview ? '' : clickTarget(e.target)?.label ?? '')} onMouseLeave={() => setHovered('')} dangerouslySetInnerHTML={{ __html: previewSvg }} />
         </div>
       </main>
       {footer}

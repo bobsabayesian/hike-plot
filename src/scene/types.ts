@@ -2,8 +2,12 @@
 /** How densely a fill is hatched for a plotter, relative to the pen tip. */
 export type HatchDensity = 'solid' | 'medium' | 'light';
 
+/** Which part of the poster a primitive draws; the editor preview uses it to open that part's settings when clicked. */
+export type Part = 'border' | 'title' | 'location' | 'info' | 'watermark' | 'contours' | 'relief' | 'water' | 'profile' | 'route' | 'north' | 'landmarks';
+
 export interface PathPrim {
   kind: 'path';
+  part?: Part;
   /** SVG path data in poster mm */
   d: string;
   color: string;
@@ -22,6 +26,7 @@ export interface PathPrim {
 
 export interface TextPrim {
   kind: 'text';
+  part?: Part;
   text: string;
   x: number;
   y: number;

@@ -279,7 +279,10 @@ describe('3D in the poster', () => {
   it('a flat 3D view is identical to the flat poster (the anchor)', async () => {
     const flat = await make();
     const threeD = await make((p) => { p.relief = { ...p.relief, enabled: true, style: 'contours', turn: 0, tilt: 0, perspective: 0, depth: 200 }; });
-    expect(threeD.scene.prims).toEqual(flat.scene.prims);
+    // the same drawing; only the editor's tag differs (clicking 3D lines opens the 3D relief settings, not Contours)
+    const drawn = (ps: Prim[]) => ps.map(({ part: _, ...rest }) => rest);
+    expect(drawn(threeD.scene.prims)).toEqual(drawn(flat.scene.prims));
+    expect(threeD.scene.prims.filter((x) => x.part === 'relief').length).toBe(flat.scene.prims.filter((x) => x.part === 'contours').length);
   });
   it('is off by default and changes nothing when off', async () => {
     expect(defaultProject().relief.enabled).toBe(false);

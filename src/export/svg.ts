@@ -17,7 +17,11 @@ export interface InkLook { pens: Pen[]; /** dark paper: inks are drawn over it, 
 /** How much of a pen's color one pass shows: an opaque pen 1, a very translucent marker about a half. */
 export const inkAlpha = (pen: Pen): number => +(1 - 0.55 * (pen.transparency ?? penKind(pen.kind).transparency)).toFixed(3);
 
-function pathEl(p: PathPrim, look?: InkLook): string {
+/** wide enough to click on screen: a poster is shown at about 1 px per mm, so a hairline needs help */
+const HIT_MM = 4;
+
+function pathEl(p: PathPrim, look?: InkLook, ids = false): string {
+  const part = ids && p.part ? ` data-part="${p.part}"` : '';
   const col = normColor(p.color);
   let op = p.opacity !== undefined && p.opacity < 1 ? ` opacity="${f(p.opacity)}"` : '';
   if (look && p.mode === 'stroke' && p.pen !== undefined) {
@@ -25,9 +29,12 @@ function pathEl(p: PathPrim, look?: InkLook): string {
     const a = inkAlpha(pen) * (p.opacity ?? 1);
     op = ` stroke-opacity="${f(a)}"${look.dark ? '' : ' style="mix-blend-mode:multiply"'}`;
   }
-  if (p.mode === 'fill') return `<path d="${p.d}" fill="${col}" stroke="none"${op}/>`;
+  if (p.mode === 'fill') return `<path${part} d="${p.d}" fill="${col}" stroke="none"${op}/>`;
   const dash = p.dash ? ` stroke-dasharray="${p.dash.map(f).join(' ')}"` : '';
-  return `<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${f(p.widthMm ?? 0.5)}" stroke-linejoin="round" stroke-linecap="${p.round ? 'round' : 'butt'}"${dash}${op}/>`;
+  const line = `<path${part} d="${p.d}" fill="none" stroke="${col}" stroke-width="${f(p.widthMm ?? 0.5)}" stroke-linejoin="round" stroke-linecap="${p.round ? 'round' : 'butt'}"${dash}${op}/>`;
+  // an invisible, wider copy of the line to click on (editor preview only)
+  const hit = part ? `<path${part} d="${p.d}" fill="none" stroke="transparent" stroke-width="${HIT_MM}" stroke-linejoin="round" pointer-events="stroke"/>` : '';
+  return line + hit;
 }
 
 function textEl(t: TextPrim, ids = false): string {
@@ -38,17 +45,20 @@ function textEl(t: TextPrim, ids = false): string {
   const paint = t.mode === 'stroke'
     ? `fill="none" stroke="${normColor(t.color)}" stroke-width="${f(t.strokeMm ?? 0.35)}" stroke-linejoin="round"`
     : `fill="${normColor(t.color)}"`;
-  const ref = ids && t.ref ? ` data-lm="${esc(t.ref)}"` : '';
+  const ref = (ids && t.ref ? ` data-lm="${esc(t.ref)}"` : '') + (ids && t.part ? ` data-part="${t.part}"` : '');
   return `<text${ref} x="${f(t.x)}" y="${f(t.y)}"${rot}${fit} text-anchor="${t.anchor}" font-size="${f(t.sizeMm)}" letter-spacing="${f(t.trackingMm)}" font-family="${esc(t.fontFamily)}" ${paint}${op}>${esc(t.text)}</text>`;
 }
 
-const el = (p: Prim, ids = false, look?: InkLook) => (p.kind === 'path' ? pathEl(p, look) : textEl(p, ids));
+const el = (p: Prim, ids = false, look?: InkLook) => (p.kind === 'path' ? pathEl(p, look, ids) : textEl(p, ids));
 const colorOf = (p: Prim) => normColor(p.color);
 
 export interface SvgOptions {
   /** include the paper-colored background rect (omit for plotting) */
   paper?: boolean;
-  /** tag landmark labels with their id (the editor preview uses it for click to edit; exports leave it off) */
+  /**
+   * tag landmark labels with their id, and everything with the part of the poster it draws (with wider invisible lines
+   * to click on): the editor preview uses it for click to edit; exports leave it off
+   */
   ids?: boolean;
   /**
    * 'style' (the default): one layer per color and stroke width, which is what a design file wants.
