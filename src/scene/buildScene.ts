@@ -74,6 +74,21 @@ export function featureView(f: NonNullable<Project['feature']>): BBox {
   return { minLat: lat - dLat, maxLat: lat + dLat, minLon: lon - dLon, maxLon: lon + dLon };
 }
 
+/**
+ * The area a GPX route is shown at: the route's own extent, grown to at least `spanKm` each way around its center
+ * when that is set (never smaller, so the route is never cut off).
+ */
+export function routeView(points: { lat: number; lon: number }[], spanKm?: number): BBox {
+  const b = bbox(points);
+  if (spanKm === undefined) return b;
+  const lat = (b.minLat + b.maxLat) / 2;
+  const lon = (b.minLon + b.maxLon) / 2;
+  const dLat = Math.max(spanKm / 110.57, b.maxLat - b.minLat) / 2;
+  const dLon = Math.max(spanKm / (111.32 * Math.max(Math.cos((lat * Math.PI) / 180), 0.05)), b.maxLon - b.minLon) / 2;
+  // min/max so rounding in the center can never leave a sliver of the route outside
+  return { minLat: Math.min(lat - dLat, b.minLat), maxLat: Math.max(lat + dLat, b.maxLat), minLon: Math.min(lon - dLon, b.minLon), maxLon: Math.max(lon + dLon, b.maxLon) };
+}
+
 /** Rough size of a view in km (width, height). */
 export function viewSizeKm(b: BBox): [number, number] {
   const lat = (b.minLat + b.maxLat) / 2;
@@ -252,7 +267,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     // distance tick labels hang below the profile, so reserve room for them
     const tickPad = p.profile.enabled && p.profile.labels.xTicks && p.points.length ? p.profile.labels.sizePt * PT * 2.4 : 0;
     const frame: Rect = { x: contentL, y: topCursor, w: innerW, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) - tickPad };
-    const focus: BBox = p.points.length >= 2 ? bbox(p.points) : featureView(p.feature!);
+    const focus: BBox = p.points.length >= 2 ? routeView(p.points, p.routeSpanKm) : featureView(p.feature!);
     const fit = fitBBox(focus, frame);
     const [la1, lo1] = fit.fromMm(frame.x, frame.y + frame.h);
     const [la2, lo2] = fit.fromMm(frame.x + frame.w, frame.y);

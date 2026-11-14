@@ -126,6 +126,11 @@ export interface Project {
   /** the terrain drawn in 3D: turned and tipped back, with hills standing up */
   relief: ReliefSettings;
   points: TrackPoint[];
+  /**
+   * how wide the map around a GPX route is, km: the view grows to at least this in each direction, centered on the
+   * route (the route itself is always shown whole). Undefined = fit the route snugly.
+   */
+  routeSpanKm?: number;
   /** typed-in geographic feature; used for the map view when there is no GPX */
   feature?: Feature;
   /** named <wpt> entries from the GPX */

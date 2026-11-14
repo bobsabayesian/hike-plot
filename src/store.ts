@@ -67,7 +67,7 @@ export const useStore = create<Store>((setState, get) => ({
 
   loadPoints: (pts, lookups = true, waypoints = []) => {
     const id = ++loadId;
-    get().set((p) => { p.points = pts; p.waypoints = waypoints; p.feature = undefined; p.lookup = {}; p.features.overrides = {}; });
+    get().set((p) => { p.points = pts; p.waypoints = waypoints; p.feature = undefined; p.routeSpanKm = undefined; p.lookup = {}; p.features.overrides = {}; });
     if (!lookups) return;
     // Fire-and-forget name lookups; the poster is complete without them. Ignore results if the track changed.
     const stale = () => id !== loadId;
@@ -81,6 +81,7 @@ export const useStore = create<Store>((setState, get) => ({
     loadId++;
     get().set((p) => {
       p.points = [];
+      p.routeSpanKm = undefined;
       p.waypoints = [];
       p.features.overrides = {};
       p.feature = { name: hit.name, bbox: hit.bbox, lat: hit.lat, lon: hit.lon, kind: hit.kind };

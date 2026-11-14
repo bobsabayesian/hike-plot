@@ -8,7 +8,7 @@ import { OpenByCode, SaveGroup, linkFor, useProjectSave } from './SaveGroup';
 import { createShareLink } from '../share';
 import { CustomRow } from './CustomRow';
 import { newCustomId } from '../features/custom';
-import { composeScene, viewBBox, autoValues, featureView, viewSizeKm } from '../scene/buildScene';
+import { composeScene, viewBBox, autoValues, featureView, routeView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
 import { sceneToSvg } from '../export/svg';
@@ -123,13 +123,19 @@ function GpxDrop({ onFile, className = '', children }: { onFile: (f?: File) => v
   );
 }
 
-/** The "Showing <feature>" block: hover it and use the mouse wheel to zoom (wheel up = slider left = closer). */
-function FeatureStatus({ feature, onSpan }: { feature: NonNullable<ReturnType<typeof useStore.getState>['project']['feature']>; onSpan: (km: number | undefined) => void }) {
+/**
+ * How much map the poster shows: a view-width slider, and the mouse wheel over the whole block zooms (wheel up =
+ * slider left = closer). With `fitAtMin` the slider's left end is "fit snugly" (undefined), as for a route, which can
+ * be widened but never cut; otherwise the button returns to the automatic view.
+ */
+function ViewZoom({ valueKm, minKm, maxKm, isAuto, fitAtMin, onSpan, note, children }: {
+  valueKm: number; minKm: number; maxKm: number; isAuto: boolean; fitAtMin?: boolean; onSpan: (km: number | undefined) => void; note: string; children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
-  const [w, h] = viewSizeKm(featureView(feature));
-  const shown = Math.min(SPAN_MAX_KM, Math.max(SPAN_MIN_KM, Math.round(w)));
-  const latest = useRef(shown);
-  latest.current = shown;
+  const shown = Math.min(maxKm, Math.max(minKm, Math.round(valueKm)));
+  const pick = (km: number) => (fitAtMin && km <= minKm ? undefined : km);
+  const latest = useRef({ shown, minKm, maxKm, pick, onSpan });
+  latest.current = { shown, minKm, maxKm, pick, onSpan };
 
   useEffect(() => {
     const el = ref.current;
@@ -138,22 +144,50 @@ function FeatureStatus({ feature, onSpan }: { feature: NonNullable<ReturnType<ty
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY; // lines -> pixels
-      onSpan(wheelSpan(latest.current, delta));
+      const l = latest.current;
+      l.onSpan(l.pick(wheelSpan(l.shown, delta, l.minKm, l.maxKm)));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [onSpan]);
+  }, []);
 
   return (
     <div className="found" ref={ref} title="Scroll the mouse wheel here to zoom: up zooms in, down zooms out">
-      <div>Showing <b>{feature.name}</b>{feature.kind ? ` (${feature.kind})` : ''}</div>
-      <div className="hint">{feature.lat.toFixed(4)}°, {feature.lon.toFixed(4)}° · view about {Math.round(w)} × {Math.round(h)} km · scroll to zoom</div>
+      {children}
+      <div className="hint">{note} · scroll to zoom</div>
       <Row label="View width">
-        <input type="range" min={SPAN_MIN_KM} max={SPAN_MAX_KM} step={1} value={shown} onChange={(e) => onSpan(+e.target.value)} />
+        <input type="range" min={minKm} max={maxKm} step={1} value={shown} onChange={(e) => onSpan(pick(+e.target.value))} />
         <span>{shown} km</span>
-        <button disabled={feature.spanKm === undefined} onClick={() => onSpan(undefined)}>Auto</button>
+        <button type="button" disabled={isAuto} onClick={() => onSpan(undefined)}>{fitAtMin ? 'Fit' : 'Auto'}</button>
       </Row>
     </div>
+  );
+}
+
+/** The "Showing <feature>" block for a searched place, with its zoom. */
+function FeatureStatus({ feature, onSpan }: { feature: NonNullable<ReturnType<typeof useStore.getState>['project']['feature']>; onSpan: (km: number | undefined) => void }) {
+  const [w, h] = viewSizeKm(featureView(feature));
+  return (
+    <ViewZoom valueKm={w} minKm={SPAN_MIN_KM} maxKm={SPAN_MAX_KM} isAuto={feature.spanKm === undefined} onSpan={onSpan}
+      note={`${feature.lat.toFixed(4)}°, ${feature.lon.toFixed(4)}° · view about ${Math.round(w)} × ${Math.round(h)} km`}>
+      <div>Showing <b>{feature.name}</b>{feature.kind ? ` (${feature.kind})` : ''}</div>
+    </ViewZoom>
+  );
+}
+
+/**
+ * A GPX route's zoom: from fitting the route snugly (the slider's left end) out to several times its size, to show
+ * more of the land around it. The route is never cut off.
+ */
+function RouteZoom({ points, spanKm, onSpan, children }: { points: { lat: number; lon: number }[]; spanKm?: number; onSpan: (km: number | undefined) => void; children: ReactNode }) {
+  const [rw, rh] = viewSizeKm(routeView(points));
+  const fitKm = Math.max(SPAN_MIN_KM, Math.ceil(Math.max(rw, rh)));
+  const [w, h] = viewSizeKm(routeView(points, spanKm));
+  return (
+    <ViewZoom valueKm={spanKm ?? fitKm} minKm={fitKm} maxKm={Math.max(SPAN_MAX_KM, fitKm * 4)} isAuto={spanKm === undefined} fitAtMin onSpan={onSpan}
+      note={`view about ${Math.round(w)} × ${Math.round(h)} km${spanKm === undefined ? ', fitted to the route' : ''}`}>
+      {children}
+    </ViewZoom>
   );
 }
 
@@ -380,8 +414,10 @@ export function App() {
           <div className="source-body">
             {hasTrack ? (<>
               <div className="hint source-label">Route</div>
-              <div><b>{srcName || auto.title}</b></div>
-              <div className="hint">{[auto.info.distance, auto.info.gain && `${auto.info.gain} gain`, `${p.points.length.toLocaleString()} points`].filter(Boolean).join(' · ')}</div>
+              <RouteZoom points={p.points} spanKm={p.routeSpanKm} onSpan={(km) => set((x) => { x.routeSpanKm = km; })}>
+                <div><b>{srcName || auto.title}</b></div>
+                <div className="hint">{[auto.info.distance, auto.info.gain && `${auto.info.gain} gain`, `${p.points.length.toLocaleString()} points`].filter(Boolean).join(' · ')}</div>
+              </RouteZoom>
             </>) : p.feature && (<>
               <div className="hint source-label">Place</div>
               <FeatureStatus feature={p.feature} onSpan={(km) => set((x) => { x.feature!.spanKm = km; })} />
