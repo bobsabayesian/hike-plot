@@ -4,7 +4,7 @@ import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
 import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
-import { SaveGroup } from './SaveGroup';
+import { OpenByCode, SaveGroup, linkFor, useProjectSave } from './SaveGroup';
 import { createShareLink } from '../share';
 import { CustomRow } from './CustomRow';
 import { newCustomId } from '../features/custom';
@@ -47,6 +47,50 @@ function download(name: string, data: string | Blob, type: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Search for a place by name, and the list of matches to choose from (the first is chosen straight away). */
+function PlaceSearch({ autoFocus }: { autoFocus?: boolean }) {
+  const { searchFeature, busy, notice, searchResults, searchIndex, chooseResult, project } = useStore();
+  const [query, setQuery] = useState('');
+  return (<>
+    <form className="row" role="search" onSubmit={(e) => { e.preventDefault(); if (query.trim()) searchFeature(query.trim()); }}>
+      <input type="text" aria-label="Place name" placeholder="e.g. Mount Rainier" autoFocus={autoFocus} value={query} onChange={(e) => setQuery(e.target.value)} />
+      <button disabled={!!busy}>{busy || 'Search'}</button>
+    </form>
+    {notice && <div className="err">{notice}</div>}
+    {searchResults.length > 1 && (
+      <div className="results">
+        {searchResults.map((r, i) => (
+          <button key={`${r.lat},${r.lon},${i}`} className={i === searchIndex && project.feature ? 'res sel' : 'res'} onClick={() => chooseResult(i)}>
+            <b>{r.name}</b>
+            <span>{[r.kind, r.location].filter(Boolean).join(' · ')}</span>
+          </button>
+        ))}
+      </div>
+    )}
+  </>);
+}
+
+/**
+ * A zone that takes a dropped .gpx file. Given plain children, the whole zone is a button that opens the file picker;
+ * given a function, it is a plain box and the function gets `pick` to open the picker from a button of its own.
+ */
+function GpxDrop({ onFile, className = '', children }: { onFile: (f?: File) => void; className?: string; children: ReactNode | ((pick: () => void) => ReactNode) }) {
+  const [over, setOver] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const pick = () => input.current?.click();
+  const whole = typeof children !== 'function';
+  return (
+    <div className={`drop ${className}${over ? ' over' : ''}`}
+      {...(whole ? { role: 'button', tabIndex: 0, onClick: pick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } } } : {})}
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
+      onDrop={(e) => { e.preventDefault(); setOver(false); onFile(e.dataTransfer.files[0]); }}>
+      {whole ? children : children(pick)}
+      <input ref={input} type="file" accept=".gpx" hidden onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ''; }} />
+    </div>
+  );
+}
+
 /** The "Showing <feature>" block: hover it and use the mouse wheel to zoom (wheel up = slider left = closer). */
 function FeatureStatus({ feature, onSpan }: { feature: NonNullable<ReturnType<typeof useStore.getState>['project']['feature']>; onSpan: (km: number | undefined) => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -82,12 +126,21 @@ function FeatureStatus({ feature, onSpan }: { feature: NonNullable<ReturnType<ty
 }
 
 export function App() {
-  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, searchResults, searchIndex, chooseResult, osm, osmStatus, osmError, loadOsm, retryOsm, searchFeature, busy, notice, openProject } = useStore();
-  const [query, setQuery] = useState('');
+  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, osm, osmStatus, osmError, loadOsm, retryOsm, openProject } = useStore();
   const narrow = useMediaQuery(NARROW_QUERY);
   const [tab, setTab] = useState<'settings' | 'poster'>('settings');
   const gp = useGroups(narrow);
+  // Until there is a route or a place there is no map, and the start screen is shown instead of the editor.
+  const hasMap = p.points.length >= 2 || !!p.feature;
   // on a phone, show the poster as soon as there is something to look at
+  const hadMap = useRef(hasMap);
+  useEffect(() => {
+    if (hasMap && !hadMap.current && narrow) setTab('poster');
+    hadMap.current = hasMap;
+  }, [hasMap, narrow]);
+  /** the GPX file's name, when the route came from a file in this session */
+  const [srcName, setSrcName] = useState('');
+  const [searching, setSearching] = useState(false);
   // Click a landmark label on the poster to edit it: open the Landmarks group and focus that name box.
   const [pendingEdit, setPendingEdit] = useState<string | null>(null);
   const editLabel = (e: React.MouseEvent) => {
@@ -114,15 +167,29 @@ export function App() {
     return sceneToSvg(out, { paper: paperInExport && mode !== 'plotter', ...(mode === 'plotter' ? { layers: 'pen' as const, pens: p.pens } : {}) });
   };
   const showPoster = () => { if (narrow) setTab('poster'); };
+  /** a GPX that could not be read: shown where the file was dropped */
   const [err, setErr] = useState('');
+  /** an export that failed: shown in the action bar, next to the button */
+  const [exportErr, setExportErr] = useState('');
+  const [svgBusy, setSvgBusy] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkMsg, setLinkMsg] = useState('');
-  const [over, setOver] = useState(false);
   const [paperInExport, setPaperInExport] = useState(false);
   const [mode, setMode] = useState<ExportMode>('plotter');
   const [dpi, setDpi] = useState(150);
   const [pngBusy, setPngBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const downloadSvg = async () => {
+    setSvgBusy(true); setExportErr('');
+    try { download('hike-poster.svg', await makeSvg(), 'image/svg+xml'); }
+    catch (e) { setExportErr(e instanceof Error ? e.message : 'SVG export failed'); }
+    finally { setSvgBusy(false); }
+  };
+  const downloadPng = async () => {
+    setPngBusy(true); setExportErr('');
+    try { download('hike-poster.png', (await sceneToPng(scene, dpi)).blob, 'image/png'); }
+    catch (e) { setExportErr(e instanceof Error ? e.message : 'PNG export failed'); }
+    finally { setPngBusy(false); }
+  };
 
   // While a 3D slider is held, draw a lighter version (no hidden-line cut, fewer rows) so dragging stays smooth.
   const [draft, setDraft] = useState(false);
@@ -149,6 +216,7 @@ export function App() {
     const { widthMm } = scene;
     return (await sceneToPng(scene, (THUMB_PX / widthMm) * 25.4)).blob;
   };
+  const saver = useProjectSave({ project: p, openProject, meta: saveMeta, thumb: saveThumb });
 
   // Fetch landmarks/water whenever the visible area, or what we want to show, is not covered by what we have.
   const want = useMemo(() => wantedRequest(p.features), [p.features.kinds, p.features.water, p.features.waterLabels]);
@@ -198,13 +266,56 @@ export function App() {
     if (!file) return;
     try {
       const xml = await file.text();
-      loadPoints(parseGpx(xml), true, parseWaypoints(xml));
+      const pts = parseGpx(xml);
+      if (pts.length < 2) throw new Error('This file has no track to draw (it needs at least two points).');
+      loadPoints(pts, true, parseWaypoints(xml));
+      setSrcName(file.name);
+      setSearching(false);
       setErr('');
       showPoster();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not read file');
     }
   }
+
+  const useSample = () => { const t = sampleTrack(); loadPoints(t, false, sampleWaypoints(t)); setSrcName('Sample route'); setSearching(false); setErr(''); showPoster(); };
+  const footer = (
+    <footer className="notice">
+      Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL), served as vector tiles by <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> (© <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a>). Place search by Nominatim. Elevation: Terrain Tiles on AWS (SRTM, GMTED and other sources).
+    </footer>
+  );
+
+  if (!hasMap) return (
+    <div className="app empty">
+      <main className="start">
+        <h1>Walk of Frame</h1>
+        <p className="lede">Turn a hike or a mountain into a poster or a pen-plotter drawing.</p>
+        {saver.busy === 'Opening…' ? <div className="hint">Opening the saved project…</div> : (<>
+          <div className="choices">
+            <section className="choice">
+              <h2>Draw a hike</h2>
+              <GpxDrop className="big" onFile={load}>Drop a .gpx file here<br /><span className="hint">or click to choose one</span></GpxDrop>
+              {err && <div className="err">{err}</div>}
+            </section>
+            <section className="choice">
+              <h2>Draw a place</h2>
+              <PlaceSearch />
+              <div className="hint">A mountain, lake, park or town.</div>
+            </section>
+          </div>
+          <div className="start-more">
+            <button type="button" onClick={useSample}>Try the sample route</button>
+            <div className="open">
+              <span className="hint">Open a saved project</span>
+              <OpenByCode s={saver} />
+            </div>
+          </div>
+          {saver.msg?.error && <div className="err">{saver.msg.text}</div>}
+        </>)}
+      </main>
+      {footer}
+    </div>
+  );
 
   return (
     <div className={`app${narrow ? ' narrow' : ''}`}>
@@ -229,39 +340,29 @@ export function App() {
       )}
       <div className="side" id="panel-settings" hidden={narrow && tab !== 'settings'} {...(narrow ? { role: 'tabpanel', 'aria-labelledby': 'tab-settings' } : {})}>
         <h1>Walk of Frame</h1>
-        <div
-          className={`drop${over ? ' over' : ''}`}
-          onClick={() => input.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-          onDragLeave={() => setOver(false)}
-          onDrop={(e) => { e.preventDefault(); setOver(false); load(e.dataTransfer.files[0]); }}
-        >
-          Drop a .gpx file here, or click to browse
-          <input ref={input} type="file" accept=".gpx" hidden onChange={(e) => load(e.target.files?.[0])} />
-        </div>
-        <div className="row"><button type="button" onClick={() => { const t = sampleTrack(); loadPoints(t, false, sampleWaypoints(t)); showPoster(); }}>Use sample route</button></div>
-        {err && <div className="err">{err}</div>}
-        <Group id="search" title="Or search for a place" {...gp('search')}>
-        <form className="row" onSubmit={(e) => { e.preventDefault(); if (query.trim()) searchFeature(query.trim()); }}>
-          <input type="text" placeholder="e.g. Mount Rainier" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button disabled={!!busy}>{busy || 'Go'}</button>
-        </form>
-        {notice && <div className="err">{notice}</div>}
-        {searchResults.length > 0 && (
-          <div className="results">
-            {searchResults.map((r, i) => (
-              <button key={`${r.lat},${r.lon},${i}`} className={i === searchIndex && p.feature ? 'res sel' : 'res'} onClick={() => chooseResult(i)}>
-                <b>{r.name}</b>
-                <span>{[r.kind, r.location].filter(Boolean).join(' · ')}</span>
-              </button>
-            ))}
+        {/* What the poster is drawn from, and how to swap it. A .gpx can be dropped anywhere on this card. */}
+        <GpxDrop className="source" onFile={load}>{(pick) => (
+          <div className="source-body">
+            {hasTrack ? (<>
+              <div className="hint source-label">Route</div>
+              <div><b>{srcName || auto.title}</b></div>
+              <div className="hint">{[auto.info.distance, auto.info.gain && `${auto.info.gain} gain`, `${p.points.length.toLocaleString()} points`].filter(Boolean).join(' · ')}</div>
+            </>) : p.feature && (<>
+              <div className="hint source-label">Place</div>
+              <FeatureStatus feature={p.feature} onSpan={(km) => set((x) => { x.feature!.spanKm = km; })} />
+            </>)}
+            <div className="row">
+              <button type="button" onClick={pick}>{hasTrack ? 'Replace GPX' : 'Load a GPX'}</button>
+              <button type="button" aria-expanded={searching || !hasTrack} onClick={() => setSearching((v) => !v)} hidden={!hasTrack}>Find a place</button>
+              <button type="button" onClick={useSample}>Sample</button>
+            </div>
+            {(searching || !hasTrack) && <PlaceSearch autoFocus={searching} />}
+            {err && <div className="err">{err}</div>}
+            <div className="hint">Drop a .gpx on this box to replace the route. A new route or place clears your landmark edits.</div>
           </div>
-        )}
-        {p.feature && <FeatureStatus feature={p.feature} onSpan={(km) => set((x) => { x.feature!.spanKm = km; })} />}
+        )}</GpxDrop>
 
-        </Group>
-
-        <SaveGroup gp={gp('saved')} project={p} openProject={openProject} meta={saveMeta} thumb={saveThumb} />
+        <SaveGroup gp={gp('saved')} s={saver} />
 
         <Group id="size" title="Print size" {...gp('size')}>
         <Row label="Size">
@@ -658,16 +759,17 @@ export function App() {
             {passes.length ? passes.map((x) => `${x.widthMm} mm = ${x.passes} passes${x.forced ? ' (kept heavier than the rest)' : ''}`).join(', ') : 'none with these pens'}.
           </div>
         </>)}
+        <Row label="PNG">
+          <select value={dpi} onChange={(e) => setDpi(+e.target.value)}>
+            {[72, 150, 300].map((d) => <option key={d} value={d}>{d} dpi</option>)}
+          </select>
+        </Row>
+        {(() => {
+          const s = pngSize(scene.widthMm, scene.heightMm, dpi);
+          return <div className="hint">{s.width} × {s.height} px{s.capped ? ` (reduced to ${s.dpi} dpi, the largest this browser can render)` : ''}</div>;
+        })()}
+        <div className="hint">Download the SVG and PNG from the bar above the poster; they follow these settings.</div>
         <div className="row">
-          <button className="primary" onClick={async () => {
-            try {
-              download('hike-poster.svg', await makeSvg(), 'image/svg+xml');
-            } catch (e) {
-              setErr(e instanceof Error ? e.message : 'SVG export failed');
-            }
-          }}>
-            {mode === 'plotter' ? 'Download plotter SVG (layer per pen)' : 'Download SVG (layer per color)'}
-          </button>
           <button type="button" disabled={linkBusy} title="Put this SVG on the server and copy a link to it that works for one hour, to open it on another computer" onClick={async () => {
             setLinkBusy(true); setLinkMsg('Making the link…');
             try {
@@ -680,40 +782,42 @@ export function App() {
           }}>Copy 1-hour link</button>
         </div>
         {linkMsg && <div className="hint">{linkMsg}</div>}
-        <Row label="PNG">
-          <select value={dpi} onChange={(e) => setDpi(+e.target.value)}>
-            {[72, 150, 300].map((d) => <option key={d} value={d}>{d} dpi</option>)}
-          </select>
-          <button
-            disabled={pngBusy}
-            onClick={async () => {
-              setPngBusy(true);
-              try {
-                const { blob } = await sceneToPng(scene, dpi);
-                download('hike-poster.png', blob, 'image/png');
-              } catch (e) {
-                setErr(e instanceof Error ? e.message : 'PNG export failed');
-              } finally {
-                setPngBusy(false);
-              }
-            }}
-          >
-            {pngBusy ? 'Rendering…' : 'Download PNG'}
-          </button>
-        </Row>
-        {(() => {
-          const s = pngSize(scene.widthMm, scene.heightMm, dpi);
-          return <div className="hint">{s.width} × {s.height} px{s.capped ? ` (reduced to ${s.dpi} dpi, the largest this browser can render)` : ''}</div>;
-        })()}
         </Group>
       </div>
       <main className="main" id="preview" tabIndex={-1} hidden={narrow && tab !== 'poster'} {...(narrow ? { role: 'tabpanel', 'aria-labelledby': 'tab-poster' } : {})}>
-        <label className="plotpreview"><input type="checkbox" checked={plotPreview} onChange={(e) => setPlotPreview(e.target.checked)} /> Plotter preview: how the pens will draw it{plotPreview && !plotSvg ? ' (working…)' : ''}{plotPreview ? ' · click to edit labels is off' : ''}</label>
-        <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editLabel} dangerouslySetInnerHTML={{ __html: previewSvg }} />
+        <div className="actionbar">
+          <div className="bar">
+            <span className="seg" role="radiogroup" aria-label="Preview">
+              <button type="button" role="radio" aria-checked={!plotPreview} className={plotPreview ? '' : 'on'} title="The design, with click-to-edit labels" onClick={() => setPlotPreview(false)}>Design</button>
+              <button type="button" role="radio" aria-checked={plotPreview} className={plotPreview ? 'on' : ''} title="How the pens will draw it: hatched fills, passes, ink width and translucency" onClick={() => setPlotPreview(true)}>Plotter</button>
+            </span>
+            <span className="bar-status hint">{plotPreview ? (plotSvg ? 'Click-to-edit is off here' : 'Drawing…') : 'Click a label to edit it'}</span>
+            <span className="bar-actions">
+              <button type="button" disabled={!!saver.busy} onClick={() => void saver.save()} title="Save the whole poster under a code you can open again">
+                {saver.busy === 'Saving…' ? 'Saving…' : saver.changed ? 'Save*' : 'Save'}
+              </button>
+              <button type="button" className="primary" disabled={svgBusy} onClick={() => void downloadSvg()}
+                title={`${mode === 'plotter' ? 'Pen plotter SVG: a layer per pen, lines only' : mode === 'print' ? 'SVG for print or design: filled shapes, a layer per color' : 'SVG with live text'}. Change it under Export.`}>
+                {svgBusy ? 'Preparing…' : `SVG · ${mode === 'plotter' ? 'plotter' : mode === 'print' ? 'print' : 'live text'}`}
+              </button>
+              <button type="button" disabled={pngBusy} onClick={() => void downloadPng()} title={`PNG at ${dpi} dpi. Change it under Export.`}>
+                {pngBusy ? 'Rendering…' : `PNG · ${dpi} dpi`}
+              </button>
+            </span>
+          </div>
+          {exportErr && <div className="err" role="alert">{exportErr}</div>}
+          {!exportErr && saver.msg && (
+            <div className={saver.msg.error ? 'err' : 'hint'} role={saver.msg.error ? 'alert' : 'status'}>
+              {saver.msg.text}
+              {!saver.msg.error && saver.code && <> <button type="button" className="link" onClick={() => saver.copy(linkFor(saver.code))}>Copy link</button></>}
+            </div>
+          )}
+        </div>
+        <div className="stage">
+          <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editLabel} dangerouslySetInnerHTML={{ __html: previewSvg }} />
+        </div>
       </main>
-      <footer className="notice">
-        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> (ODbL), served as vector tiles by <a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> (© <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a>). Place search by Nominatim. Elevation: Terrain Tiles on AWS (SRTM, GMTED and other sources).
-      </footer>
+      {footer}
     </div>
   );
 }
