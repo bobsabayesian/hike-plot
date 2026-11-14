@@ -12,9 +12,15 @@ preview_urls = false
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*"]
+run_worker_first = ["/api/*", "/admin", "/admin/*"]
 
 # saved projects live in the shared project-files bucket, under hike/
 [[r2_buckets]]
 binding = "PROJECTS"
 bucket_name = "project-files"
+
+# the admin page (/admin) lists every saved project, so it sits behind Cloudflare Access (Zero Trust) and the Worker checks the Access
+# token as well. Fill ACCESS_AUD in from the Access application's Audience tag; while either is empty, /admin is shut.
+[vars]
+ACCESS_TEAM_DOMAIN = "little-firefly-6873.cloudflareaccess.com"
+ACCESS_AUD = ""

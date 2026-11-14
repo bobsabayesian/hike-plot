@@ -10,7 +10,19 @@ export const CODE_RE = new RegExp(`^[${ALPHABET}]{${CODE_LEN}}$`);
 export interface Bucket {
   get(key: string): Promise<{ text(): Promise<string> } | null>;
   head(key: string): Promise<unknown | null>;
-  put(key: string, value: string, opts?: { httpMetadata?: { contentType: string } }): Promise<unknown>;
+  put(key: string, value: string, opts?: { httpMetadata?: { contentType: string }; customMetadata?: Record<string, string> }): Promise<unknown>;
+  list?(opts: { prefix: string; cursor?: string; include?: ('customMetadata')[] }): Promise<{
+    objects: { key: string; size: number; uploaded: Date; customMetadata?: Record<string, string> }[]; truncated: boolean; cursor?: string;
+  }>;
+}
+
+/** What the admin page shows about a project without opening its (large) file: stored with the object when it is saved. */
+export function summarize(project: Record<string, any>): Record<string, string> {
+  const points = Array.isArray(project.points) ? project.points.length : 0;
+  const name = String(project.lookup?.peakName ?? project.feature?.name ?? '').slice(0, 120);
+  const place = String(project.lookup?.location ?? '').slice(0, 120);
+  const waypoints = Array.isArray(project.waypoints) ? project.waypoints.length : 0;
+  return { name, place, points: String(points), waypoints: String(waypoints), savedAt: new Date().toISOString() };
 }
 
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
@@ -56,7 +68,7 @@ export async function handleProjects(req: Request, bucket: Bucket | undefined, u
     for (let i = 0; i < 5; i++) {
       const code = newCode();
       if (await bucket.head(PREFIX + code + '.json')) continue;
-      await bucket.put(PREFIX + code + '.json', text, { httpMetadata: { contentType: 'application/json' } });
+      await bucket.put(PREFIX + code + '.json', text, { httpMetadata: { contentType: 'application/json' }, customMetadata: summarize(d.project as Record<string, any>) });
       return json({ code }, 201);
     }
     return json({ error: 'could not make a code, try again' }, 503);

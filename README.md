@@ -58,3 +58,14 @@ A healthy answer lists two Cloudflare addresses (`104.21.x.x`, `172.67.x.x`). If
 site, the cause is on the phone or its network: a DNS answer cached before the domain existed (switch Wi-Fi/cellular off
 and on, or turn airplane mode on and off), a private DNS or VPN, iCloud Private Relay, or a content blocker. Try another
 network, or open the address in a private tab.
+
+## Saved projects and the admin page
+
+"Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.
+
+`/admin` lists every saved project (code, name, place, when, track points, size, links to open it or its JSON), read-only. It shows everyone's work, so it is protected twice, the same way as the Moire admin page:
+
+1. **Cloudflare Access (Zero Trust)** in front of it. Add a *Self-hosted application* for `hike.bobsabayesian.io` with two destinations, the path `admin` and the path `api/admin/*`, and a policy that allows only you.
+2. **The Worker checks the Access token itself** (`worker/access.ts`). Until `ACCESS_AUD` in `wrangler.toml` is filled in with the application's Audience (AUD) tag, `/admin` answers 503. Then `npm run deploy`.
+
+Under `npm run dev` the page is at `/admin` with no sign-in and an empty list (saved projects live in R2).
