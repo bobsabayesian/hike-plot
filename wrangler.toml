@@ -23,4 +23,4 @@ bucket_name = "project-files"
 # token as well. Fill ACCESS_AUD in from the Access application's Audience tag; while either is empty, /admin is shut.
 [vars]
 ACCESS_TEAM_DOMAIN = "little-firefly-6873.cloudflareaccess.com"
-ACCESS_AUD = ""
+ACCESS_AUD = "265c773cee11bdf38d42be010c765fdc78993d804aee3a63a3b76291621ef397"
