@@ -10,6 +10,8 @@ export interface AdminStore {
   listObjects(prefix: string): Promise<AdminObject[]>;
   /** the picture saved beside a project, if there is one */
   getThumb?(code: string): Promise<ArrayBuffer | null>;
+  /** remove a project: its file and its picture */
+  deleteProject?(code: string): Promise<void>;
 }
 
 export interface ProjectSummary {
@@ -20,6 +22,7 @@ export interface ProjectSummary {
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
 /**
+ *   DELETE /api/admin/project/<code> (with header x-admin-action: delete) -> { deleted: code }
  *   GET /api/admin/thumb/<code> -> the project's small picture (PNG)
  *   GET /api/admin/summary -> { projects: [{ code, name, place, savedAt, bytes, points, waypoints }], totals: { projects, bytes } }, newest first
  * The name, place and counts were stored with each file when it was saved; a file saved before that shows only its code and date.
@@ -27,6 +30,18 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 export async function handleAdmin(req: Request, store: AdminStore): Promise<Response | null> {
   const url = new URL(req.url);
   if (!url.pathname.startsWith('/api/admin/')) return null;
+  // the one thing the admin page can change: delete a saved project. A cross-site page cannot send this custom header
+  // without a CORS preflight, which this site never answers, so the Access cookie alone cannot be used to delete from elsewhere.
+  const del = /^\/api\/admin\/project\/([^/]+)$/.exec(url.pathname);
+  if (del) {
+    if (req.method !== 'DELETE') return json(405, { error: 'DELETE only' });
+    if (req.headers.get('x-admin-action') !== 'delete') return json(400, { error: 'missing confirmation header' });
+    const code = decodeURIComponent(del[1]!);
+    if (!CODE_RE.test(code)) return json(400, { error: 'not a project code' });
+    if (!store.deleteProject) return json(501, { error: 'deleting is not available' });
+    await store.deleteProject(code);
+    return json(200, { deleted: code });
+  }
   if (req.method !== 'GET') return json(405, { error: 'GET only' });
   const t = /^\/api\/admin\/thumb\/([^/]+)$/.exec(url.pathname);
   if (t) {

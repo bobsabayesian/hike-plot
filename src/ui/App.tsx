@@ -5,6 +5,7 @@ import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
 import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
 import { SaveGroup } from './SaveGroup';
+import { createShareLink } from '../share';
 import { CustomRow } from './CustomRow';
 import { newCustomId } from '../features/custom';
 import { composeScene, viewBBox, autoValues, featureView, viewSizeKm } from '../scene/buildScene';
@@ -106,8 +107,15 @@ export function App() {
     }, 50);
     return () => clearTimeout(t);
   }, [pendingEdit]);
+  /** the SVG as the Export settings say (plotter: a layer per pen), for download or for a link */
+  const makeSvg = async () => {
+    const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { pens: p.pens });
+    return sceneToSvg(out, { paper: paperInExport && mode !== 'plotter', ...(mode === 'plotter' ? { layers: 'pen' as const, pens: p.pens } : {}) });
+  };
   const showPoster = () => { if (narrow) setTab('poster'); };
   const [err, setErr] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkMsg, setLinkMsg] = useState('');
   const [over, setOver] = useState(false);
   const [paperInExport, setPaperInExport] = useState(false);
   const [mode, setMode] = useState<ExportMode>('plotter');
@@ -627,15 +635,25 @@ export function App() {
         <div className="row">
           <button className="primary" onClick={async () => {
             try {
-              const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { pens: p.pens });
-              download('hike-poster.svg', sceneToSvg(out, { paper: paperInExport && mode !== 'plotter', ...(mode === 'plotter' ? { layers: 'pen' as const, pens: p.pens } : {}) }), 'image/svg+xml');
+              download('hike-poster.svg', await makeSvg(), 'image/svg+xml');
             } catch (e) {
               setErr(e instanceof Error ? e.message : 'SVG export failed');
             }
           }}>
             {mode === 'plotter' ? 'Download plotter SVG (layer per pen)' : 'Download SVG (layer per color)'}
           </button>
+          <button type="button" disabled={linkBusy} title="Put this SVG on the server and copy a link to it that works for one hour, to open it on another computer" onClick={async () => {
+            setLinkBusy(true); setLinkMsg('Making the link…');
+            try {
+              const { url, expiresAt } = await createShareLink(await makeSvg());
+              const until = new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              try { await navigator.clipboard.writeText(url); setLinkMsg(`Link copied. Works until ${until}.`); } catch { setLinkMsg(`${url} (works until ${until})`); }
+            } catch (e) {
+              setLinkMsg(e instanceof Error ? e.message : 'Could not make the link.');
+            } finally { setLinkBusy(false); }
+          }}>Copy 1-hour link</button>
         </div>
+        {linkMsg && <div className="hint">{linkMsg}</div>}
         <Row label="PNG">
           <select value={dpi} onChange={(e) => setDpi(+e.target.value)}>
             {[72, 150, 300].map((d) => <option key={d} value={d}>{d} dpi</option>)}

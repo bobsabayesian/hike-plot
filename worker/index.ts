@@ -1,11 +1,12 @@
 import { handleApi } from './api';
 import { handleProjects, type Bucket } from './projects';
 import { handleAdmin } from './admin';
+import { handleShare, type ShareBucket } from './share';
 import { verifyAccess } from './access';
 
 interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
-  PROJECTS?: Bucket;
+  PROJECTS?: Bucket & ShareBucket;
   /** the Cloudflare Access (Zero Trust) application that protects /admin: the team name and the application's AUD tag. Both must be set, or the admin page stays shut. */
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
@@ -33,12 +34,13 @@ export default {
           } while (cursor);
           return out;
         },
+        deleteProject: async (code) => { await bucket!.delete([`hike/${code}.json`, `hike/${code}.png`]); },
         getThumb: async (code) => { const o = await bucket!.get(`hike/${code}.png`); return o ? o.arrayBuffer() : null; },
       });
       if (api) return api;
       const page = await env.ASSETS.fetch(req);
       return new Response(page.body, { status: page.status, headers: { ...Object.fromEntries(page.headers), ...headers } });
     }
-    return (await handleProjects(req, env.PROJECTS)) ?? (await handleApi(req)) ?? env.ASSETS.fetch(req);
+    return (await handleShare(req, env.PROJECTS)) ?? (await handleProjects(req, env.PROJECTS)) ?? (await handleApi(req)) ?? env.ASSETS.fetch(req);
   },
 };

@@ -21,6 +21,7 @@
     a { color: var(--accent); } input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--text); }
     .err { color: #c0392b; } [hidden] { display: none !important; }
     td.thumb { width: 84px; padding: 6px 12px; } td.thumb img { display: block; width: 72px; height: auto; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
+    button.del { font: inherit; padding: 0; border: 0; background: none; color: #c0392b; cursor: pointer; text-decoration: underline; } button.del:hover { color: #96281b; }
     td .name { font-weight: 600; overflow-wrap: anywhere; }
     @media (max-width: 600px) { main { padding: 12px; } th, td { padding: 6px 8px; } }
   </style>
@@ -28,7 +29,7 @@
 <body>
   <header>
     <h1>Walk of Frame: admin</h1>
-    <span class="dim">Signed in as <span id="who" class="mono">…</span> · read-only</span>
+    <span class="dim">Signed in as <span id="who" class="mono">…</span> · can delete projects</span>
   </header>
   <main>
     <section><div class="tot" id="totals"></div></section>

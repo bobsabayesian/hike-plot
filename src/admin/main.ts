@@ -24,9 +24,34 @@ async function get<T>(path: string): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+async function remove(p: Project, row: HTMLElement) {
+  const label = p.name ? `${p.name} (${p.code})` : p.code;
+  if (!window.confirm(`Delete ${label}?\n\nThis removes the saved project and its picture for good. Anyone opening its code will get "no project with that code".`)) return;
+  try {
+    const r = await fetch(`/api/admin/project/${encodeURIComponent(p.code)}`, { method: 'DELETE', credentials: 'same-origin', headers: { 'x-admin-action': 'delete' } });
+    if (!r.ok) throw new Error(String(r.status));
+    all = all.filter((x) => x.code !== p.code);
+    row.remove();
+    refreshTotals();
+  } catch (e) {
+    window.alert(`Could not delete ${label} (${(e as Error).message}).`);
+  }
+}
+
 const link = (text: string, href: string) => { const a = el('a', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
 
 let all: Project[] = [];
+
+function refreshTotals() {
+  const tot = $('totals');
+  tot.replaceChildren();
+  for (const [n, label] of [[String(all.length), 'saved projects'], [size(all.reduce((t, p) => t + p.bytes, 0)), 'stored']] as const) {
+    const d = el('div'); d.append(el('b', n), el('span', label, 'dim')); tot.append(d);
+  }
+  $('table').hidden = !all.length;
+  $('msg').hidden = all.length > 0;
+  if (!all.length) $('msg').textContent = 'No saved projects yet.';
+}
 
 function draw() {
   const q = $<HTMLInputElement>('find').value.trim().toLowerCase();
@@ -50,6 +75,10 @@ function draw() {
     const route = el('td', [p.distance, p.gain && `${p.gain} gain`].filter(Boolean).join(' · ') || '—');
     const links = el('td');
     links.append(link('open', `/?p=${encodeURIComponent(p.code)}`), document.createTextNode(' · '), link('json', `/api/project/${encodeURIComponent(p.code)}`));
+    const del = el('button', 'delete');
+    del.type = 'button'; del.className = 'del'; del.title = `Delete ${p.code}`;
+    del.addEventListener('click', () => void remove(p, tr));
+    links.append(document.createTextNode(' · '), del);
     tr.append(thumb, who, route, el('td', when(p.savedAt)), el('td', String(p.points), 'n'), el('td', size(p.bytes), 'n'), links);
     rows.append(tr);
   }
@@ -60,10 +89,7 @@ async function main() {
     $('who').textContent = (await get<{ email: string }>('/api/admin/me')).email;
     const s = await get<{ projects: Project[]; totals: { projects: number; bytes: number } }>('/api/admin/summary');
     all = s.projects;
-    const tot = $('totals');
-    for (const [n, label] of [[String(s.totals.projects), 'saved projects'], [size(s.totals.bytes), 'stored']] as const) {
-      const d = el('div'); d.append(el('b', n), el('span', label, 'dim')); tot.append(d);
-    }
+    refreshTotals();
     $('msg').hidden = all.length > 0;
     if (!all.length) $('msg').textContent = 'No saved projects yet.';
     $('table').hidden = !all.length;

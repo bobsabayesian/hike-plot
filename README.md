@@ -63,9 +63,13 @@ network, or open the address in a private tab.
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.
 
-`/admin` lists every saved project (code, name, place, when, track points, size, links to open it or its JSON), read-only. It shows everyone's work, so it is protected twice, the same way as the Moire admin page:
+`/admin` lists every saved project (picture, title, place, route numbers, paper size, when, track points, size, links to open it or its JSON) and can delete one (it asks first; this removes the file and its picture for good). It shows everyone's work, so it is protected twice, the same way as the Moire admin page:
 
 1. **Cloudflare Access (Zero Trust)** in front of it. Add a *Self-hosted application* for `hike.bobsabayesian.io` with two destinations, the path `admin` and the path `api/admin/*`, and a policy that allows only you.
 2. **The Worker checks the Access token itself** (`worker/access.ts`). Until `ACCESS_AUD` in `wrangler.toml` is filled in with the application's Audience (AUD) tag, `/admin` answers 503. Then `npm run deploy`.
 
 Under `npm run dev` the page is at `/admin` with no sign-in and an empty list (saved projects live in R2).
+
+## The 1-hour link
+
+"Copy 1-hour link" next to the SVG download puts the SVG (as the Export settings make it, so a plotter SVG with a layer per pen) in `hike/share/<token>.svg` and copies `/api/share/<token>.svg`. The Worker enforces the hour itself (R2 only expires whole days, and only through a bucket rule): an older file is refused and deleted when asked for, and every new link clears the expired ones. The file is served with a sandboxing Content-Security-Policy, so it can only ever be data. The token (16 characters, about 80 bits) is the only key. To also have R2 clear any left-over files, add a lifecycle rule for the `hike/share/` prefix on the `project-files` bucket.
