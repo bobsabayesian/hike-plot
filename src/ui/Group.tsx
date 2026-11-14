@@ -37,18 +37,38 @@ export function useGroups(narrow: boolean) {
   return gp;
 }
 
-/** A section of settings that opens and closes: the heading holds a button that shows or hides the body. */
-export function Group({ id, title, open, onToggle, swatch, children }: GroupProps & { id: string; title: string; swatch?: string; children: ReactNode }) {
+/** A part of the poster that can be turned on and off from its group's header. */
+export interface Switch { on: boolean; onChange: (on: boolean) => void; /** a short note beside the switch, such as "Loading…" */ status?: string }
+
+/**
+ * A section of settings that opens and closes: the heading holds a button that shows or hides the body. A group for a
+ * part of the poster that can be left out also has an on/off switch in its header, beside (not inside) that button,
+ * so the closed sidebar shows at a glance what is on. While it is off, the body says so instead of its settings.
+ */
+export function Group({ id, title, open, onToggle, swatch, toggle, children }: GroupProps & { id: string; title: string; swatch?: string; toggle?: Switch; children: ReactNode }) {
+  const off = toggle && !toggle.on;
   return (
-    <section className="group" id={`group-${id}`}>
-      <h2 className="group-title">
-        <button type="button" aria-expanded={open} aria-controls={`group-body-${id}`} onClick={onToggle}>
-          <span className="chevron" aria-hidden="true">▸</span>
-          {swatch && <span className="swatch" aria-hidden="true" style={{ background: swatch }} />}
-          <span>{title}</span>
-        </button>
-      </h2>
-      <div className="group-body" id={`group-body-${id}`} hidden={!open}>{children}</div>
+    <section className={`group${off ? ' off' : ''}`} id={`group-${id}`}>
+      <div className="group-head">
+        <h2 className="group-title">
+          <button type="button" aria-expanded={open} aria-controls={`group-body-${id}`} onClick={onToggle}>
+            <span className="chevron" aria-hidden="true">▸</span>
+            {swatch && <span className="swatch" aria-hidden="true" style={{ background: swatch }} />}
+            <span>{title}</span>
+            {off && <span className="sr-only"> (off)</span>}
+          </button>
+        </h2>
+        {toggle && (<>
+          {toggle.status && <span className="group-status hint">{toggle.status}</span>}
+          <label className="switch" title={toggle.on ? `${title} is on: click to leave it out` : `${title} is off: click to show it`}>
+            <input type="checkbox" role="switch" aria-label={`Show ${title.toLowerCase()}`} checked={toggle.on} onChange={(e) => toggle.onChange(e.target.checked)} />
+            <span className="track" aria-hidden="true" />
+          </label>
+        </>)}
+      </div>
+      <div className="group-body" id={`group-body-${id}`} hidden={!open}>
+        {off ? <div className="hint off-note">Off. Turn on the switch above to show it on the poster.</div> : children}
+      </div>
     </section>
   );
 }

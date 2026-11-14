@@ -376,9 +376,8 @@ export function App() {
         </Row>
         </Group>)}
 
-        <Group id="contours" title="Contours" {...gp('contours')}>
-        <Row label="Show"><input type="checkbox" checked={p.terrain.enabled} onChange={(e) => set((x) => { x.terrain.enabled = e.target.checked; })} />
-          <span>{terrainStatus === 'loading' ? 'Loading terrain…' : ''}</span></Row>
+        <Group id="contours" title="Contours" {...gp('contours')}
+          toggle={{ on: p.terrain.enabled, onChange: (v) => set((x) => { x.terrain.enabled = v; }), status: p.terrain.enabled && terrainStatus === 'loading' ? 'Loading…' : undefined }}>
         {terrainError && <div className="err">{terrainError}</div>}
         {p.terrain.enabled && (<>
           <Row label="Interval">
@@ -417,9 +416,8 @@ export function App() {
 
         </Group>
 
-        <Group id="relief" title="3D relief" {...gp('relief')}>
-          <Row label="Show in 3D"><input type="checkbox" checked={p.relief.enabled} onChange={(e) => set((x) => { x.relief.enabled = e.target.checked; })} />
-            <span>{p.relief.enabled && terrainStatus === 'loading' ? 'Loading terrain…' : ''}</span></Row>
+        <Group id="relief" title="3D relief" {...gp('relief')}
+          toggle={{ on: p.relief.enabled, onChange: (v) => set((x) => { x.relief.enabled = v; }), status: p.relief.enabled && terrainStatus === 'loading' ? 'Loading…' : undefined }}>
           {p.relief.enabled && (<div onPointerDownCapture={(e) => { if ((e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type === 'range') setDraft(true); }}>
             <div className="row">
               {([['Top-down', { turn: 0, tilt: 0, perspective: 0 }], ['Oblique', { turn: 0, tilt: 55, perspective: 35 }], ['Angled', { turn: 35, tilt: 62, perspective: 40 }]] as const).map(([name, v]) => (
@@ -448,11 +446,8 @@ export function App() {
           </div>)}
         </Group>
 
-        <Group id="landmarks" title="Landmarks" {...gp('landmarks')}>
-        <Row label="Show">
-          <input type="checkbox" checked={p.features.enabled} onChange={(e) => set((x) => { x.features.enabled = e.target.checked; })} />
-          <span>{osmStatus === 'loading' ? 'Loading landmarks…' : ''}</span>
-        </Row>
+        <Group id="landmarks" title="Landmarks" {...gp('landmarks')}
+          toggle={{ on: p.features.enabled, onChange: (v) => set((x) => { x.features.enabled = v; }), status: p.features.enabled && osmStatus === 'loading' ? 'Loading…' : undefined }}>
         {osmError && <div className="err">{osmError} <button onClick={retryOsm}>Retry</button></div>}
         {osm?.note && <div className="hint">{osm.note}</div>}
         {osm?.partial?.length ? (
@@ -563,8 +558,8 @@ export function App() {
 
         </Group>
 
-        {hasTrack && (<Group id="profile" title="Elevation profile" {...gp('profile')}>
-        <Row label="Show"><input type="checkbox" checked={p.profile.enabled} onChange={(e) => set((x) => { x.profile.enabled = e.target.checked; })} /></Row>
+        {hasTrack && (<Group id="profile" title="Elevation profile" {...gp('profile')}
+          toggle={{ on: p.profile.enabled, onChange: (v) => set((x) => { x.profile.enabled = v; }) }}>
         {p.profile.enabled && (<>
           <Row label="Position">
             <select value={p.profile.position} onChange={(e) => set((x) => { x.profile.position = e.target.value as typeof p.profile.position; })}>
@@ -585,8 +580,8 @@ export function App() {
         </>)}
         </Group>)}
 
-        <Group id="north" title="North arrow" {...gp('north')}>
-        <Row label="Show"><input type="checkbox" checked={p.north.enabled} onChange={(e) => set((x) => { x.north.enabled = e.target.checked; })} /></Row>
+        <Group id="north" title="North arrow" {...gp('north')}
+          toggle={{ on: p.north.enabled, onChange: (v) => set((x) => { x.north.enabled = v; }) }}>
         {p.north.enabled && (<>
           <Row label="Style">
             <select value={p.north.style} onChange={(e) => set((x) => { x.north.style = e.target.value as NorthStyle; })}>

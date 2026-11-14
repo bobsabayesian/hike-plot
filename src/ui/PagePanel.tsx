@@ -49,10 +49,7 @@ export function PagePanel({ project: p, margins, border }: { project: Project; m
         {clamped ? ' Reduced to leave room for the content (at least 20% of the page each way).' : ''}
       </div>
       </Group>
-      <Group id="border" title="Border" {...border}>
-      <div className="row">
-        <label><input type="checkbox" checked={p.border.enabled} onChange={(e) => set((x) => { x.border.enabled = e.target.checked; })} /> Draw a border</label>
-      </div>
+      <Group id="border" title="Border" {...border} toggle={{ on: p.border.enabled, onChange: (v) => set((x) => { x.border.enabled = v; }) }}>
       {p.border.enabled && (() => {
         const lay = layoutBorder(w, h, p.border, used);
         return (<>
