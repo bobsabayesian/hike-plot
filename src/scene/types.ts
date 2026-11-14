@@ -44,6 +44,8 @@ export interface TextPrim {
   fitWidthMm?: number;
   /** plotter export: hatch the letters in this density rather than outlining them */
   hatch?: HatchDensity;
+  /** plotter export: how densely plain filled letters are filled in (they are outlined too); default solid */
+  plotFill?: HatchDensity;
   color: string;
   opacity?: number;
 }

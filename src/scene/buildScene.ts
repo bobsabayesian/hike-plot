@@ -171,7 +171,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           text(ts.fillPen, title.toUpperCase(), base, size, { ...place, hatch: ts.fillDensity }, titleX),
           text(ts.pen, title.toUpperCase(), base, size, outline, titleX),
         ];
-        return [text(ts.pen, title.toUpperCase(), base, size, place, titleX)];
+        return [text(ts.pen, title.toUpperCase(), base, size, { ...place, plotFill: ts.fillDensity }, titleX)];
       },
     });
   }

@@ -559,8 +559,8 @@ export function App() {
           {p.text.title.style !== 'fill' && (
             <Row label="Outline weight"><input type="number" min={0.1} max={3} step={0.05} value={p.text.title.outlineMm} onChange={(e) => set((x) => { x.text.title.outlineMm = Math.max(0.1, +e.target.value || 0.35); })} /><span className="unit">mm</span></Row>
           )}
-          {p.text.title.style === 'outlineFill' && (<>
-            <Row label="Fill pen"><PenSelect pens={p.pens} value={p.text.title.fillPen} onChange={(id) => set((x) => { x.text.title.fillPen = id!; })} /></Row>
+          {p.text.title.style !== 'outline' && (<>
+            {p.text.title.style === 'outlineFill' && <Row label="Fill pen"><PenSelect pens={p.pens} value={p.text.title.fillPen} onChange={(id) => set((x) => { x.text.title.fillPen = id!; })} /></Row>}
             <Row label="Fill (plotter)">
               <select value={p.text.title.fillDensity} onChange={(e) => set((x) => { x.text.title.fillDensity = e.target.value as typeof p.text.title.fillDensity; })}>
                 <option value="solid">Solid hatching</option><option value="medium">Medium hatching</option><option value="light">Light hatching</option>

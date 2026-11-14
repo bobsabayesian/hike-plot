@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import { parse } from 'opentype.js';
 import { sceneToSvg, penLayerOf } from '../src/export/svg';
-import { isSmallText, prepareScene, type FontSet } from '../src/export/outlines';
+import { prepareScene, type FontSet } from '../src/export/outlines';
 import { composeScene } from '../src/scene/buildScene';
 import { defaultProject } from '../src/scene/project';
 import { sampleTrack, sampleWaypoints } from '../src/sample';
@@ -38,12 +38,7 @@ describe('layers follow pens', () => {
   });
 });
 
-describe('small text in the plotter export', () => {
-  it('is small when its stems are about as thick as the pen', () => {
-    expect(isSmallText(3.9, 0.3)).toBe(true); // 11 pt label
-    expect(isSmallText(21, 0.3)).toBe(false); // 60 pt title
-    expect(isSmallText(3.9, 0.1)).toBe(false); // a fine pen can outline it
-  });
+describe('filled text in the plotter export', () => {
   const buf = (f: string) => { const b = readFileSync(f); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer; };
   const fonts = {
     sans: parse(buf('node_modules/@fontsource/inter/files/inter-latin-400-normal.woff')),
@@ -69,7 +64,7 @@ describe('small text in the plotter export', () => {
       expect(colors.size).toBe(1);
     }
   });
-  it('small text is outlined and hatched in its own pen, so it stays a solid letter', () => {
+  it('all filled text, big or small, is outlined and filled in with hatch lines of its own pen', () => {
     const text = out.prims.filter((x): x is PathPrim => x.kind === 'path' && (x.d.match(/M/g) ?? []).length > 40);
     expect(text.length).toBeGreaterThan(0);
   });
