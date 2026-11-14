@@ -18,7 +18,7 @@ import { pngSize, sceneToPng } from '../export/png';
 const THUMB_PX = 480;
 import { loadFonts } from '../export/fonts';
 import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
-import { PAPER_COLORS, isDarkPaper } from '../scene/pens';
+import { isDarkPaper } from '../scene/pens';
 import { prepareScene, tipFor, type ExportMode } from '../export/outlines';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
@@ -719,7 +719,7 @@ export function App() {
         </Group>
 
         <div className="side-stage">Page</div>
-        <Group id="size" title="Paper and size" {...gp('size')}>
+        <Group id="size" title="Print size" {...gp('size')}>
         <Row label="Size">
           <select value={p.sizeId} onChange={(e) => set((x) => { x.sizeId = e.target.value; })}>
             {(['US (inches)', 'ISO (A series)', 'Metric (cm)'] as SizeGroup[]).map((g) => (
@@ -747,16 +747,6 @@ export function App() {
             <option value="p">Portrait</option><option value="l">Landscape</option>
           </select>
         </Row>
-        <Row label="Paper">
-          <span className="swatches" role="radiogroup" aria-label="Paper color">
-            {PAPER_COLORS.map((c) => (
-              <button key={c.color} type="button" role="radio" aria-checked={c.color === p.paper.toLowerCase()} aria-label={c.name} title={c.name}
-                className={c.color === p.paper.toLowerCase() ? 'chip active' : 'chip'} style={{ background: c.color }} onClick={() => set((x) => { x.paper = c.color; })} />
-            ))}
-          </span>
-          <input type="color" title="Any paper color" value={p.paper} onChange={(e) => set((x) => { x.paper = e.target.value; })} />
-        </Row>
-        {isDarkPaper(p.paper) && <div className="hint">Dark paper: check each pen's color under Pens (a light ink or a paint marker shows up; a dark one will not).</div>}
         <Row label="Units">
           <select value={p.units} onChange={(e) => set((x) => { x.units = e.target.value as typeof p.units; })}>
             <option value="imperial">mi / ft</option><option value="metric">km / m</option>
@@ -768,7 +758,7 @@ export function App() {
         <PagePanel project={p} margins={gp('margins')} border={gp('border')} />
 
         <div className="side-stage">Pens and output</div>
-        <PensPanel project={p} scene={scene} group={gp('pens')} />
+        <PensPanel project={p} scene={scene} group={gp('pens')} openGroup={(g) => { gp.show(g); setPendingEdit(`#group-${g} .group-title button`); }} />
 
         <Group id="export" title="Export" {...gp('export')}>
         <Row label="Watermark">

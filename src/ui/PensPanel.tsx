@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { addPen, applySavedPen, contrast, inkWidth, isDarkPaper, loadSavedPens, MAX_PENS, MIN_INK_CONTRAST, PEN_KINDS, penFor, penKind, penUsage, removePen, savedFromPen, storeSavedPens, withKind, withSavedPen, type Pen, type SavedPen } from '../scene/pens';
+import { addPen, applySavedPen, contrast, inkWidth, isDarkPaper, loadSavedPens, MAX_PENS, MIN_INK_CONTRAST, PEN_KINDS, penFor, penKind, penSlots, penUsage, PAPER_COLORS, removePen, savedFromPen, storeSavedPens, withKind, withSavedPen, type Pen, type SavedPen } from '../scene/pens';
 import type { Project } from '../scene/project';
 import { summarizePasses } from '../export/offset';
 import type { Scene } from '../scene/types';
@@ -20,8 +20,11 @@ export function PenSelect({ pens, value, onChange, allowDefault }: { pens: Pen[]
   );
 }
 
-/** The pen palette: define the pens, and see which parts of the design draw with which pen. */
-export function PensPanel({ project: p, scene, group }: { project: Project; scene: Scene; group: GroupProps }) {
+/**
+ * The paper and the pen palette: choose the paper, define the pens, and see and change which part of the design draws
+ * with which pen, all in one place. `openGroup` jumps to a part's own group of settings.
+ */
+export function PensPanel({ project: p, scene, group, openGroup }: { project: Project; scene: Scene; group: GroupProps; openGroup?: (id: string) => void }) {
   const set = useStore((s) => s.set);
   const usage = penUsage(p);
   const usedBy = (id: string) => usage.filter((u) => u.penId === id).map((u) => u.section);
@@ -30,7 +33,19 @@ export function PensPanel({ project: p, scene, group }: { project: Project; scen
   const dark = isDarkPaper(p.paper);
   return (
     <>
-      <Group id="pens" title="Pens" {...group}>
+      <Group id="pens" title="Pens and paper" swatch={p.paper} {...group}>
+      <div className="row">
+        <label>Paper</label>
+        <span className="swatches" role="radiogroup" aria-label="Paper color">
+          {PAPER_COLORS.map((c) => (
+            <button key={c.color} type="button" role="radio" aria-checked={c.color === p.paper.toLowerCase()} aria-label={c.name} title={c.name}
+              className={c.color === p.paper.toLowerCase() ? 'chip active' : 'chip'} style={{ background: c.color }} onClick={() => set((x) => { x.paper = c.color; })} />
+          ))}
+        </span>
+        <input type="color" title="Any paper color" aria-label="Any paper color" value={p.paper} onChange={(e) => set((x) => { x.paper = e.target.value; })} />
+      </div>
+      {dark && <div className="hint">Dark paper: a light ink or a paint marker shows up on it; a dark ink will not. Pens that are hard to see are marked below.</div>}
+      <h3>Pens</h3>
       <div className="hint">Pens are what the plotter draws with. Each part of the design picks one; its color comes from the pen, and the width one pass leaves (the tip plus the ink's spread) decides how many passes a heavy line needs and how close hatch lines sit.</div>
       {p.pens.map((pen, i) => {
         const sections = usedBy(pen.id);
@@ -80,6 +95,29 @@ export function PensPanel({ project: p, scene, group }: { project: Project; scen
         <button disabled={p.pens.length >= MAX_PENS} onClick={() => set((x) => { addPen(x); })}>Add pen</button>
         <span className="hint">{p.pens.length} of {MAX_PENS}</span>
       </div>
+      <h3>Which pen draws what</h3>
+      {(() => {
+        const slots = penSlots(p);
+        if (!slots.length) return <div className="hint">Nothing on the poster draws with a pen yet.</div>;
+        return (
+          <div className="assign">
+            {slots.map((s) => {
+              const id = s.get(p);
+              const faint = id !== undefined && contrast(penFor(p.pens, id).color, p.paper) < MIN_INK_CONTRAST;
+              return (
+                <div className="row" key={s.key}>
+                  {openGroup
+                    ? <button type="button" className="link part" title={`Open the ${s.section} settings`} onClick={() => openGroup(s.group)}>{s.section}</button>
+                    : <label>{s.section}</label>}
+                  <PenSelect pens={p.pens} value={id} allowDefault={s.inherits ? `Same as landmarks (${penFor(p.pens, p.features.pens.default).name})` : undefined}
+                    onChange={(v) => set((x) => { s.set(x, v); })} />
+                  {faint && <span className="hint warn" title="This ink is hard to see on this paper">!</span>}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
       {library.length > 0 && (
         <div className="field">
           <div className="hint">Saved pens (kept in this browser). Choose one to put it into a pen of this project:</div>

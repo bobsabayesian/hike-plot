@@ -167,28 +167,58 @@ export function removePen(p: Project, id: string): boolean {
 
 export interface PenUse { penId: string; section: string }
 
-/** Which sections of the design use which pen, for the Pens panel. Switched-off sections are left out. */
-export function penUsage(p: Project): PenUse[] {
-  const use: PenUse[] = [];
-  const add = (penId: string, section: string) => use.push({ penId, section });
-  if (p.points.length) add(p.route.pen, 'Route');
-  if (p.terrain.enabled) add(p.terrain.pen, p.terrain.labels.enabled ? 'Contours and their numbers' : 'Contours');
-  if (p.profile.enabled && p.points.length) add(p.profile.pen, 'Elevation profile');
-  if (p.north.enabled) add(p.north.pen, 'North arrow');
-  if (p.text.title.visible) {
-    add(p.text.title.pen, p.text.title.style === 'fill' ? 'Title' : 'Title outline');
-    if (p.text.title.style === 'outlineFill') add(p.text.title.fillPen, 'Title fill');
-  }
-  if (p.text.location.visible) add(p.text.location.pen, 'Location');
-  if (p.text.info.visible) add(p.text.info.pen, 'Route info');
-  if (p.showWatermark) add(p.watermarkPen, 'Watermark');
-  if (p.border.enabled) add(p.border.pen, 'Border');
+/**
+ * One part of the design that draws with a pen: its name, and how to read and change its pen. The Pens panel lists
+ * these as a table so every pen choice can be seen and changed in one place (each part's own group has it too).
+ * `group` is the sidebar group the part lives in. A landmark kind with its own pen (an override) can be set back to
+ * the landmarks' pen with `undefined`.
+ */
+export interface PenSlot {
+  key: string;
+  section: string;
+  group: string;
+  get: (p: Project) => string | undefined;
+  set: (p: Project, id: string | undefined) => void;
+  /** set to `undefined` to use the landmarks' pen; shown as that choice */
+  inherits?: boolean;
+}
+
+/** The parts of the design that draw with a pen, in sidebar order. Switched-off parts are left out. */
+export function penSlots(p: Project): PenSlot[] {
+  const out: PenSlot[] = [];
+  const add = (key: string, section: string, group: string, get: PenSlot['get'], set: (p: Project, id: string) => void) =>
+    out.push({ key, section, group, get, set: (q, id) => { if (id !== undefined) set(q, id); } });
+  if (p.points.length) add('route', 'Route', 'route', (q) => q.route.pen, (q, id) => { q.route.pen = id; });
+  if (p.terrain.enabled || p.relief.enabled) add('terrain', p.relief.enabled ? '3D relief lines' : p.terrain.labels.enabled ? 'Contours and their numbers' : 'Contours', 'contours', (q) => q.terrain.pen, (q, id) => { q.terrain.pen = id; });
   if (p.features.enabled) {
-    add(p.features.pens.default, 'Landmarks');
+    add('landmarks', 'Landmarks', 'landmarks', (q) => q.features.pens.default, (q, id) => {
+      q.features.pens.default = id;
+      // an override that now equals the default is no longer an override
+      for (const k of Object.keys(q.features.pens.overrides) as FeaturePenKey[]) if (q.features.pens.overrides[k] === id) delete q.features.pens.overrides[k];
+    });
     for (const k of Object.keys(p.features.pens.overrides) as FeaturePenKey[]) {
-      const id = p.features.pens.overrides[k];
-      if (id !== undefined) add(id, FEATURE_PEN_LABELS[k]);
+      if (p.features.pens.overrides[k] === undefined) continue;
+      out.push({
+        key: `landmarks-${k}`, section: FEATURE_PEN_LABELS[k], group: 'landmarks', inherits: true,
+        get: (q) => q.features.pens.overrides[k],
+        set: (q, id) => { if (id === undefined || id === q.features.pens.default) delete q.features.pens.overrides[k]; else q.features.pens.overrides[k] = id; },
+      });
     }
   }
-  return use;
+  if (p.profile.enabled && p.points.length) add('profile', 'Elevation profile', 'profile', (q) => q.profile.pen, (q, id) => { q.profile.pen = id; });
+  if (p.north.enabled) add('north', 'North arrow', 'north', (q) => q.north.pen, (q, id) => { q.north.pen = id; });
+  if (p.text.title.visible) {
+    add('title', p.text.title.style === 'fill' ? 'Title' : 'Title outline', 'typography', (q) => q.text.title.pen, (q, id) => { q.text.title.pen = id; });
+    if (p.text.title.style === 'outlineFill') add('titleFill', 'Title fill', 'typography', (q) => q.text.title.fillPen, (q, id) => { q.text.title.fillPen = id; });
+  }
+  if (p.text.location.visible) add('location', 'Location', 'typography', (q) => q.text.location.pen, (q, id) => { q.text.location.pen = id; });
+  if (p.text.info.visible) add('info', 'Route info', 'typography', (q) => q.text.info.pen, (q, id) => { q.text.info.pen = id; });
+  if (p.border.enabled) add('border', 'Border', 'border', (q) => q.border.pen, (q, id) => { q.border.pen = id; });
+  if (p.showWatermark) add('watermark', 'Watermark', 'export', (q) => q.watermarkPen, (q, id) => { q.watermarkPen = id; });
+  return out;
+}
+
+/** Which sections of the design use which pen, for the Pens panel. Switched-off sections are left out. */
+export function penUsage(p: Project): PenUse[] {
+  return penSlots(p).map((s) => ({ penId: s.get(p)!, section: s.section }));
 }

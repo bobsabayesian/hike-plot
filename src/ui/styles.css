@@ -181,3 +181,8 @@ button.link:hover:not(:disabled) { background: none; }
 .source .row button { white-space: nowrap; }
 /* small labels between the stages of the sidebar: map, text, page, pens and output */
 .side-stage { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .55; margin: 8px 2px -6px; }
+
+/* the Pens panel's table of which pen draws what: the part's name opens its own settings */
+.assign .row { margin: 4px 0; }
+.assign .part { flex: 0 0 118px; text-align: left; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assign .warn { margin: 0; font-weight: 700; }
