@@ -362,58 +362,7 @@ export function App() {
           </div>
         )}</GpxDrop>
 
-        <SaveGroup gp={gp('saved')} s={saver} />
-
-        <Group id="size" title="Print size" {...gp('size')}>
-        <Row label="Size">
-          <select value={p.sizeId} onChange={(e) => set((x) => { x.sizeId = e.target.value; })}>
-            {(['US (inches)', 'ISO (A series)', 'Metric (cm)'] as SizeGroup[]).map((g) => (
-              <optgroup key={g} label={g}>
-                {PRINT_SIZES.filter((s) => s.group === g).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </optgroup>
-            ))}
-            <option value={CUSTOM_SIZE_ID}>Custom size…</option>
-          </select>
-        </Row>
-        {p.sizeId === CUSTOM_SIZE_ID && (() => {
-          const inches = p.units === 'imperial';
-          const conv = inches ? 25.4 : 10; // mm per displayed unit (in or cm)
-          const show = (mm: number) => +(mm / conv).toFixed(2);
-          const lim = (mm: number) => +(mm / conv).toFixed(1);
-          const edit = (k: 'wMm' | 'hMm') => (e: React.ChangeEvent<HTMLInputElement>) => set((x) => { x.customSize[k] = Math.min(CUSTOM_SIZE_MAX_MM, Math.max(CUSTOM_SIZE_MIN_MM, (+e.target.value || 0) * conv)); });
-          return (<>
-            <Row label="Width"><input type="number" step={inches ? 0.5 : 1} min={lim(CUSTOM_SIZE_MIN_MM)} max={lim(CUSTOM_SIZE_MAX_MM)} value={show(p.customSize.wMm)} onChange={edit('wMm')} /><span className="unit">{inches ? 'in' : 'cm'}</span></Row>
-            <Row label="Height"><input type="number" step={inches ? 0.5 : 1} min={lim(CUSTOM_SIZE_MIN_MM)} max={lim(CUSTOM_SIZE_MAX_MM)} value={show(p.customSize.hMm)} onChange={edit('hMm')} /><span className="unit">{inches ? 'in' : 'cm'}</span></Row>
-            <div className="hint">Between {lim(CUSTOM_SIZE_MIN_MM)} and {lim(CUSTOM_SIZE_MAX_MM)} {inches ? 'in' : 'cm'}. Width and height are for a portrait page; use Orientation to turn it.</div>
-          </>);
-        })()}
-        <Row label="Orientation">
-          <select value={p.landscape ? 'l' : 'p'} onChange={(e) => set((x) => { x.landscape = e.target.value === 'l'; })}>
-            <option value="p">Portrait</option><option value="l">Landscape</option>
-          </select>
-        </Row>
-        <Row label="Paper">
-          <span className="swatches" role="radiogroup" aria-label="Paper color">
-            {PAPER_COLORS.map((c) => (
-              <button key={c.color} type="button" role="radio" aria-checked={c.color === p.paper.toLowerCase()} aria-label={c.name} title={c.name}
-                className={c.color === p.paper.toLowerCase() ? 'chip active' : 'chip'} style={{ background: c.color }} onClick={() => set((x) => { x.paper = c.color; })} />
-            ))}
-          </span>
-          <input type="color" title="Any paper color" value={p.paper} onChange={(e) => set((x) => { x.paper = e.target.value; })} />
-        </Row>
-        {isDarkPaper(p.paper) && <div className="hint">Dark paper: check each pen's color under Pens (a light ink or a paint marker shows up; a dark one will not).</div>}
-        <Row label="Units">
-          <select value={p.units} onChange={(e) => set((x) => { x.units = e.target.value as typeof p.units; })}>
-            <option value="imperial">mi / ft</option><option value="metric">km / m</option>
-          </select>
-        </Row>
-
-        </Group>
-
-        <PagePanel project={p} margins={gp('margins')} border={gp('border')} />
-
-        <PensPanel project={p} scene={scene} group={gp('pens')} />
-
+        <div className="side-stage">Map</div>
         {hasTrack && (<Group id="route" title="Route" {...gp('route')}>
         <Row label="Pen"><PenSelect pens={p.pens} value={p.route.pen} onChange={(id) => set((x) => { x.route.pen = id!; })} /></Row>
         <Row label="Weight">
@@ -658,6 +607,7 @@ export function App() {
 
         </Group>
 
+        <div className="side-stage">Text</div>
         <Group id="typography" title="Typography" {...gp('typography')}>
         <Row label="Font">
           <select value={p.text.font} onChange={(e) => set((x) => { x.text.font = e.target.value as FontKey; })}>
@@ -738,6 +688,58 @@ export function App() {
 
         </Group>
 
+        <div className="side-stage">Page</div>
+        <Group id="size" title="Paper and size" {...gp('size')}>
+        <Row label="Size">
+          <select value={p.sizeId} onChange={(e) => set((x) => { x.sizeId = e.target.value; })}>
+            {(['US (inches)', 'ISO (A series)', 'Metric (cm)'] as SizeGroup[]).map((g) => (
+              <optgroup key={g} label={g}>
+                {PRINT_SIZES.filter((s) => s.group === g).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </optgroup>
+            ))}
+            <option value={CUSTOM_SIZE_ID}>Custom size…</option>
+          </select>
+        </Row>
+        {p.sizeId === CUSTOM_SIZE_ID && (() => {
+          const inches = p.units === 'imperial';
+          const conv = inches ? 25.4 : 10; // mm per displayed unit (in or cm)
+          const show = (mm: number) => +(mm / conv).toFixed(2);
+          const lim = (mm: number) => +(mm / conv).toFixed(1);
+          const edit = (k: 'wMm' | 'hMm') => (e: React.ChangeEvent<HTMLInputElement>) => set((x) => { x.customSize[k] = Math.min(CUSTOM_SIZE_MAX_MM, Math.max(CUSTOM_SIZE_MIN_MM, (+e.target.value || 0) * conv)); });
+          return (<>
+            <Row label="Width"><input type="number" step={inches ? 0.5 : 1} min={lim(CUSTOM_SIZE_MIN_MM)} max={lim(CUSTOM_SIZE_MAX_MM)} value={show(p.customSize.wMm)} onChange={edit('wMm')} /><span className="unit">{inches ? 'in' : 'cm'}</span></Row>
+            <Row label="Height"><input type="number" step={inches ? 0.5 : 1} min={lim(CUSTOM_SIZE_MIN_MM)} max={lim(CUSTOM_SIZE_MAX_MM)} value={show(p.customSize.hMm)} onChange={edit('hMm')} /><span className="unit">{inches ? 'in' : 'cm'}</span></Row>
+            <div className="hint">Between {lim(CUSTOM_SIZE_MIN_MM)} and {lim(CUSTOM_SIZE_MAX_MM)} {inches ? 'in' : 'cm'}. Width and height are for a portrait page; use Orientation to turn it.</div>
+          </>);
+        })()}
+        <Row label="Orientation">
+          <select value={p.landscape ? 'l' : 'p'} onChange={(e) => set((x) => { x.landscape = e.target.value === 'l'; })}>
+            <option value="p">Portrait</option><option value="l">Landscape</option>
+          </select>
+        </Row>
+        <Row label="Paper">
+          <span className="swatches" role="radiogroup" aria-label="Paper color">
+            {PAPER_COLORS.map((c) => (
+              <button key={c.color} type="button" role="radio" aria-checked={c.color === p.paper.toLowerCase()} aria-label={c.name} title={c.name}
+                className={c.color === p.paper.toLowerCase() ? 'chip active' : 'chip'} style={{ background: c.color }} onClick={() => set((x) => { x.paper = c.color; })} />
+            ))}
+          </span>
+          <input type="color" title="Any paper color" value={p.paper} onChange={(e) => set((x) => { x.paper = e.target.value; })} />
+        </Row>
+        {isDarkPaper(p.paper) && <div className="hint">Dark paper: check each pen's color under Pens (a light ink or a paint marker shows up; a dark one will not).</div>}
+        <Row label="Units">
+          <select value={p.units} onChange={(e) => set((x) => { x.units = e.target.value as typeof p.units; })}>
+            <option value="imperial">mi / ft</option><option value="metric">km / m</option>
+          </select>
+        </Row>
+
+        </Group>
+
+        <PagePanel project={p} margins={gp('margins')} border={gp('border')} />
+
+        <div className="side-stage">Pens and output</div>
+        <PensPanel project={p} scene={scene} group={gp('pens')} />
+
         <Group id="export" title="Export" {...gp('export')}>
         <Row label="Watermark">
           <label><input type="checkbox" checked={p.showWatermark} onChange={(e) => set((x) => { x.showWatermark = e.target.checked; })} /> Include attribution</label>
@@ -783,6 +785,8 @@ export function App() {
         </div>
         {linkMsg && <div className="hint">{linkMsg}</div>}
         </Group>
+
+        <SaveGroup gp={gp('saved')} s={saver} />
       </div>
       <main className="main" id="preview" tabIndex={-1} hidden={narrow && tab !== 'poster'} {...(narrow ? { role: 'tabpanel', 'aria-labelledby': 'tab-poster' } : {})}>
         <div className="actionbar">
