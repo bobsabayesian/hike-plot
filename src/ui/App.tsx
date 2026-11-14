@@ -12,6 +12,9 @@ import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
 import { sceneToSvg } from '../export/svg';
 import { pngSize, sceneToPng } from '../export/png';
+
+/** width of the picture saved beside a project for the admin page, px */
+const THUMB_PX = 480;
 import { loadFonts } from '../export/fonts';
 import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
 import { prepareScene, tipFor, type ExportMode } from '../export/outlines';
@@ -128,6 +131,15 @@ export function App() {
   const hasTrack = p.points.length > 0;
   const need = useMemo(() => viewBBox(p), [p]);
   const auto = useMemo(() => autoValues(p, p.points.length ? computeStats(p.points) : undefined), [p]);
+  // what the admin page shows beside a saved project: the title and place as printed, the headline numbers, the paper size and a small picture
+  const saveMeta = {
+    title: auto.title, place: auto.location, distance: auto.info.distance, gain: auto.info.gain,
+    size: `${PRINT_SIZES.find((s) => s.id === p.sizeId)?.label ?? 'custom'}${p.landscape ? ' landscape' : ''}`,
+  };
+  const saveThumb = async () => {
+    const { widthMm } = scene;
+    return (await sceneToPng(scene, (THUMB_PX / widthMm) * 25.4)).blob;
+  };
 
   // Fetch landmarks/water whenever the visible area, or what we want to show, is not covered by what we have.
   const want = useMemo(() => wantedRequest(p.features), [p.features.kinds, p.features.water, p.features.waterLabels]);
@@ -224,7 +236,7 @@ export function App() {
 
         </Group>
 
-        <SaveGroup gp={gp('saved')} project={p} openProject={openProject} />
+        <SaveGroup gp={gp('saved')} project={p} openProject={openProject} meta={saveMeta} thumb={saveThumb} />
 
         <Group id="size" title="Print size" {...gp('size')}>
         <Row label="Size">

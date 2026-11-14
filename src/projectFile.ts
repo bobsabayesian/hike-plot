@@ -3,10 +3,13 @@ import { defaultProject, type Project } from './scene/project';
 export const FILE_APP = 'walk-of-frame';
 export const FILE_VERSION = 1;
 
-export interface ProjectFile { app: typeof FILE_APP; version: number; savedAt: string; project: Project }
+/** What the admin page shows about a project without opening it. Typed by the app at save time and only ever displayed. */
+export interface ProjectMeta { title?: string; place?: string; distance?: string; gain?: string; size?: string }
+
+export interface ProjectFile { app: typeof FILE_APP; version: number; savedAt: string; project: Project; meta?: ProjectMeta }
 
 /** Everything needed to rebuild the poster: all settings, the GPX track and its waypoints, and the searched place. */
-export const toFile = (p: Project): ProjectFile => ({ app: FILE_APP, version: FILE_VERSION, savedAt: new Date().toISOString(), project: p });
+export const toFile = (p: Project, meta?: ProjectMeta): ProjectFile => ({ app: FILE_APP, version: FILE_VERSION, savedAt: new Date().toISOString(), project: p, ...(meta ? { meta } : {}) });
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -34,10 +37,14 @@ export function fromFile(raw: unknown): Project {
   return p;
 }
 
-export async function saveProject(p: Project): Promise<string> {
-  const r = await fetch('/api/project', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(toFile(p)) });
+export async function saveProject(p: Project, meta?: ProjectMeta, thumb?: () => Promise<Blob>): Promise<string> {
+  const r = await fetch('/api/project', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(toFile(p, meta)) });
   const body = (await r.json().catch(() => ({}))) as { code?: string; error?: string };
   if (!r.ok || !body.code) throw new Error(body.error ?? 'Could not save');
+  // the small picture for the admin page: the project is saved either way, so a failure here is not an error
+  if (thumb) {
+    try { await fetch(`/api/project/${body.code}/thumb`, { method: 'PUT', headers: { 'content-type': 'image/png' }, body: await thumb() }); } catch { /* no thumbnail */ }
+  }
   return body.code;
 }
 

@@ -20,6 +20,8 @@
     tr:last-child td { border-bottom: 0; } td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
     a { color: var(--accent); } input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--text); }
     .err { color: #c0392b; } [hidden] { display: none !important; }
+    td.thumb { width: 84px; padding: 6px 12px; } td.thumb img { display: block; width: 72px; height: auto; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
+    td .name { font-weight: 600; overflow-wrap: anywhere; }
     @media (max-width: 600px) { main { padding: 12px; } th, td { padding: 6px 8px; } }
   </style>
 </head>
@@ -35,7 +37,7 @@
       <p><input id="find" type="search" placeholder="Find a code, name or place" aria-label="Find a project" /></p>
       <p id="msg" class="dim">Loading…</p>
       <table id="table" hidden>
-        <thead><tr><th>Code</th><th>Name</th><th>Place</th><th>Saved</th><th class="n">Track points</th><th class="n">Size</th><th>Links</th></tr></thead>
+        <thead><tr><th></th><th>Project</th><th>Route</th><th>Saved</th><th class="n">Track points</th><th class="n">Size</th><th>Links</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </section>

@@ -1,6 +1,9 @@
 /** The admin page: every saved project, read-only. All of it sits behind Cloudflare Access (see worker/access.ts). */
 
-interface Project { code: string; name: string; place: string; savedAt: string; bytes: number; points: number; waypoints: number }
+interface Project {
+  code: string; name: string; place: string; savedAt: string; bytes: number; points: number; waypoints: number;
+  distance: string; gain: string; size: string; thumb: boolean;
+}
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -30,11 +33,24 @@ function draw() {
   const rows = $('rows');
   rows.replaceChildren();
   for (const p of all) {
-    if (q && !`${p.code} ${p.name} ${p.place}`.toLowerCase().includes(q)) continue;
+    if (q && !`${p.code} ${p.name} ${p.place} ${p.size}`.toLowerCase().includes(q)) continue;
     const tr = el('tr');
+    const thumb = el('td', '', 'thumb');
+    if (p.thumb) {
+      const img = el('img');
+      img.loading = 'lazy'; img.alt = p.name || p.code;
+      img.src = `/api/admin/thumb/${encodeURIComponent(p.code)}`;
+      img.addEventListener('error', () => thumb.replaceChildren());
+      const a = link('', `/?p=${encodeURIComponent(p.code)}`);
+      a.append(img);
+      thumb.append(a);
+    }
+    const who = el('td');
+    who.append(el('div', p.name || '(no name)', 'name'), el('div', p.place, 'dim'), el('div', `${p.code}${p.size ? ` · ${p.size}` : ''}`, 'dim mono'));
+    const route = el('td', [p.distance, p.gain && `${p.gain} gain`].filter(Boolean).join(' · ') || '—');
     const links = el('td');
     links.append(link('open', `/?p=${encodeURIComponent(p.code)}`), document.createTextNode(' · '), link('json', `/api/project/${encodeURIComponent(p.code)}`));
-    tr.append(el('td', p.code, 'mono'), el('td', p.name || '—'), el('td', p.place || '—', 'dim'), el('td', when(p.savedAt)), el('td', String(p.points), 'n'), el('td', size(p.bytes), 'n'), links);
+    tr.append(thumb, who, route, el('td', when(p.savedAt)), el('td', String(p.points), 'n'), el('td', size(p.bytes), 'n'), links);
     rows.append(tr);
   }
 }

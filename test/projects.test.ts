@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { CODE_RE, MAX_BYTES, PREFIX, cleanCode, handleProjects, newCode, type Bucket } from '../worker/projects';
+import { CODE_RE, MAX_BYTES, MAX_THUMB_BYTES, PREFIX, summarize, cleanCode, handleProjects, newCode, type Bucket } from '../worker/projects';
 import { fromFile, mergeDefaults, toFile } from '../src/projectFile';
 import { defaultProject } from '../src/scene/project';
 import { sampleTrack, sampleWaypoints } from '../src/sample';
 
 const fakeBucket = () => {
-  const m = new Map<string, string>();
+  const m = new Map<string, string | ArrayBuffer>();
   const b: Bucket = {
-    get: async (k) => (m.has(k) ? { text: async () => m.get(k)! } : null),
+    get: async (k) => (m.has(k) ? { text: async () => m.get(k) as string, arrayBuffer: async () => m.get(k) as ArrayBuffer } : null),
     head: async (k) => (m.has(k) ? {} : null),
     put: async (k, v) => { m.set(k, v); },
   };
@@ -103,5 +103,38 @@ describe('project files', () => {
   it('arrays are taken as saved, not merged', () => {
     const p = fromFile({ app: 'walk-of-frame', version: 1, project: { pens: [{ id: 'a', name: 'A', color: '#000000', tipMm: 0.5 }] } });
     expect(p.pens).toHaveLength(1);
+  });
+});
+
+describe('the picture saved beside a project', () => {
+  const doc = JSON.stringify(toFile(defaultProject(), { title: 'The Grand Canyon', place: 'Coconino County, Arizona', distance: '16.1 mi', gain: '11,968 ft', size: '18 × 24 in' }));
+  const png = (n = 20) => { const a = new Uint8Array(n); a.set([0x89, 0x50, 0x4e, 0x47]); return a; };
+  const put = (code: string, body: BodyInit) => new Request(`https://x.test/api/project/${code}/thumb`, { method: 'PUT', body });
+  const make = async () => {
+    const { b, m } = fakeBucket();
+    const { code } = (await (await handleProjects(post(doc), b))!.json()) as { code: string };
+    return { b, m, code };
+  };
+  it('a save keeps the title, place and numbers the app sent, beside the file', async () => {
+    const { m, code } = await make();
+    expect(m.has(`${PREFIX}${code}.json`)).toBe(true);
+    // (the fake bucket stores no metadata; summarize is checked directly)
+    expect(summarize({ points: [] }, { title: 'The Grand Canyon', place: 'AZ', distance: '16.1 mi', gain: '11,968 ft', size: '18 × 24 in' })).toMatchObject({ name: 'The Grand Canyon', place: 'AZ', distance: '16.1 mi', gain: '11,968 ft', size: '18 × 24 in' });
+    expect(summarize({ points: [], feature: { name: 'Fallback' } }, undefined).name).toBe('Fallback');
+    expect(summarize({}, { title: 42 as never }).name).toBe('');
+  });
+  it('is stored next to the project, as a PNG, once', async () => {
+    const { b, m, code } = await make();
+    expect((await handleProjects(put(code, png()), b))!.status).toBe(201);
+    expect(m.has(`${PREFIX}${code}.png`)).toBe(true);
+    expect((await handleProjects(put(code, png()), b))!.status).toBe(409); // cannot be swapped afterwards
+  });
+  it('refuses a picture for an unknown project, a malformed code, something that is not a PNG, or one that is too big', async () => {
+    const { b, code } = await make();
+    expect((await handleProjects(put('abcd2345', png()), b))!.status).toBe(404);
+    expect((await handleProjects(put('short', png()), b))!.status).toBe(400);
+    expect((await handleProjects(put(code, new Uint8Array(20)), b))!.status).toBe(400);
+    expect((await handleProjects(put(code, png(MAX_THUMB_BYTES + 10)), b))!.status).toBe(413);
+    expect((await handleProjects(new Request(`https://x.test/api/project/${code}/thumb`), b))!.status).toBe(405);
   });
 });

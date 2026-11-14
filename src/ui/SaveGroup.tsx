@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Group, type GroupProps } from './Group';
-import { loadProject, saveProject } from '../projectFile';
+import { loadProject, saveProject, type ProjectMeta } from '../projectFile';
 import { cleanCode } from '../../worker/projects';
 import type { Project } from '../scene/project';
 
 const linkFor = (code: string) => `${location.origin}/?p=${code}`;
 
 /** Save the whole poster (settings, GPX track and waypoints) under a short code, and open one by its code. */
-export function SaveGroup({ gp, project, openProject }: { gp: GroupProps; project: Project; openProject: (p: Project) => void }) {
+export function SaveGroup({ gp, project, openProject, meta, thumb }: { gp: GroupProps; project: Project; openProject: (p: Project) => void; meta?: ProjectMeta; thumb?: () => Promise<Blob> }) {
   const [code, setCode] = useState('');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState('');
@@ -40,7 +40,7 @@ export function SaveGroup({ gp, project, openProject }: { gp: GroupProps; projec
   const save = async () => {
     setBusy('Saving…'); setMsg(null);
     try {
-      const c = await saveProject(project);
+      const c = await saveProject(project, meta, thumb);
       setCode(c);
       history.replaceState(null, '', `?p=${c}`);
       setMsg({ text: 'Saved. Anyone with this code can open it, so share it only with people who may see the track.' });

@@ -33,6 +33,7 @@ export default {
           } while (cursor);
           return out;
         },
+        getThumb: async (code) => { const o = await bucket!.get(`hike/${code}.png`); return o ? o.arrayBuffer() : null; },
       });
       if (api) return api;
       const page = await env.ASSETS.fetch(req);
