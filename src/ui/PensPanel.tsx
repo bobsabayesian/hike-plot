@@ -60,7 +60,9 @@ export function PensPanel({ project: p, scene, group }: { project: Project; scen
               )}
             </div>
             <div className="row">
-              <label title="How far the ink spreads past the tip on paper, each side">Spread <input type="number" min={0} max={2} step={0.01} value={pen.gainMm ?? 0} onChange={(e) => update((x) => ({ ...x, gainMm: Math.max(0, +e.target.value || 0) }))} /> mm</label>
+              <label title="How far the ink spreads past the tip on paper, each side">Spread</label>
+              <input type="number" min={0} max={2} step={0.01} value={pen.gainMm ?? 0} onChange={(e) => update((x) => ({ ...x, gainMm: Math.max(0, +e.target.value || 0) }))} />
+              <span className="unit">mm</span>
               <span className="hint">line on paper {ink} mm</span>
             </div>
             <div className="hint">
