@@ -12,7 +12,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px system-ui,
 .notice a { color: var(--accent); }
 .side { min-width: 0; overflow: auto; padding: 16px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
 .side h1 { font-size: 17px; margin: 0; }
-.main { display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; min-width: 0; }
+.main { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; overflow: auto; min-width: 0; }
 .main:focus { outline: none; }
 .sheet { box-shadow: 0 1px 8px #0004; max-width: 100%; max-height: 100%; line-height: 0; background: #fff; }
 .sheet svg { display: block; max-width: 100%; max-height: calc(100vh - 64px); height: auto; width: auto; }
@@ -122,3 +122,4 @@ h3 { font-size: 13px; margin: 14px 0 4px; }
 .swatches .chip { width: 20px; height: 20px; padding: 0; border-radius: 4px; border: 1px solid var(--line); cursor: pointer; }
 .swatches .chip.active { outline: 2px solid var(--accent, #2f6f9f); outline-offset: 1px; }
 .hint.warn { color: #b4441f; }
+.plotpreview { display: block; font-size: 13px; margin: 0 0 6px; }

@@ -63,7 +63,7 @@ network, or open the address in a private tab.
 
 Each pen has a kind (technical pen, fineliner such as Micron, gel, marker such as Molotow, or custom), a tip, and a spread: how far the ink bleeds past the tip on paper. The plotter export uses the width one pass leaves (tip plus spread on both sides) to decide how many passes a heavy line needs and how far apart hatch lines sit, so a Molotow fills solid without the lines merging. The kind's numbers are starting estimates; adjust the spread from your own swatches. Pens can be saved by name to a library kept in this browser (not in the project file) and put into any project. Pens without a kind (older projects) draw exactly as before.
 
-The paper has color swatches (white to black, kraft, navy) and a custom picker, and is saved with the project. A pen whose ink is too close to the paper's color gets a warning in the Pens panel. The preview does not yet draw ink transparency or overlap darkening.
+The paper has color swatches (white to black, kraft, navy) and a custom picker, and is saved with the project. A pen whose ink is too close to the paper's color gets a warning in the Pens panel. The "Plotter preview" checkbox above the poster draws it the way the pens will: hatched fills, repeated passes, each line at its pen's ink width, translucent inks letting the paper show and darkening where lines overlap (on light paper; dark paper draws inks over it). It is slower, so it follows edits after a short pause, and click-to-edit labels is off while it is on. Exports never carry the transparency.
 
 ## Saved projects and the admin page
 

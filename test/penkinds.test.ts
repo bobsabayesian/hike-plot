@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applySavedPen, cleanSavedPen, contrast, defaultPens, inkWidth, isDarkPaper, loadSavedPens, MIN_INK_CONTRAST, PAPER_COLORS, penKind, savedFromPen, storeSavedPens, withKind, withSavedPen } from '../src/scene/pens';
+import { inkAlpha, sceneToSvg } from '../src/export/svg';
 import { tipFor } from '../src/export/outlines';
 import { fromFile, toFile } from '../src/projectFile';
 import { defaultProject } from '../src/scene/project';
@@ -68,5 +69,26 @@ describe('paper', () => {
     expect(contrast('#1f2a24', '#0d0d0d')).toBeLessThan(MIN_INK_CONTRAST); // dark ink on black paper
     expect(contrast('#1f2a24', '#f6f3ec')).toBeGreaterThan(MIN_INK_CONTRAST);
     expect(contrast('#ffffff', '#0d0d0d')).toBeGreaterThan(10);
+  });
+});
+
+describe('plotter preview ink', () => {
+  const scene = (pen: string) => ({ widthMm: 10, heightMm: 10, paper: '#ffffff', prims: [{ kind: 'path' as const, d: 'M0 0L5 5', color: '#000000', mode: 'stroke' as const, widthMm: 1, pen }] });
+  const marker = withKind({ ...defaultPens()[0]!, tipMm: 1 }, 'marker');
+  const micron = withKind({ ...defaultPens()[0]!, tipMm: 0.3 }, 'fineliner');
+  it('a marker shows less of its color per pass than a fineliner, and multiplies on light paper', () => {
+    expect(inkAlpha(marker)).toBeLessThan(inkAlpha(micron));
+    const svg = sceneToSvg(scene(marker.id), { ink: { pens: [marker], dark: false } });
+    expect(svg).toContain(`stroke-opacity="${inkAlpha(marker)}"`);
+    expect(svg).toContain('mix-blend-mode:multiply');
+  });
+  it('on dark paper inks are laid over it, not multiplied into it', () => {
+    expect(sceneToSvg(scene(marker.id), { ink: { pens: [marker], dark: true } })).not.toContain('mix-blend-mode');
+  });
+  it('without the preview option the file is unchanged, so exports carry no blend or opacity', () => {
+    expect(sceneToSvg(scene(marker.id))).not.toMatch(/stroke-opacity|mix-blend/);
+  });
+  it('a pen of an older project (no transparency) is drawn mostly opaque', () => {
+    expect(inkAlpha(defaultPens()[0]!)).toBeGreaterThan(0.7);
   });
 });

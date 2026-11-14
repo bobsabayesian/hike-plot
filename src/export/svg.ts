@@ -1,5 +1,6 @@
 import type { PathPrim, Prim, Scene, TextPrim } from '../scene/types';
-import type { Pen } from '../scene/pens';
+import { penFor, type Pen } from '../scene/pens';
+import { penKind } from '../scene/pens';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const f = (n: number) => +n.toFixed(3);
@@ -10,9 +11,20 @@ export function normColor(c: string): string {
   return /^#[0-9a-f]{3}$/.test(h) ? '#' + [...h.slice(1)].map((x) => x + x).join('') : h;
 }
 
-function pathEl(p: PathPrim): string {
+/** How the preview draws what a pen leaves: translucent ink lets what is under it show (and darkens where lines overlap, on light paper). */
+export interface InkLook { pens: Pen[]; /** dark paper: inks are drawn over it, not multiplied into it */ dark: boolean }
+
+/** How much of a pen's color one pass shows: an opaque pen 1, a very translucent marker about a half. */
+export const inkAlpha = (pen: Pen): number => +(1 - 0.55 * (pen.transparency ?? penKind(pen.kind).transparency)).toFixed(3);
+
+function pathEl(p: PathPrim, look?: InkLook): string {
   const col = normColor(p.color);
-  const op = p.opacity !== undefined && p.opacity < 1 ? ` opacity="${f(p.opacity)}"` : '';
+  let op = p.opacity !== undefined && p.opacity < 1 ? ` opacity="${f(p.opacity)}"` : '';
+  if (look && p.mode === 'stroke' && p.pen !== undefined) {
+    const pen = penFor(look.pens, p.pen);
+    const a = inkAlpha(pen) * (p.opacity ?? 1);
+    op = ` stroke-opacity="${f(a)}"${look.dark ? '' : ' style="mix-blend-mode:multiply"'}`;
+  }
   if (p.mode === 'fill') return `<path d="${p.d}" fill="${col}" stroke="none"${op}/>`;
   const dash = p.dash ? ` stroke-dasharray="${p.dash.map(f).join(' ')}"` : '';
   return `<path d="${p.d}" fill="none" stroke="${col}" stroke-width="${f(p.widthMm ?? 0.5)}" stroke-linejoin="round" stroke-linecap="${p.round ? 'round' : 'butt'}"${dash}${op}/>`;
@@ -30,7 +42,7 @@ function textEl(t: TextPrim, ids = false): string {
   return `<text${ref} x="${f(t.x)}" y="${f(t.y)}"${rot}${fit} text-anchor="${t.anchor}" font-size="${f(t.sizeMm)}" letter-spacing="${f(t.trackingMm)}" font-family="${esc(t.fontFamily)}" ${paint}${op}>${esc(t.text)}</text>`;
 }
 
-const el = (p: Prim, ids = false) => (p.kind === 'path' ? pathEl(p) : textEl(p, ids));
+const el = (p: Prim, ids = false, look?: InkLook) => (p.kind === 'path' ? pathEl(p, look) : textEl(p, ids));
 const colorOf = (p: Prim) => normColor(p.color);
 
 export interface SvgOptions {
@@ -45,6 +57,8 @@ export interface SvgOptions {
   layers?: 'style' | 'pen';
   /** the pen palette, for `layers: 'pen'` */
   pens?: Pen[];
+  /** draw lines the way their pens lay ink on paper (the editor's plotter preview); exports leave it off */
+  ink?: InkLook;
 }
 
 /**
@@ -90,7 +104,7 @@ export function sceneToSvg(scene: Scene, opts: SvgOptions = {}): string {
       groups.set(id, { label, els: [] });
       order.push(id);
     }
-    groups.get(id)!.els.push(el(p, opts.ids));
+    groups.get(id)!.els.push(el(p, opts.ids, opts.ink));
   }
   const { widthMm: w, heightMm: h } = scene;
   // pen layers follow the palette's order (the order the pens are swapped in); style layers keep first appearance

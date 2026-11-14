@@ -176,7 +176,23 @@ export function App() {
   }, [need, p.terrain.enabled, p.relief.enabled, terrain, setTerrain]);
   // Which line weights in this design become several passes with the chosen pen (plotter export).
   const passes = useMemo(() => summarizePasses(scene.prims, (x) => tipFor(x as { pen?: string }, { pens: p.pens })), [scene, p.pens]);
-  const previewSvg = useMemo(() => sceneToSvg(scene, { paper: true, ids: true }), [scene]);
+  const [plotPreview, setPlotPreview] = useState(false);
+  const [plotSvg, setPlotSvg] = useState('');
+  // The plotter preview: the poster as the pens will draw it (hatched, passes, ink width, translucency). Slower, so it follows edits after a pause.
+  useEffect(() => {
+    if (!plotPreview) return;
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const out = prepareScene(scene, 'plotter', await loadFonts(), { pens: p.pens });
+        const svg = sceneToSvg(out, { paper: true, ink: { pens: p.pens, dark: isDarkPaper(p.paper) } });
+        if (live) setPlotSvg(svg);
+      } catch { if (live) setPlotSvg(''); }
+    }, draft ? 0 : 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [plotPreview, scene, p.pens, p.paper, draft]);
+  const designSvg = useMemo(() => sceneToSvg(scene, { paper: true, ids: true }), [scene]);
+  const previewSvg = plotPreview && plotSvg ? plotSvg : designSvg;
 
   async function load(file?: File) {
     if (!file) return;
@@ -692,6 +708,7 @@ export function App() {
         </Group>
       </div>
       <main className="main" id="preview" tabIndex={-1} hidden={narrow && tab !== 'poster'} {...(narrow ? { role: 'tabpanel', 'aria-labelledby': 'tab-poster' } : {})}>
+        <label className="plotpreview"><input type="checkbox" checked={plotPreview} onChange={(e) => setPlotPreview(e.target.checked)} /> Plotter preview: how the pens will draw it{plotPreview && !plotSvg ? ' (working…)' : ''}{plotPreview ? ' · click to edit labels is off' : ''}</label>
         <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editLabel} dangerouslySetInnerHTML={{ __html: previewSvg }} />
       </main>
       <footer className="notice">
