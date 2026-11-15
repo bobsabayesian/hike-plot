@@ -143,7 +143,11 @@ export interface Project {
   units: 'imperial' | 'metric';
   /** the pen palette every section picks from */
   pens: Pen[];
-  route: { pen: string; weightMm: number; style: StrokeStyle };
+  route: {
+    pen: string; weightMm: number; style: StrokeStyle;
+    /** clear paper beside the route, mm beyond its edge: contour and relief lines are cut that close to it; 0 = off */
+    clearMm?: number;
+  };
   terrain: {
     enabled: boolean;
     /** meters; 0 = automatic */

@@ -67,6 +67,8 @@ The paper (color swatches from white to black, kraft, navy, and a custom picker)
 
 Contours can use a different pen for the heavy (index) lines: "Heavy pen" under Contours, or the "Major contour lines" row in the Pens table. The heavy lines and their elevation numbers then use that pen, drawn once with its own tip, and get their own layer in the plotter SVG. Left on "same pen", they are the contour pen drawn twice over, as before.
 
+The route can have clear paper beside it: "Clear beside route" under Route cuts the contour and 3D relief lines that come within that many mm of the route's edge (half its weight, or its pen's line if wider). Off by default.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.

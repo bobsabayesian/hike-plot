@@ -445,6 +445,8 @@ export function App() {
             <option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option>
           </select>
         </Row>
+        <Row label="Clear beside route"><input type="range" min={0} max={3} step={0.1} value={p.route.clearMm ?? 0} onChange={(e) => set((x) => { x.route.clearMm = +e.target.value; })} /><span>{p.route.clearMm ? `${p.route.clearMm.toFixed(1)} mm` : 'off'}</span></Row>
+        <div className="hint">Cuts the contour and 3D relief lines this far from the route's edge (the edge follows the route's weight or its pen's line, whichever is wider), so the route has clear paper beside it.</div>
         </Group>)}
 
         <Group id="contours" title="Contours" {...gp('contours')}

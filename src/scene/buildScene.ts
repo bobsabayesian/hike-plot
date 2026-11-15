@@ -7,7 +7,7 @@ import {
 } from '../geo/stats';
 import { contourInterval, contourPaths, toD } from '../topo/contours';
 import { resolveCustom } from '../features/custom';
-import { cutOutHalos } from '../features/halo';
+import { cutNearRoute, cutOutHalos } from '../features/halo';
 import { buildRelief, liftContours, needsHiding, ridgeRows, type Relief } from '../relief/relief';
 import { buildVisibility, visibleRuns, type P3 } from '../relief/visibility';
 import type { TerrainField } from '../topo/terrain';
@@ -18,7 +18,7 @@ import { penKeyOf, type OsmData } from '../features/types';
 import type { XY } from '../geo/clip';
 import { northBox, northPrims } from './north';
 import { borderPrims, layoutBorder } from './border';
-import { featurePenId, penFor } from './pens';
+import { featurePenId, inkWidth, penFor } from './pens';
 import { formatLevel, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
 import type { Box } from '../features/select';
 import type { Part, Prim, Scene } from './types';
@@ -316,6 +316,9 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       }
 
       const halos = landmarkOut?.halos ?? [];
+      // clear paper beside the route: half of what the route draws (its weight, or the pen's line if that is wider) plus the gap
+      const routeClearR = (p.route.clearMm ?? 0) > 0 && routeXY.length >= 2 ? Math.max(p.route.weightMm, inkWidth(penFor(p.pens, p.route.pen))) / 2 + p.route.clearMm! : 0;
+      const clearLines = (lines: XY[][]): XY[][] => cutNearRoute(cutOutHalos(lines, halos), routeXY, routeClearR);
       // heavy lines and their numbers: their own pen if one is set (its tip makes them heavier, so no forced second pass), else the regular pen, drawn twice over
       const majorPen = p.terrain.indexPen !== undefined && p.terrain.indexPen !== p.terrain.pen ? p.terrain.indexPen : undefined;
       const heavyPen = majorPen ?? p.terrain.pen;
@@ -329,21 +332,21 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const heavy = { ...paint, ...(majorPen ? { color: colorOf(majorPen), pen: majorPen } : {}) };
         if (style === 'contours' || style === 'both') {
           const lifted = liftContours(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces, vis);
-          lifted.regular = cutOutHalos(lifted.regular, halos);
-          lifted.index = cutOutHalos(lifted.index, halos);
+          lifted.regular = clearLines(lifted.regular);
+          lifted.index = clearLines(lifted.index);
           // with rows underneath, only the heavy index lines are kept: they read as elevation marks on the slices
           if (style === 'contours' && lifted.regular.length) prims.push({ kind: 'path', d: toD(lifted.regular), widthMm: tc.weightMm, ...paint });
           if (lifted.index.length) prims.push({ kind: 'path', d: toD(lifted.index), widthMm: tc.indexWeightMm, ...majorPasses, ...heavy });
         }
-        if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(cutOutHalos(ridgeRows(relief, p.relief.rows, vis), halos)), widthMm: p.relief.rowWeightMm, ...paint });
+        if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(clearLines(ridgeRows(relief, p.relief.rows, vis))), widthMm: p.relief.rowWeightMm, ...paint });
       } else if (p.terrain.enabled && terrain) {
         const paths = contourPaths(terrain, fit, frame, interval!, p.terrain.indexEvery);
         const tc = p.terrain;
         let { regular, index } = paths;
         let pieces = paths.pieces;
-        if (halos.length) {
-          // room around labels: cut the contours there (the pieces stay consistent for the numbers below)
-          pieces = pieces.flatMap((pc) => cutOutHalos([pc.pts], halos).map((pts) => ({ ...pc, pts })));
+        if (halos.length || routeClearR > 0) {
+          // room around labels and beside the route: cut the contours there (the pieces stay consistent for the numbers below)
+          pieces = pieces.flatMap((pc) => clearLines([pc.pts]).map((pts) => ({ ...pc, pts })));
           regular = toD(pieces.filter((x) => !x.heavy).map((x) => x.pts));
           index = toD(pieces.filter((x) => x.heavy).map((x) => x.pts));
         }

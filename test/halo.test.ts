@@ -54,3 +54,40 @@ describe('halos from placed labels', () => {
     expect(run({ overrides: { th: { clearMm: 0 } } }, 6).halos).toEqual([]);
   });
 });
+
+import { cutNearRoute } from '../src/features/halo';
+
+describe('clear paper beside the route', () => {
+  const route: [number, number][] = [[0, 0], [100, 0]];
+  const across: [number, number][] = [[50, -10], [50, 10]];
+  const len = (ls: [number, number][][]) => ls.reduce((a, l) => a + l.slice(1).reduce((b, q, i) => b + Math.hypot(q[0] - l[i]![0], q[1] - l[i]![1]), 0), 0);
+  it('does nothing when off or without a route', () => {
+    expect(cutNearRoute([across], route, 0)).toEqual([across]);
+    expect(cutNearRoute([across], [[0, 0]], 2)).toEqual([across]);
+  });
+  it('cuts a line crossing the route into two pieces with a gap of twice the radius', () => {
+    const out = cutNearRoute([across], route, 2);
+    expect(out).toHaveLength(2);
+    expect(len(out)).toBeGreaterThan(15);
+    expect(len(out)).toBeLessThan(16.5); // 20 long, 4 cut out
+  });
+  it('leaves a line that stays beyond the radius alone, and drops one that runs along the route inside it', () => {
+    const far: [number, number][] = [[0, 5], [100, 5]];
+    const kept = cutNearRoute([far], route, 2);
+    expect(kept).toHaveLength(1);
+    expect(len(kept)).toBeCloseTo(100, 6); // nothing removed (a long segment near the route is only re-sampled)
+    expect(cutNearRoute([[[0, 1], [100, 1]]], route, 2)).toEqual([]);
+  });
+  it('a line starting inside the cleared strip begins where it leaves it', () => {
+    const out = cutNearRoute([[[50, 0], [50, 10]]], route, 2);
+    expect(out).toHaveLength(1);
+    expect(out[0]![0]![1]).toBeGreaterThan(1.5);
+  });
+  it('is fast on a long, winding route and many lines', () => {
+    const wind: [number, number][] = Array.from({ length: 5000 }, (_, i) => [i * 0.1, 30 + Math.sin(i / 50) * 20]);
+    const lines: [number, number][][] = Array.from({ length: 300 }, (_, k) => Array.from({ length: 400 }, (_, i) => [i * 1.25, k * 0.5 + Math.cos(i / 30) * 5] as [number, number]));
+    const t = performance.now();
+    cutNearRoute(lines, wind, 1.5);
+    expect(performance.now() - t).toBeLessThan(3000);
+  });
+});

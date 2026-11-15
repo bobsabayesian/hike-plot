@@ -80,3 +80,25 @@ describe('a separate pen for the major contour lines', () => {
     expect(p.terrain.indexPen).toBe(p.pens[0]!.id);
   });
 });
+
+describe('clear paper beside the route', () => {
+  it('off by default: contours are untouched; on: fewer contour points near the route, and the route itself is not cut', async () => {
+    const a = await setup(false);
+    const b = await setup(false);
+    b.p.route.clearMm = 1.5;
+    const terrain = await loadTerrain(viewBBox(b.p)!, cone);
+    const sb = buildScene(b.p, terrain);
+    const pts = (s: Setup['scene']) => contourPaths(s, a.p).flatMap((x) => (x.d.match(/-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?/g) ?? []).map((t) => t.split(/\s+/).map(Number) as [number, number]));
+    const routePts = a.scene.prims.filter((x): x is PathPrim => x.kind === 'path' && x.part === 'route').flatMap((x) => (x.d.match(/-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?/g) ?? []).map((t) => t.split(/\s+/).map(Number) as [number, number]));
+    const nearest = (ps: [number, number][]) => Math.min(...ps.map((q) => Math.min(...routePts.map((r) => Math.hypot(q[0] - r[0], q[1] - r[1])))));
+    expect(pts(sb).length).toBeGreaterThan(0);
+    expect(nearest(pts(a.scene))).toBeLessThan(1); // contours do run right up to the route today
+    // route vertices are sparse, so test against them with a generous allowance: the nearest contour point is farther away than before
+    expect(nearest(pts(sb))).toBeGreaterThan(nearest(pts(a.scene)) + 0.5);
+    const route = (s: Setup['scene']) => s.prims.filter((x) => x.kind === 'path' && x.part === 'route').map((x) => (x as PathPrim).d);
+    expect(route(sb)).toEqual(route(a.scene));
+    // the same poster with no clearing reproduces the original exactly
+    b.p.route.clearMm = 0;
+    expect(JSON.stringify(buildScene(b.p, terrain).prims)).toBe(JSON.stringify(a.scene.prims));
+  });
+});
