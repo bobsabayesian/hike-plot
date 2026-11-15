@@ -464,6 +464,9 @@ export function App() {
             </select>
           </Row>
           <Row label="Pen"><PenSelect pens={p.pens} value={p.terrain.pen} onChange={(id) => set((x) => { x.terrain.pen = id!; })} /></Row>
+          {p.terrain.indexEvery > 0 && (
+            <Row label="Heavy pen"><PenSelect pens={p.pens} value={p.terrain.indexPen} allowDefault={`Same pen, drawn twice (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.terrain.indexPen; else x.terrain.indexPen = id; })} /></Row>
+          )}
           <Row label="Weight"><input type="range" min={0.05} max={0.6} step={0.01} value={p.terrain.weightMm} onChange={(e) => set((x) => { x.terrain.weightMm = +e.target.value; x.terrain.indexWeightMm = +e.target.value * 2; })} /></Row>
           <Row label="Opacity"><input type="range" min={0.1} max={1} step={0.05} value={p.terrain.opacity} onChange={(e) => set((x) => { x.terrain.opacity = +e.target.value; })} /></Row>
           {p.terrain.indexEvery > 0 && (<>

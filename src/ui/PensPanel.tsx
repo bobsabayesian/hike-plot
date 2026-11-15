@@ -109,7 +109,7 @@ export function PensPanel({ project: p, scene, group, openGroup }: { project: Pr
                   {openGroup
                     ? <button type="button" className="link part" title={`Open the ${s.section} settings`} onClick={() => openGroup(s.group)}>{s.section}</button>
                     : <label>{s.section}</label>}
-                  <PenSelect pens={p.pens} value={id} allowDefault={s.inherits ? `Same as landmarks (${penFor(p.pens, p.features.pens.default).name})` : undefined}
+                  <PenSelect pens={p.pens} value={id} allowDefault={s.base ? `Same as ${s.base(p).label} (${penFor(p.pens, s.base(p).id).name})` : undefined}
                     onChange={(v) => set((x) => { s.set(x, v); })} />
                   {faint && <span className="hint warn" title="This ink is hard to see on this paper">!</span>}
                 </div>

@@ -316,19 +316,24 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       }
 
       const halos = landmarkOut?.halos ?? [];
+      // heavy lines and their numbers: their own pen if one is set (its tip makes them heavier, so no forced second pass), else the regular pen, drawn twice over
+      const majorPen = p.terrain.indexPen !== undefined && p.terrain.indexPen !== p.terrain.pen ? p.terrain.indexPen : undefined;
+      const heavyPen = majorPen ?? p.terrain.pen;
+      const majorPasses = majorPen ? {} : { minPasses: 2 };
       const terrainAt = prims.length;
       if (relief && terrain) {
         // the terrain in 3D: contours lifted onto the surface, and/or evenly spaced slices across it
         const tc = p.terrain;
         const style = p.relief.style;
         const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
+        const heavy = { ...paint, ...(majorPen ? { color: colorOf(majorPen), pen: majorPen } : {}) };
         if (style === 'contours' || style === 'both') {
           const lifted = liftContours(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces, vis);
           lifted.regular = cutOutHalos(lifted.regular, halos);
           lifted.index = cutOutHalos(lifted.index, halos);
           // with rows underneath, only the heavy index lines are kept: they read as elevation marks on the slices
           if (style === 'contours' && lifted.regular.length) prims.push({ kind: 'path', d: toD(lifted.regular), widthMm: tc.weightMm, ...paint });
-          if (lifted.index.length) prims.push({ kind: 'path', d: toD(lifted.index), widthMm: tc.indexWeightMm, minPasses: 2, ...paint });
+          if (lifted.index.length) prims.push({ kind: 'path', d: toD(lifted.index), widthMm: tc.indexWeightMm, ...majorPasses, ...heavy });
         }
         if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(cutOutHalos(ridgeRows(relief, p.relief.rows, vis), halos)), widthMm: p.relief.rowWeightMm, ...paint });
       } else if (p.terrain.enabled && terrain) {
@@ -359,7 +364,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         }
         if (regular) prims.push({ kind: 'path', d: regular, color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke', widthMm: tc.weightMm, opacity: tc.opacity });
         // heavy lines are drawn as two passes of the pen in the plotter export, so they stay heavier than the rest
-        if (index) prims.push({ kind: 'path', d: index, color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke', widthMm: tc.indexWeightMm, opacity: tc.opacity, minPasses: 2 });
+        if (index) prims.push({ kind: 'path', d: index, color: colorOf(heavyPen), pen: heavyPen, mode: 'stroke', widthMm: tc.indexWeightMm, opacity: tc.opacity, ...majorPasses });
         const nsize = tc.labels.sizePt * PT;
         for (const n of numbers) {
           // text sits centered on its line (gap) or just above it, always upright along the line
@@ -368,7 +373,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           const lift = tc.labels.gap ? 0 : nsize * (1.15 / 2 + 0.2); // same offset the placement reserved
           prims.push({
             kind: 'text', text: n.text, x: n.x + nx * lift - nx * nsize * 0.36, y: n.y + ny * lift - ny * nsize * 0.36,
-            anchor: 'middle', sizeMm: nsize, trackingMm: nsize * 0.04, fontFamily, fontKey: t.font, color: colorOf(tc.pen), pen: tc.pen,
+            anchor: 'middle', sizeMm: nsize, trackingMm: nsize * 0.04, fontFamily, fontKey: t.font, color: colorOf(heavyPen), pen: heavyPen,
             ...(n.angle ? { rotate: (n.angle * 180) / Math.PI } : {}),
           });
         }

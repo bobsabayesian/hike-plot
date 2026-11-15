@@ -153,8 +153,10 @@ export interface Project {
     weightMm: number;
     indexWeightMm: number;
     opacity: number;
-    /** one pen for regular lines, heavy lines and the elevation numbers */
+    /** the pen for regular lines (and, unless `indexPen` is set, the heavy lines and the elevation numbers) */
     pen: string;
+    /** a different pen for the heavy (index) lines and their numbers; unset = the same pen as the regular lines */
+    indexPen?: string;
     /** elevation numbers written along the heavy contour lines */
     labels: {
       enabled: boolean;

@@ -127,6 +127,7 @@ export const featurePenId = (f: Project['features'], key: FeaturePenKey): string
 export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   p.route.pen = fn(p.route.pen);
   p.terrain.pen = fn(p.terrain.pen);
+  if (p.terrain.indexPen !== undefined) p.terrain.indexPen = fn(p.terrain.indexPen);
   p.profile.pen = fn(p.profile.pen);
   p.north.pen = fn(p.north.pen);
   p.text.title.pen = fn(p.text.title.pen);
@@ -181,6 +182,8 @@ export interface PenSlot {
   set: (p: Project, id: string | undefined) => void;
   /** set to `undefined` to use the landmarks' pen; shown as that choice */
   inherits?: boolean;
+  /** for a part that can follow another: the pen and the part it follows ("landmarks", "the contour lines") */
+  base?: (p: Project) => { id: string; label: string };
 }
 
 /** The parts of the design that draw with a pen, in sidebar order. Switched-off parts are left out. */
@@ -190,6 +193,14 @@ export function penSlots(p: Project): PenSlot[] {
     out.push({ key, section, group, get, set: (q, id) => { if (id !== undefined) set(q, id); } });
   if (p.points.length) add('route', 'Route', 'route', (q) => q.route.pen, (q, id) => { q.route.pen = id; });
   if (p.terrain.enabled || p.relief.enabled) add('terrain', p.relief.enabled ? '3D relief lines' : p.terrain.labels.enabled ? 'Contours and their numbers' : 'Contours', 'contours', (q) => q.terrain.pen, (q, id) => { q.terrain.pen = id; });
+  if ((p.terrain.enabled || p.relief.enabled) && p.terrain.indexEvery > 0) {
+    out.push({
+      key: 'terrainMajor', section: 'Major contour lines', group: 'contours', inherits: true,
+      base: (q) => ({ id: q.terrain.pen, label: 'the contour lines' }),
+      get: (q) => q.terrain.indexPen,
+      set: (q, id) => { if (id === undefined || id === q.terrain.pen) delete q.terrain.indexPen; else q.terrain.indexPen = id; },
+    });
+  }
   if (p.features.enabled) {
     add('landmarks', 'Landmarks', 'landmarks', (q) => q.features.pens.default, (q, id) => {
       q.features.pens.default = id;
@@ -199,7 +210,7 @@ export function penSlots(p: Project): PenSlot[] {
     for (const k of Object.keys(p.features.pens.overrides) as FeaturePenKey[]) {
       if (p.features.pens.overrides[k] === undefined) continue;
       out.push({
-        key: `landmarks-${k}`, section: FEATURE_PEN_LABELS[k], group: 'landmarks', inherits: true,
+        key: `landmarks-${k}`, section: FEATURE_PEN_LABELS[k], group: 'landmarks', inherits: true, base: (q) => ({ id: q.features.pens.default, label: 'landmarks' }),
         get: (q) => q.features.pens.overrides[k],
         set: (q, id) => { if (id === undefined || id === q.features.pens.default) delete q.features.pens.overrides[k]; else q.features.pens.overrides[k] = id; },
       });
@@ -220,5 +231,5 @@ export function penSlots(p: Project): PenSlot[] {
 
 /** Which sections of the design use which pen, for the Pens panel. Switched-off sections are left out. */
 export function penUsage(p: Project): PenUse[] {
-  return penSlots(p).map((s) => ({ penId: s.get(p)!, section: s.section }));
+  return penSlots(p).map((s) => ({ penId: s.get(p) ?? s.base!(p).id, section: s.section }));
 }
