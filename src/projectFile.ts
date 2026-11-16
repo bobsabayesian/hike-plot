@@ -37,13 +37,52 @@ export function fromFile(raw: unknown): Project {
   return p;
 }
 
-export async function saveProject(p: Project, meta?: ProjectMeta, thumb?: () => Promise<Blob>): Promise<string> {
-  const r = await fetch('/api/project', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(toFile(p, meta)) });
-  const body = (await r.json().catch(() => ({}))) as { code?: string; error?: string };
+/** The keys that let this browser save over the projects it saved: a code is shared, a key is not. Kept in this browser only. */
+export const EDIT_KEYS = 'walk-of-frame-edit-keys';
+const MAX_KEYS = 200;
+function readKeys(): Record<string, string> {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(EDIT_KEYS) ?? '{}');
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, string>) : {};
+  } catch { return {}; }
+}
+export const editKeyFor = (code: string): string | undefined => { const k = readKeys()[code]; return typeof k === 'string' ? k : undefined; };
+export function rememberEditKey(code: string, key: string): void {
+  try {
+    const all = { ...readKeys() };
+    delete all[code];
+    all[code] = key; // newest last
+    const codes = Object.keys(all);
+    for (const c of codes.slice(0, Math.max(0, codes.length - MAX_KEYS))) delete all[c];
+    localStorage.setItem(EDIT_KEYS, JSON.stringify(all));
+  } catch { /* storage may be blocked */ }
+}
+export function forgetEditKey(code: string): void {
+  try { const all = { ...readKeys() }; delete all[code]; localStorage.setItem(EDIT_KEYS, JSON.stringify(all)); } catch { /* ignore */ }
+}
+
+export class NotYoursError extends Error {}
+
+/**
+ * Save the project. With `over` (a code this browser holds the key for) the saved copy under that code is replaced; otherwise it is
+ * saved under a new code, and the key to save over it later is remembered.
+ */
+export async function saveProject(p: Project, meta?: ProjectMeta, thumb?: () => Promise<Blob>, over?: string): Promise<string> {
+  const key = over ? editKeyFor(over) : undefined;
+  const replacing = !!(over && key);
+  const r = await fetch(replacing ? `/api/project/${over}` : '/api/project', {
+    method: replacing ? 'PUT' : 'POST',
+    headers: { 'content-type': 'application/json', ...(replacing ? { 'x-edit-key': key! } : {}) },
+    body: JSON.stringify(toFile(p, meta)),
+  });
+  const body = (await r.json().catch(() => ({}))) as { code?: string; editKey?: string; error?: string };
+  if (r.status === 403 && over) { forgetEditKey(over); throw new NotYoursError(body.error ?? 'You can only save over a project you saved yourself'); }
   if (!r.ok || !body.code) throw new Error(body.error ?? 'Could not save');
+  if (body.editKey) rememberEditKey(body.code, body.editKey);
+  const useKey = body.editKey ?? key;
   // the small picture for the admin page: the project is saved either way, so a failure here is not an error
   if (thumb) {
-    try { await fetch(`/api/project/${body.code}/thumb`, { method: 'PUT', headers: { 'content-type': 'image/png' }, body: await thumb() }); } catch { /* no thumbnail */ }
+    try { await fetch(`/api/project/${body.code}/thumb`, { method: 'PUT', headers: { 'content-type': 'image/png', ...(useKey ? { 'x-edit-key': useKey } : {}) }, body: await thumb() }); } catch { /* no thumbnail */ }
   }
   return body.code;
 }

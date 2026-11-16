@@ -864,8 +864,13 @@ export function App() {
             </span>
             <span className="bar-status hint" aria-live="polite">{plotPreview ? (plotSvg ? 'Click-to-edit is off here' : 'Drawing…') : hovered ? `Click to edit: ${hovered}` : 'Click any part of the poster to edit it'}</span>
             <span className="bar-actions">
-              <button type="button" disabled={!!saver.busy} onClick={() => void saver.save()} title="Save the whole poster under a code you can open again">
-                {saver.busy === 'Saving…' ? 'Saving…' : saver.changed ? 'Save*' : 'Save'}
+              {saver.mine && saver.code && (
+                <button type="button" disabled={!!saver.busy} onClick={() => void saver.save(true)} title={`Replace the saved copy under ${saver.code}: the same code and link, with these changes`}>
+                  {saver.busy === 'Saving…' ? 'Saving…' : saver.changed ? 'Save over*' : 'Save over'}
+                </button>
+              )}
+              <button type="button" disabled={!!saver.busy} onClick={() => void saver.save()} title="Save the whole poster under a new code you can open again">
+                {saver.busy === 'Saving…' && !saver.mine ? 'Saving…' : saver.mine ? 'Save as new' : saver.changed ? 'Save*' : 'Save'}
               </button>
               <button type="button" className="primary" disabled={svgBusy} onClick={() => void downloadSvg()}
                 title={`${mode === 'plotter' ? 'Pen plotter SVG: a layer per pen, lines only' : mode === 'print' ? 'SVG for print or design: filled shapes, a layer per color' : 'SVG with live text'}. Change it under Export.`}>

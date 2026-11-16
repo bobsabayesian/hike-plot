@@ -69,6 +69,8 @@ Contours can use a different pen for the heavy (index) lines: "Heavy pen" under 
 
 The route can have clear paper beside it: "Clear beside route" under Route cuts the contour and 3D relief lines that come within that many mm of the route's edge (half its weight, or its pen's line if wider). Off by default.
 
+Saving over: the first save of a project also returns a secret key (only its hash is stored), which this browser keeps. For a project you saved yourself, "Save over" replaces the saved copy under the same code and link, and "Save as new" makes a new code. Anyone else who opens the code can only save as new, and projects saved before this existed can't be saved over. The key lives in this browser's storage, so clearing it, or another browser, means Save as new.
+
 ## Places from photos
 
 At the bottom of Landmarks, "Add places from photos…" reads where a photo was taken from its own EXIF metadata (JPEG, HEIC and others) and adds it as a landmark. Choose files or drag them in, or press "Send from my phone" for a QR code: the phone opens `/phone`, reads the photos there, and sends only each place and time through the Worker. The photos are never uploaded. The relay keeps the places under `hike/photo/` for 15 minutes after the last post (expired ones are refused and deleted, and cleared when a new session starts). Phones often strip the location from photos shared through their photo pickers; the phone page says what to do.

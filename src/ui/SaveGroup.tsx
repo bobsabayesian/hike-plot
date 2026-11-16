@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Group, type GroupProps } from './Group';
-import { loadProject, saveProject, type ProjectMeta } from '../projectFile';
+import { editKeyFor, loadProject, NotYoursError, saveProject, type ProjectMeta } from '../projectFile';
 import { cleanCode } from '../../worker/projects';
 import type { Project } from '../scene/project';
 
@@ -45,15 +45,22 @@ export function useProjectSave({ project, openProject, meta, thumb }: { project:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const save = async () => {
+  /** this browser saved the open code, so it may save over it */
+  const [mine, setMine] = useState(false);
+  useEffect(() => { setMine(!!code && !!editKeyFor(code)); }, [code]);
+
+  /** `over`: replace the saved copy under the open code; otherwise save under a new code */
+  const save = async (over = false) => {
     setBusy('Saving…'); setMsg(null);
     try {
-      const c = await saveProject(project, meta, thumb);
+      const c = await saveProject(project, meta, thumb, over ? code : undefined);
       setCode(c);
+      setMine(!!editKeyFor(c));
       setSavedAs(project);
       history.replaceState(null, '', `?p=${c}`);
-      setMsg({ text: `Saved as ${c}. Anyone with this code can open it, so share it only with people who may see the track.` });
+      setMsg({ text: over ? `Saved over ${c}. The same code and link now show these changes.` : `Saved as ${c}. Anyone with this code can open it, so share it only with people who may see the track.` });
     } catch (e) {
+      if (e instanceof NotYoursError) setMine(false);
       setMsg({ text: e instanceof Error ? e.message : 'Could not save', error: true });
     } finally { setBusy(''); }
   };
@@ -62,7 +69,7 @@ export function useProjectSave({ project, openProject, meta, thumb }: { project:
 
   /** edited since the last save or open: the code (and the ?p= link) point at the older copy */
   const changed = !!code && savedAs !== project;
-  return { code, busy, msg, setMsg, open, save, copy, changed };
+  return { code, busy, msg, setMsg, open, save, copy, changed, mine };
 }
 
 export type ProjectSave = ReturnType<typeof useProjectSave>;
@@ -90,10 +97,10 @@ export function SaveGroup({ gp, s }: { gp: GroupProps; s: ProjectSave }) {
           <button type="button" onClick={() => s.copy(linkFor(s.code))}>Copy link</button>
         </div>
       ) : <div className="hint">Not saved yet. Use Save above the poster.</div>}
-      {s.changed && <div className="hint">Changed since this code was saved. Save again for a code with the changes.</div>}
+      {s.changed && <div className="hint">{s.mine ? 'Changed since this code was saved. Save over it to keep the same code, or save as new.' : 'Changed since this code was saved. Save again for a code with the changes.'}</div>}
       <OpenByCode s={s} />
       {s.msg && <div className={s.msg.error ? 'err' : 'hint'}>{s.msg.text}</div>}
-      <div className="hint">Saving keeps all settings, the GPX track and its waypoints. Each save makes a new code; opening one loads that saved copy.</div>
+      <div className="hint">Saving keeps all settings, the GPX track and its waypoints. Save makes a new code; on a project you saved yourself in this browser, Save over keeps the code and replaces the copy.</div>
     </Group>
   );
 }

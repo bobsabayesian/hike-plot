@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { CODE_RE, MAX_BYTES, MAX_THUMB_BYTES, PREFIX, summarize, cleanCode, handleProjects, newCode, type Bucket } from '../worker/projects';
+import { CODE_RE, hashKey, MAX_BYTES, MAX_THUMB_BYTES, PREFIX, summarize, cleanCode, handleProjects, newCode, type Bucket } from '../worker/projects';
 import { fromFile, mergeDefaults, toFile } from '../src/projectFile';
 import { defaultProject } from '../src/scene/project';
 import { sampleTrack, sampleWaypoints } from '../src/sample';
 
 const fakeBucket = () => {
   const m = new Map<string, string | ArrayBuffer>();
+  const meta = new Map<string, Record<string, string> | undefined>();
   const b: Bucket = {
     get: async (k) => (m.has(k) ? { text: async () => m.get(k) as string, arrayBuffer: async () => m.get(k) as ArrayBuffer } : null),
-    head: async (k) => (m.has(k) ? {} : null),
-    put: async (k, v) => { m.set(k, v); },
+    head: async (k) => (m.has(k) ? { customMetadata: meta.get(k) } : null),
+    put: async (k, v, o) => { m.set(k, v); meta.set(k, o?.customMetadata); },
   };
   return { b, m };
 };
@@ -136,5 +137,63 @@ describe('the picture saved beside a project', () => {
     expect((await handleProjects(put(code, new Uint8Array(20)), b))!.status).toBe(400);
     expect((await handleProjects(put(code, png(MAX_THUMB_BYTES + 10)), b))!.status).toBe(413);
     expect((await handleProjects(new Request(`https://x.test/api/project/${code}/thumb`), b))!.status).toBe(405);
+  });
+});
+
+describe('saving over a project', () => {
+  const doc = (title = 'one') => JSON.stringify({ ...toFile(defaultProject()), meta: { title } });
+  const put = (code: string, body: string, key?: string) => new Request(`https://x.test/api/project/${code}`, { method: 'PUT', body, headers: { 'content-type': 'application/json', ...(key ? { 'x-edit-key': key } : {}) } });
+  const make = async () => {
+    const { b, m } = fakeBucket();
+    const { code, editKey } = (await (await handleProjects(post(doc()), b))!.json()) as { code: string; editKey: string };
+    return { b, m, code, editKey };
+  };
+  it('a new save returns a key, and only its hash is kept', async () => {
+    const { m, code, editKey } = await make();
+    expect(editKey).toMatch(/^[0-9a-f]{32}$/);
+    expect(await hashKey(editKey)).toHaveLength(64);
+    expect(m.get(PREFIX + code + '.json')).toBeDefined();
+  });
+  it('the key replaces the saved copy under the same code', async () => {
+    const { b, m, code, editKey } = await make();
+    const res = (await handleProjects(put(code, doc('two'), editKey), b))!;
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ code });
+    expect(JSON.parse(m.get(PREFIX + code + '.json') as string).meta.title).toBe('two');
+    // saving over again still works: the key is kept
+    expect((await handleProjects(put(code, doc('three'), editKey), b))!.status).toBe(200);
+  });
+  it('the code alone, a wrong key, or no key cannot replace it', async () => {
+    const { b, m, code } = await make();
+    const before = m.get(PREFIX + code + '.json');
+    for (const key of [undefined, 'a'.repeat(32), 'nonsense']) expect((await handleProjects(put(code, doc('x'), key), b))!.status).toBe(403);
+    expect(m.get(PREFIX + code + '.json')).toBe(before);
+  });
+  it('a key for one project does not open another, and an unknown code is a 404', async () => {
+    const a = await make();
+    const other = (await (await handleProjects(post(doc()), a.b))!.json()) as { code: string };
+    expect((await handleProjects(put(other.code, doc(), a.editKey), a.b))!.status).toBe(403);
+    expect((await handleProjects(put('abcdefgh'.replace(/[a-z]/g, '2'), doc(), a.editKey), a.b))!.status).toBe(404);
+    expect((await handleProjects(put('bad', doc(), a.editKey), a.b))!.status).toBe(400);
+  });
+  it('a project saved before keys existed cannot be saved over', async () => {
+    const { b, m } = fakeBucket();
+    m.set(PREFIX + 'abcd2345.json', doc());
+    expect((await handleProjects(put('abcd2345', doc(), 'a'.repeat(32)), b))!.status).toBe(403);
+  });
+  it('rejects a body that is not a project, and one that is too large', async () => {
+    const { b, code, editKey } = await make();
+    expect((await handleProjects(put(code, '{"app":"other","version":1,"project":{}}', editKey), b))!.status).toBe(400);
+    expect((await handleProjects(put(code, 'nope', editKey), b))!.status).toBe(400);
+    expect((await handleProjects(put(code, 'x'.repeat(MAX_BYTES + 1), editKey), b))!.status).toBe(413);
+  });
+  it('the picture is written once, unless the request carries the key', async () => {
+    const { b, code, editKey } = await make();
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const thumb = (key?: string) => new Request(`https://x.test/api/project/${code}/thumb`, { method: 'PUT', body: png, headers: key ? { 'x-edit-key': key } : {} });
+    expect((await handleProjects(thumb(), b))!.status).toBe(201);
+    expect((await handleProjects(thumb(), b))!.status).toBe(409);
+    expect((await handleProjects(thumb('a'.repeat(32)), b))!.status).toBe(409);
+    expect((await handleProjects(thumb(editKey), b))!.status).toBe(201);
   });
 });
