@@ -2,6 +2,7 @@ import { handleApi } from './api';
 import { handleProjects, type Bucket } from './projects';
 import { handleAdmin } from './admin';
 import { handleShare, type ShareBucket } from './share';
+import { handlePhoto, type PhotoBucket } from './photo';
 import { verifyAccess } from './access';
 
 interface Env {
@@ -41,6 +42,6 @@ export default {
       const page = await env.ASSETS.fetch(req);
       return new Response(page.body, { status: page.status, headers: { ...Object.fromEntries(page.headers), ...headers } });
     }
-    return (await handleShare(req, env.PROJECTS)) ?? (await handleProjects(req, env.PROJECTS)) ?? (await handleApi(req)) ?? env.ASSETS.fetch(req);
+    return (await handlePhoto(req, env.PROJECTS as unknown as PhotoBucket)) ?? (await handleShare(req, env.PROJECTS)) ?? (await handleProjects(req, env.PROJECTS)) ?? (await handleApi(req)) ?? env.ASSETS.fetch(req);
   },
 };

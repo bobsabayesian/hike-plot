@@ -69,6 +69,10 @@ Contours can use a different pen for the heavy (index) lines: "Heavy pen" under 
 
 The route can have clear paper beside it: "Clear beside route" under Route cuts the contour and 3D relief lines that come within that many mm of the route's edge (half its weight, or its pen's line if wider). Off by default.
 
+## Places from photos
+
+At the bottom of Landmarks, "Add places from photos…" reads where a photo was taken from its own EXIF metadata (JPEG, HEIC and others) and adds it as a landmark. Choose files or drag them in, or press "Send from my phone" for a QR code: the phone opens `/phone`, reads the photos there, and sends only each place and time through the Worker. The photos are never uploaded. The relay keeps the places under `hike/photo/` for 15 minutes after the last post (expired ones are refused and deleted, and cleared when a new session starts). Phones often strip the location from photos shared through their photo pickers; the phone page says what to do.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.

@@ -7,6 +7,7 @@ import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCo
 import { OpenByCode, SaveGroup, linkFor, useProjectSave } from './SaveGroup';
 import { createShareLink } from '../share';
 import { CustomRow } from './CustomRow';
+import { PhotoPlaces } from './PhotoPlaces';
 import { newCustomId } from '../features/custom';
 import { composeScene, viewBBox, autoValues, featureView, routeView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
@@ -630,6 +631,11 @@ export function App() {
               </div>
             );
           })}
+          <PhotoPlaces onPlaces={(places) => set((x) => {
+            let list = x.customLandmarks ?? [];
+            for (const pl of places) list = [...list, { id: newCustomId(list), name: pl.name, at: 'latlon' as const, lat: pl.lat, lon: pl.lon }];
+            x.customLandmarks = list;
+          })} />
         </>)}
 
         </Group>

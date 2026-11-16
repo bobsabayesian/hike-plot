@@ -186,3 +186,13 @@ button.link:hover:not(:disabled) { background: none; }
 .assign .row { margin: 4px 0; }
 .assign .part { flex: 0 0 118px; text-align: left; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .assign .warn { margin: 0; font-weight: 700; }
+
+.photoplaces { margin-top: 10px; }
+.photoplaces .drop { display: block; margin: 8px 0; padding: 14px 10px; text-align: center; border: 1px dashed var(--line); border-radius: 6px; cursor: pointer; font-size: 13px; }
+.photoplaces .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.photoplaces .qr { display: grid; gap: 6px; justify-items: start; }
+.photoplaces .qrimg { width: 180px; background: #fff; padding: 4px; border-radius: 4px; line-height: 0; }
+.photoplaces .qrimg svg { width: 100%; height: auto; }
+.photoplaces .notes { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; display: grid; gap: 3px; }
+.photoplaces .notes li.err { color: var(--error); }
+.photoplaces .mono { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }

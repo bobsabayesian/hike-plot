@@ -4,6 +4,15 @@ import { Readable } from 'node:stream';
 import { resolve } from 'node:path';
 import { handleApi } from './worker/api.ts';
 import { handleAdmin } from './worker/admin.ts';
+import { handlePhoto, type PhotoBucket } from './worker/photo.ts';
+
+// the phone relay under `npm run dev`: an in-memory bucket, so the QR flow can be tried without R2
+const devPhotos = new Map<string, { text: string; uploaded: Date }>();
+const devPhotoBucket: PhotoBucket = {
+  get: async (k) => { const v = devPhotos.get(k); return v ? { text: async () => v.text, uploaded: v.uploaded } : null; },
+  put: async (k, v) => { devPhotos.set(k, { text: String(v), uploaded: new Date() }); },
+  delete: async (ks) => { for (const k of [ks].flat()) devPhotos.delete(k); },
+};
 
 /** Serve /api/* from the same handlers the Cloudflare Worker uses, so `npm run dev` needs no second process. */
 const devApi = {
@@ -21,6 +30,16 @@ const devApi = {
         res.end(await out.text());
         return;
       }
+      if (req.url === '/phone' || req.url?.startsWith('/phone?')) { req.url = '/phone.html' + (req.url.slice(6) || ''); return next(); }
+      if (req.url?.startsWith('/api/photo')) {
+        const chunks: Buffer[] = [];
+        for await (const c of req) chunks.push(c as Buffer);
+        const out = await handlePhoto(new Request(`http://localhost${req.url}`, { method: req.method, headers: { 'content-type': 'application/json' }, ...(chunks.length ? { body: Buffer.concat(chunks) } : {}) }), devPhotoBucket);
+        res.statusCode = out!.status;
+        out!.headers.forEach((v, k) => res.setHeader(k, v));
+        res.end(await out!.text());
+        return;
+      }
       if (!req.url?.startsWith('/api/')) return next();
       const out = await handleApi(new Request(`http://localhost${req.url}`, { method: req.method }));
       if (!out) return next();
@@ -35,7 +54,7 @@ export default defineConfig({
   plugins: [react(), devApi],
   build: {
     // two pages: the app, and the admin page (behind Access)
-    rolldownOptions: { input: { main: resolve(__dirname, 'index.html'), admin: resolve(__dirname, 'admin.html') } },
+    rolldownOptions: { input: { main: resolve(__dirname, 'index.html'), admin: resolve(__dirname, 'admin.html'), phone: resolve(__dirname, 'phone.html') } },
   },
   test: { include: ['test/**/*.test.ts'] },
 });

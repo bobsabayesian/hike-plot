@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Send photo locations · Walk of Frame</title>
+  <style>
+    :root { --bg: #fafafa; --panel: #fff; --text: #1d1d1f; --dim: #6b6b72; --line: #dcdce0; --accent: #1f5fbf; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #17171a; --panel: #202024; --text: #ececf0; --dim: #9a9aa4; --line: #34343a; --accent: #6ea4f5; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, sans-serif; }
+    main { max-width: 480px; margin: 0 auto; padding: 20px 16px; display: grid; gap: 16px; }
+    h1 { margin: 0; font-size: 20px; }
+    .dim { color: var(--dim); font-size: 14px; }
+    label.pick { display: block; text-align: center; padding: 18px; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+    label.pick input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    li { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; overflow-wrap: anywhere; }
+    li.bad { border-color: #c0392b; } li small { display: block; color: var(--dim); }
+    .err { color: #c0392b; } [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Send photo locations</h1>
+    <p class="dim">Choose photos and only the place each was taken (and the time) is read and sent to your computer. The photos themselves never leave this phone.</p>
+    <p id="err" class="err" hidden></p>
+    <label class="pick" id="pick">Choose photos<input id="file" type="file" accept="image/*,.heic,.heif" multiple /></label>
+    <ul id="out"></ul>
+    <p class="dim">If a photo is rejected for having no location: on iPhone tap Options in the picker and turn Location on; on Android pick it from Files instead of the photo picker, or check that the camera's location tags are on.</p>
+  </main>
+  <script type="module" src="/src/phone/main.ts"></script>
+</body>
+</html>
