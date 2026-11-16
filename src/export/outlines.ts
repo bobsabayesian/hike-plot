@@ -2,6 +2,7 @@ import type { PathPrim, Scene, TextPrim } from '../scene/types';
 import { offsetPath, passOffsets } from './offset';
 import { HATCH_FACTOR, hatchPath } from './hatch';
 import { inkWidth, penFor, type Pen } from '../scene/pens';
+import { textToStrokes } from './strokefont';
 
 interface PathCommand { type: string; x?: number; y?: number; x1?: number; y1?: number; x2?: number; y2?: number }
 interface GlyphLike {
@@ -71,7 +72,19 @@ function rotatedPathData(commands: PathCommand[], cx: number, cy: number, rot: n
     .join('') + (commands.length ? 'Z' : '');
 }
 
+/**
+ * How plain filled text is written for a pen plotter:
+ *  'outline': the letters are outlined and filled with hatch lines (heavy letters, but small ones clot into blobs)
+ *  'single':  every letter is a few single strokes of the pen (fast and clean, but thin)
+ *  'auto':    single strokes for small text, outlined and filled letters for large text such as the title
+ */
+export type PlotterText = 'outline' | 'single' | 'auto';
+/** 'auto' draws text up to this size (mm) in single strokes. */
+export const SINGLE_STROKE_MAX_MM = 6;
+
 export interface PrepareOptions {
+  /** plotter export: how plain filled text is drawn; defaults to 'outline' */
+  plotterText?: PlotterText;
   /** the pen palette: each primitive is drawn with the tip width of its pen */
   pens?: Pen[];
   /** tip width for anything without a pen (and when there is no palette); defaults to 0.3 mm */
@@ -108,6 +121,12 @@ export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, op
         // a pen cannot fill: hatch the letters with parallel lines of the pen
         const lines = hatchPath(d, pen * HATCH_FACTOR[p.hatch]);
         return lines ? [{ kind: 'path', d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }] : [];
+      }
+      const mode = opts.plotterText ?? 'outline';
+      if (mode === 'single' || (mode === 'auto' && p.sizeMm <= SINGLE_STROKE_MAX_MM)) {
+        // single strokes: one line per stroke of each letter, drawn with the pen (text with a character the set lacks keeps the outline)
+        const strokes = textToStrokes(p);
+        if (strokes) return [{ kind: 'path', d: strokes, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }];
       }
       // plain filled letters: a pen cannot fill, so the letter is outlined and filled in with hatch lines of the same pen
       // (an outline alone leaves big letters hollow and makes small ones, as thick as the pen, merge into blobs)

@@ -20,7 +20,7 @@ const THUMB_PX = 480;
 import { loadFonts } from '../export/fonts';
 import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
 import { isDarkPaper } from '../scene/pens';
-import { prepareScene, tipFor, type ExportMode } from '../export/outlines';
+import { prepareScene, tipFor, type ExportMode, type PlotterText } from '../export/outlines';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
 import { PagePanel } from './PagePanel';
@@ -233,7 +233,7 @@ export function App() {
   }, [pendingEdit]);
   /** the SVG as the Export settings say (plotter: a layer per pen), for download or for a link */
   const makeSvg = async () => {
-    const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { pens: p.pens });
+    const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { pens: p.pens, plotterText: plotText });
     return sceneToSvg(out, { paper: paperInExport && mode !== 'plotter', ...(mode === 'plotter' ? { layers: 'pen' as const, pens: p.pens } : {}) });
   };
   const showPoster = () => { if (narrow) setTab('poster'); };
@@ -314,6 +314,7 @@ export function App() {
   }, [need, p.terrain.enabled, p.relief.enabled, terrain, setTerrain]);
   // Which line weights in this design become several passes with the chosen pen (plotter export).
   const passes = useMemo(() => summarizePasses(scene.prims, (x) => tipFor(x as { pen?: string }, { pens: p.pens })), [scene, p.pens]);
+  const [plotText, setPlotText] = useState<PlotterText>('auto');
   const [plotPreview, setPlotPreview] = useState(false);
   const [plotSvg, setPlotSvg] = useState('');
   // The plotter preview: the poster as the pens will draw it (hatched, passes, ink width, translucency). Slower, so it follows edits after a pause.
@@ -322,13 +323,13 @@ export function App() {
     let live = true;
     const t = setTimeout(async () => {
       try {
-        const out = prepareScene(scene, 'plotter', await loadFonts(), { pens: p.pens });
+        const out = prepareScene(scene, 'plotter', await loadFonts(), { pens: p.pens, plotterText: plotText });
         const svg = sceneToSvg(out, { paper: true, ink: { pens: p.pens, dark: isDarkPaper(p.paper) } });
         if (live) setPlotSvg(svg);
       } catch { if (live) setPlotSvg(''); }
     }, draft ? 0 : 250);
     return () => { live = false; clearTimeout(t); };
-  }, [plotPreview, scene, p.pens, p.paper, draft]);
+  }, [plotPreview, scene, p.pens, p.paper, draft, plotText]);
   const designSvg = useMemo(() => sceneToSvg(scene, { paper: true, ids: true }), [scene]);
   const previewSvg = plotPreview && plotSvg ? plotSvg : designSvg;
 
@@ -823,6 +824,14 @@ export function App() {
           </select>
         </Row>
         {mode === 'plotter' && (<>
+          <Row label="Text">
+            <select value={plotText} onChange={(e) => setPlotText(e.target.value as PlotterText)}>
+              <option value="auto">Single strokes for small text, filled letters for large</option>
+              <option value="single">Single strokes for all text</option>
+              <option value="outline">Outlined and filled letters for all text</option>
+            </select>
+          </Row>
+          <div className="hint">Single strokes draw each letter as a few lines of the pen: fast, and small labels stay readable. Filled letters are outlined and hatched: heavier, but small ones clot with a wide pen.</div>
           <div className="hint">
             One layer per pen, named after it and in the order of the Pens list, so a layer is a pen to load. Nothing is filled: letters and shapes are outlined, and filled with hatch lines in the same pen. Every line is drawn with its pen's tip width. Heavier lines are repeated side by side:{' '}
             {passes.length ? passes.map((x) => `${x.widthMm} mm = ${x.passes} passes${x.forced ? ' (kept heavier than the rest)' : ''}`).join(', ') : 'none with these pens'}.
