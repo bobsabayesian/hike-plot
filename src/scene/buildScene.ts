@@ -1,5 +1,6 @@
 import { cleanTrack } from '../gpx/clean';
-import { bbox, fitBBox, groundMetersPerMm, haversine, type BBox, type Fit } from '../geo/project';
+import { bbox, bboxCenter, fitBBox, fitScale, groundMetersPerMm, haversine, MAP_SCALES, type BBox, type Fit } from '../geo/project';
+import { toMgrs } from '../geo/utm';
 import type { Rect } from '../geo/clip';
 import {
   computeStats, metersToFeet, formatCoords, formatDuration, formatFeet, formatKm, formatMeters, formatMiles,
@@ -128,7 +129,10 @@ export function autoValues(p: Project, stats?: TrackStats, contourM?: number) {
   return {
     title: p.lookup.peakName ?? p.feature?.name ?? DEFAULT_TITLE,
     location: p.lookup.location ?? '',
-    coords: coordPt ? formatCoords(coordPt.lat, coordPt.lon) : '',
+    coords: coordPt ? (p.text.location.coordFormat === 'mgrs' ? toMgrs(coordPt.lat, coordPt.lon, 4) : formatCoords(coordPt.lat, coordPt.lon)) : '',
+    /** the point the coordinates are for, and what it is */
+    coordPt,
+    coordWhat: center ? (stats?.peak ? 'HIGH POINT' : 'START') : (p.feature?.name ?? '').toUpperCase(),
     info: {
       distance: stats ? dist(stats.distanceM) : '',
       gain: stats ? ele(stats.gainM) : '',
@@ -142,7 +146,11 @@ export function autoValues(p: Project, stats?: TrackStats, contourM?: number) {
 
 interface Block { part: Part; height: number; gapAfter: number; draw: (yTop: number) => Prim[] }
 
-export interface View { frame: Rect; fit: Fit; bbox: BBox }
+export interface View {
+  frame: Rect; fit: Fit; bbox: BBox;
+  /** the fixed scale the map is drawn at (denominator), if one is set: the one asked for, or the next that holds the route */
+  scale?: number;
+}
 export interface Composed { scene: Scene; view?: View; landmarks?: LandmarkEntry[]; pool?: LandmarkPlacement['pool']; open?: LandmarkPlacement['open'] }
 
 function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: OsmData): Composed {
@@ -287,10 +295,24 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     const padX = padY ? Math.max(0, p.grid.labelSizePt * PT * 4.4 + 2 - Math.min(mg.left, mg.right)) : 0;
     const frame: Rect = { x: contentL + padX, y: topCursor + padY, w: innerW - 2 * padX, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) - tickPad - 2 * padY };
     const focus: BBox = p.points.length >= 2 ? routeView(p.points, p.routeSpanKm) : featureView(p.feature!);
-    const fit = fitBBox(focus, frame);
+    let fit = fitBBox(focus, frame);
+    let fixedScale: number | undefined;
+    if (p.mapScale > 0) {
+      // a fixed scale, centered on the route or place; a bigger standard scale if the whole route would not fit
+      const holds = p.points.length >= 2 ? bbox(p.points) : undefined;
+      const [cLat, cLon] = bboxCenter(holds ?? focus);
+      for (const s of [p.mapScale, ...MAP_SCALES.filter((x) => x > p.mapScale)]) {
+        const f = fitScale(cLat, cLon, frame, s);
+        const fits = !holds || [[holds.minLat, holds.minLon], [holds.maxLat, holds.maxLon]].every(([la, lo]) => {
+          const [x, y] = f.toMm(la!, lo!);
+          return x >= frame.x - 1e-6 && x <= frame.x + frame.w + 1e-6 && y >= frame.y - 1e-6 && y <= frame.y + frame.h + 1e-6;
+        });
+        if (fits) { fit = f; fixedScale = s; break; }
+      }
+    }
     const [la1, lo1] = fit.fromMm(frame.x, frame.y + frame.h);
     const [la2, lo2] = fit.fromMm(frame.x + frame.w, frame.y);
-    view = { frame, fit, bbox: { minLat: Math.min(la1, la2), maxLat: Math.max(la1, la2), minLon: Math.min(lo1, lo2), maxLon: Math.max(lo1, lo2) } };
+    view = { frame, fit, ...(fixedScale ? { scale: fixedScale } : {}), bbox: { minLat: Math.min(la1, la2), maxLat: Math.max(la1, la2), minLon: Math.min(lo1, lo2), maxLon: Math.max(lo1, lo2) } };
 
     if (!layoutOnly) {
       // The route and the landmark labels are worked out first: contour numbers have to stay clear of both.
@@ -578,7 +600,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         prims.push(...gridPrims(grid, frame, p.grid, draw));
         if (legendY !== undefined) {
           prims.push(...legendPrims(p.grid, draw, {
-            layout: grid, center: fit.fromMm(frame.x + frame.w / 2, frame.y + frame.h / 2), metersPerMm: fit.metersPerMm,
+            layout: grid, center: fit.fromMm(frame.x + frame.w / 2, frame.y + frame.h / 2), groundMetersPerMm: groundMetersPerMm(fit, frame), scale: fixedScale,
+            reference: auto.coordPt ? { what: auto.coordWhat, lat: auto.coordPt.lat, lon: auto.coordPt.lon } : undefined,
             intervalM: p.terrain.enabled ? interval : undefined, imperial: p.units === 'imperial', x: contentL, y: legendY, w: innerW,
           }));
         }

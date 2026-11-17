@@ -58,7 +58,12 @@ export interface InfoItem {
 }
 
 export interface TitleBlock { visible: boolean; value?: string; sizePt: number; placement: Placement; pen: string }
-export interface LocationBlock extends TitleBlock { showCoords: boolean }
+export type CoordFormat = 'latlon' | 'mgrs';
+export interface LocationBlock extends TitleBlock {
+  showCoords: boolean;
+  /** latitude and longitude, or a military grid reference (MGRS, to 10 m) */
+  coordFormat: CoordFormat;
+}
 export type TitleAlign = 'inherit' | 'left' | 'center' | 'right' | 'justify';
 export type TitleStyle = 'fill' | 'outline' | 'outlineFill';
 export interface TitleSettings extends TitleBlock {
@@ -138,6 +143,11 @@ export interface Project {
    * route (the route itself is always shown whole). Undefined = fit the route snugly.
    */
   routeSpanKm?: number;
+  /**
+   * a fixed map scale, the denominator (50000 = 1:50,000), centered on the route or place; 0 = fit the view instead.
+   * If the route does not fit at this scale, the next standard scale that holds it is used.
+   */
+  mapScale: number;
   /** typed-in geographic feature; used for the map view when there is no GPX */
   feature?: Feature;
   /** named <wpt> entries from the GPX */
@@ -241,6 +251,7 @@ export const defaultProject = (): Project => ({
   shade: defaultShade(),
   cover: defaultCover(),
   points: [],
+  mapScale: 0,
   waypoints: [],
   customLandmarks: [],
   lookup: {},
@@ -264,7 +275,7 @@ export const defaultProject = (): Project => ({
     trackingEm: 0.12,
     align: 'left',
     title: { visible: true, sizePt: 60, placement: 'bottom', pen: PEN_INK, align: 'inherit', style: 'fill', outlineMm: 0.35, fillPen: PEN_INK, fillDensity: 'solid' },
-    location: { visible: true, sizePt: 18, placement: 'bottom', showCoords: true, pen: PEN_INK },
+    location: { visible: true, sizePt: 18, placement: 'bottom', showCoords: true, coordFormat: 'latlon', pen: PEN_INK },
     info: {
       visible: true, pen: PEN_INK, sizePt: 22, placement: 'bottom', layout: 'row',
       items: [

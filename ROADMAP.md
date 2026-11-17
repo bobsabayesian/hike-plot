@@ -13,7 +13,9 @@ Ideas for making the poster's landscape less plain, roughly in order. Done items
 - **Map grid and Military map look** (Map grid section; "Military map" button at the top of Map): a UTM grid (WGS 84)
   over the flat map with military-style grid numbers outside the neat line, scale bars, the grid zone and 100 km
   square (MGRS) and the contour interval under the map; the look sets brown 40 m contours, blue water, green woods
-  and a black grid.
+  and a black grid at a true 1:50,000, with MGRS references (coordinates, the high point, the 100 km squares).
+- **Looks in the toolbar**: Military map, 3D contours and Custom above the poster; Custom is chosen as soon as a
+  style is changed, and brings back the design from before a look was picked.
 - **Lighter lines in the distance** (3D relief section, "Fade far away"): past a chosen point, every 2nd and then every
   4th row or contour, and/or a lighter far pen.
 - **More for the route** (Route section, and "+ High point" under Landmarks): mile or km marks with numbers, a route

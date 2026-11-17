@@ -4,6 +4,7 @@ import type { TrackPoint } from './gpx/types';
 import type { Landmark, OsmData, OsmRequest } from './features/types';
 import type { TerrainField } from './topo/terrain';
 import { geocodeFeature, type GeocodeHit, nearestPeakName, reverseLocation } from './lookup';
+import { currentLook, LOOKS, restoreCustom, type LookId } from './scene/presets';
 
 interface Store {
   project: Project;
@@ -19,6 +20,12 @@ interface Store {
   busy: string;
   notice: string;
   set: (fn: (p: Project) => void) => void;
+  /** the design as it was before a look was chosen (the "Custom" one), so it can be brought back */
+  customStash?: Project;
+  /** switch to a look; if the poster is custom now, keep that design to come back to */
+  applyLook: (id: LookId) => void;
+  /** bring back the custom design kept when a look was chosen, with today's route, place and texts */
+  restoreCustom: () => void;
   setTerrain: (t: TerrainField | undefined, status: Store['terrainStatus'], error?: string) => void;
   loadPoints: (pts: TrackPoint[], lookups?: boolean, waypoints?: Landmark[]) => void;
   loadOsm: (b: import('./geo/project').BBox, req: OsmRequest) => Promise<void>;
@@ -45,6 +52,16 @@ export const useStore = create<Store>((setState, get) => ({
       fn(project);
       return { project };
     }),
+  applyLook: (id) =>
+    setState((s) => {
+      const look = LOOKS.find((l) => l.id === id);
+      if (!look) return {};
+      const project = structuredClone(s.project);
+      look.apply(project);
+      return { project, ...(currentLook(s.project) === 'custom' ? { customStash: structuredClone(s.project) } : {}) };
+    }),
+  restoreCustom: () =>
+    setState((s) => (s.customStash && currentLook(s.project) !== 'custom' ? { project: restoreCustom(s.project, s.customStash) } : {})),
   setTerrain: (terrain, terrainStatus, terrainError) => setState({ terrain, terrainStatus, terrainError }),
 
   loadOsm: async (b, req) => {
@@ -62,7 +79,7 @@ export const useStore = create<Store>((setState, get) => ({
 
   openProject: (project) => {
     loadId++;
-    setState({ project, terrain: undefined, terrainStatus: 'idle', terrainError: undefined, osm: undefined, osmStatus: 'idle', osmError: undefined, searchResults: [], searchIndex: 0, notice: '' });
+    setState({ project, customStash: undefined, terrain: undefined, terrainStatus: 'idle', terrainError: undefined, osm: undefined, osmStatus: 'idle', osmError: undefined, searchResults: [], searchIndex: 0, notice: '' });
   },
 
   loadPoints: (pts, lookups = true, waypoints = []) => {

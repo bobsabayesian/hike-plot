@@ -79,3 +79,29 @@ export function groundMetersPerMm(fit: Fit, frame: { x: number; y: number; w: nu
   const [la2, lo2] = fit.fromMm(cx + half, cy);
   return haversine(la1, lo1, la2, lo2) / (2 * half);
 }
+
+/** The standard scales of printed topographic maps (the denominators). */
+export const MAP_SCALES = [25000, 50000, 100000, 250000, 500000, 1000000] as const;
+
+/** A map at a fixed true scale (1:`denominator` at its center), centered on `lat`, `lon` in the frame. */
+export function fitScale(lat: number, lon: number, frame: { x: number; y: number; w: number; h: number }, denominator: number): Fit {
+  const [mx, my] = mercator(lat, lon);
+  const groundPerMm = denominator / 1000;
+  const mercPerMm = groundPerMm / Math.cos((lat * Math.PI) / 180);
+  const s = 1 / mercPerMm; // mm per Mercator meter
+  const cx = frame.x + frame.w / 2, cy = frame.y + frame.h / 2;
+  const mercToMm = (x: number, y: number): [number, number] => [cx + (x - mx) * s, cy - (y - my) * s];
+  return {
+    metersPerMm: mercPerMm,
+    mercToMm,
+    toMm: (la, lo) => mercToMm(...mercator(la, lo)),
+    fromMm: (x, y) => inverseMercator(mx + (x - cx) / s, my - (y - cy) / s),
+  };
+}
+
+/** The middle of a bbox, as the map sees it (halfway in Web Mercator). */
+export function bboxCenter(b: BBox): [number, number] {
+  const [x0, y0] = mercator(b.minLat, b.minLon);
+  const [x1, y1] = mercator(b.maxLat, b.maxLon);
+  return inverseMercator((x0 + x1) / 2, (y0 + y1) / 2);
+}

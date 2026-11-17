@@ -1,6 +1,6 @@
 import { clipPolyline, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
-import { fromUtm, latBand, squareId, toUtm, utmZone } from '../geo/utm';
+import { fromUtm, latBand, squareId, toMgrs, toUtm, utmZone } from '../geo/utm';
 import { CHAR_W } from '../features/select';
 import type { Prim, TextPrim } from './types';
 
@@ -37,6 +37,8 @@ export interface GridLayout {
   zone: number;
   south: boolean;
   spacingM: number;
+  /** the 100 km squares the map covers, west to east and then north to south (MGRS letters) */
+  squares: string[];
   lines: GridLine[];
   /** where each line meets the map's edges: eastings on top and bottom (x), northings on left and right (y) */
   edges: { top: [number, number][]; bottom: [number, number][]; left: [number, number][]; right: [number, number][] };
@@ -98,7 +100,15 @@ export function gridLayout(fit: Fit, frame: Rect, spacingM: number): GridLayout 
       }
     }
   }
-  return { zone, south, spacingM: step, lines, edges };
+  // the 100 km squares: one sample in every square the frame's range reaches (they are 100 km apart)
+  const squares: string[] = [];
+  for (let n = Math.floor(n1 / 100000) * 100000; n >= Math.floor(n0 / 100000) * 100000; n -= 100000) {
+    for (let e = Math.floor(e0 / 100000) * 100000; e <= e1; e += 100000) {
+      const id = squareId(zone, e + 50000, n + 50000);
+      if (!squares.includes(id)) squares.push(id);
+    }
+  }
+  return { zone, south, spacingM: step, squares, lines, edges };
 }
 
 /** The grid number of a line as printed big: the kilometer digits that change from line to line ("47" for 547 000). */
@@ -175,13 +185,18 @@ export function gridPrims(layout: GridLayout, frame: Rect, s: GridSettings, d: G
 }
 
 /** Height of the legend under the map, mm, for its text size. */
-export const legendHeight = (g: Pick<GridSettings, 'labelSizePt'>) => g.labelSizePt * PT * 1.6 * 4;
+export const legendHeight = (g: Pick<GridSettings, 'labelSizePt'>) => g.labelSizePt * PT * 1.6 * 5;
 
 export interface LegendInput {
   layout: GridLayout;
   /** the map center, for the zone's latitude band and the 100 km square */
   center: [number, number];
-  metersPerMm: number;
+  /** true scale at the map's middle: ground meters per mm */
+  groundMetersPerMm: number;
+  /** the fixed scale the map is drawn at, if any (printed exactly) */
+  scale?: number;
+  /** a place to give as a sample grid reference (the hike's high point) */
+  reference?: { what: string; lat: number; lon: number };
   /** contour interval in meters, if contours are drawn */
   intervalM?: number;
   imperial: boolean;
@@ -216,9 +231,11 @@ export function legendPrims(s: GridSettings, d: GridDraw, L: LegendInput): Prim[
   const barMax = L.w * 0.42;
   const barH = size * 0.42;
   const bar = (unitM: number, name: string, y: number) => {
-    const total = scaleLength(unitM, L.metersPerMm, barMax);
-    const parts = [4, 5, 2, 1].find((n) => Number.isInteger(+((total / n) * 100).toFixed(6))) ?? 4;
-    const segMm = (total * unitM) / L.metersPerMm / parts;
+    const total = scaleLength(unitM, L.groundMetersPerMm, barMax);
+    // segments of a round length: 5 km as 5 × 1, 2 km as 4 × 0.5, 2.5 km as 5 × 0.5
+    const round = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 250];
+    const parts = [5, 4, 2].find((n) => round.some((r) => Math.abs(total / n - r) < 1e-9)) ?? 1;
+    const segMm = (total * unitM) / L.groundMetersPerMm / parts;
     const x0 = L.x;
     const fills: string[] = [];
     for (let k = 0; k < parts; k += 2) fills.push(`M${x0 + k * segMm} ${y}h${segMm}v${barH}h${-segMm}Z`);
@@ -230,19 +247,20 @@ export function legendPrims(s: GridSettings, d: GridDraw, L: LegendInput): Prim[
     }
     out.push(text(name, x0 + segMm * parts + size * 0.8, y + barH, 'start', size * 0.8));
   };
-  const scale = Math.round(L.metersPerMm * 1000);
+  // a fixed scale exactly; a fitted map's own scale, to three figures
+  const scale = L.scale ?? +(L.groundMetersPerMm * 1000).toPrecision(3);
   out.push(text(`SCALE 1:${scale.toLocaleString('en-US')}`, L.x, L.y + size * 0.75, 'start'));
   bar(1000, 'KILOMETERS', L.y + row * 1.05);
   bar(1609.344, 'MILES', L.y + row * 2.45);
 
   // notes, on the right half
-  const [lat, lon] = L.center;
-  const u = toUtm(lat, lon, L.layout.zone, L.layout.south);
+  const [lat] = L.center;
   const notes = [
     `GRID ZONE DESIGNATION  ${L.layout.zone}${latBand(lat)}`,
-    `100,000 M SQUARE IDENTIFICATION  ${squareId(L.layout.zone, u.easting, u.northing)}`,
+    `100,000 M SQUARE IDENTIFICATION  ${L.layout.squares.join('  ')}`,
     `${L.layout.spacingM.toLocaleString('en-US')} METER UTM GRID, ZONE ${L.layout.zone}${L.layout.south ? ' SOUTH' : ''} · DATUM WGS 84`,
   ];
+  if (L.reference) notes.push(`GRID REFERENCE${L.reference.what ? ` OF ${L.reference.what}` : ''}  ${toMgrs(L.reference.lat, L.reference.lon, 4)}`);
   if (L.intervalM) {
     const ft = Math.round(L.intervalM * 3.280839895);
     notes.push(`CONTOUR INTERVAL ${L.intervalM} METERS${L.imperial ? ` (${ft} FEET)` : ''}`);

@@ -33,9 +33,10 @@ import { Group, NARROW_QUERY, useGroups, useMediaQuery } from './Group';
 import { FEATURE_PEN_LABELS, penFor } from '../scene/pens';
 import type { FeaturePenKey } from '../features/types';
 import type { Part } from '../scene/types';
-import { applyMilitary } from '../scene/presets';
+import { currentLook, LOOKS } from '../scene/presets';
+import { MAP_SCALES } from '../geo/project';
 import { GRID_SPACINGS } from '../scene/grid';
-import { CUSTOM_SIZE_ID, CUSTOM_SIZE_MAX_MM, CUSTOM_SIZE_MIN_MM, PRINT_SIZES, type SizeGroup, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
+import { CUSTOM_SIZE_ID, CUSTOM_SIZE_MAX_MM, CUSTOM_SIZE_MIN_MM, PRINT_SIZES, type SizeGroup, type Corner, type NorthStyle, type Align, type CoordFormat, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
 
 const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placement) => void }) => (
   <Row label="Position">
@@ -206,7 +207,9 @@ function RouteZoom({ points, spanKm, onSpan, children }: { points: { lat: number
 }
 
 export function App() {
-  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, osm, osmStatus, osmError, loadOsm, retryOsm, openProject } = useStore();
+  const { project: p, set, terrain, terrainStatus, terrainError, setTerrain, loadPoints, osm, osmStatus, osmError, loadOsm, retryOsm, openProject, applyLook, restoreCustom, customStash } = useStore();
+  // which look the poster has right now: any change of style that the look would undo makes it Custom
+  const look = useMemo(() => currentLook(p), [p]);
   const narrow = useMediaQuery(NARROW_QUERY);
   const [tab, setTab] = useState<'settings' | 'poster'>('settings');
   const gp = useGroups(narrow);
@@ -430,13 +433,24 @@ export function App() {
           <div className="source-body">
             {hasTrack ? (<>
               <div className="hint source-label">Route</div>
-              <RouteZoom points={p.points} spanKm={p.routeSpanKm} onSpan={(km) => set((x) => { x.routeSpanKm = km; })}>
+              <RouteZoom points={p.points} spanKm={p.routeSpanKm} onSpan={(km) => set((x) => { x.routeSpanKm = km; x.mapScale = 0; })}>
                 <div><b>{srcName || auto.title}</b></div>
                 <div className="hint">{[auto.info.distance, auto.info.gain && `${auto.info.gain} gain`, `${p.points.length.toLocaleString()} points`].filter(Boolean).join(' · ')}</div>
               </RouteZoom>
             </>) : p.feature && (<>
               <div className="hint source-label">Place</div>
-              <FeatureStatus feature={p.feature} onSpan={(km) => set((x) => { x.feature!.spanKm = km; })} />
+              <FeatureStatus feature={p.feature} onSpan={(km) => set((x) => { x.feature!.spanKm = km; x.mapScale = 0; })} />
+            </>)}
+            {hasMap && (<>
+              <Row label="Scale">
+                <select value={p.mapScale} onChange={(e) => set((x) => { x.mapScale = +e.target.value; })}>
+                  <option value={0}>Fit the view width</option>
+                  {MAP_SCALES.slice(0, 4).map((s) => <option key={s} value={s}>1:{s.toLocaleString('en-US')}</option>)}
+                </select>
+              </Row>
+              {p.mapScale > 0 && composed.view?.scale !== undefined && composed.view.scale !== p.mapScale
+                && <div className="hint">The whole route does not fit at 1:{p.mapScale.toLocaleString('en-US')}, so it is shown at 1:{composed.view.scale.toLocaleString('en-US')}.</div>}
+              {p.mapScale > 0 && <div className="hint">A true scale at the map's middle, centered on the {hasTrack ? 'route' : 'place'}. Zooming the view goes back to fitting it.</div>}
             </>)}
             <div className="row">
               <button type="button" onClick={pick}>{hasTrack ? 'Replace GPX' : 'Load a GPX'}</button>
@@ -450,9 +464,6 @@ export function App() {
         )}</GpxDrop>
 
         <div className="side-stage">Map</div>
-        <div className="row presets"><label>Look</label>
-          <button type="button" title="Brown contours, blue water, green woods, a UTM grid with its numbers, scale bars and grid notes" onClick={() => { if (window.confirm('Switch to the military map look? This changes the pens, contours, land cover, landmarks, grid and title settings (page size, margins and border stay).')) set((x) => { applyMilitary(x); }); }}>Military map</button>
-        </div>
         {hasTrack && (<Group id="route" title="Route" {...gp('route')}>
         <Row label="Pen"><PenSelect pens={p.pens} value={p.route.pen} onChange={(id) => set((x) => { x.route.pen = id!; })} /></Row>
         <Row label="Weight">
@@ -901,7 +912,13 @@ export function App() {
         <div className="field">
           <Row label="Text"><input type="text" data-edit="location" placeholder={auto.location || 'e.g. Washington, USA'} value={p.text.location.value ?? ''} onChange={(e) => set((x) => { x.text.location.value = e.target.value || undefined; })} />
             <input type="checkbox" title="Show" checked={p.text.location.visible} onChange={(e) => set((x) => { x.text.location.visible = e.target.checked; })} /></Row>
-          <Row label="Coordinates"><input type="checkbox" checked={p.text.location.showCoords} onChange={(e) => set((x) => { x.text.location.showCoords = e.target.checked; })} /></Row>
+          <Row label="Coordinates"><input type="checkbox" checked={p.text.location.showCoords} onChange={(e) => set((x) => { x.text.location.showCoords = e.target.checked; })} />
+            {p.text.location.showCoords && (
+              <select aria-label="Coordinate format" value={p.text.location.coordFormat} onChange={(e) => set((x) => { x.text.location.coordFormat = e.target.value as CoordFormat; })}>
+                <option value="latlon">Latitude, longitude</option><option value="mgrs">MGRS grid reference</option>
+              </select>
+            )}
+          </Row>
           <Row label="Size (pt)"><input type="number" min={6} max={120} value={p.text.location.sizePt} onChange={(e) => set((x) => { x.text.location.sizePt = +e.target.value || 12; })} /></Row>
           <Row label="Pen"><PenSelect pens={p.pens} value={p.text.location.pen} onChange={(id) => set((x) => { x.text.location.pen = id!; })} /></Row>
           <PlaceRow value={p.text.location.placement} onChange={(v) => set((x) => { x.text.location.placement = v; })} />
@@ -1034,6 +1051,14 @@ export function App() {
             <span className="seg" role="radiogroup" aria-label="Preview">
               <button type="button" role="radio" aria-checked={!plotPreview} className={plotPreview ? '' : 'on'} title="The design, with click-to-edit labels" onClick={() => setPlotPreview(false)}>Design</button>
               <button type="button" role="radio" aria-checked={plotPreview} className={plotPreview ? 'on' : ''} title="How the pens will draw it: hatched fills, passes, ink width and translucency" onClick={() => setPlotPreview(true)}>Plotter</button>
+            </span>
+            <span className="seg" role="radiogroup" aria-label="Look">
+              {LOOKS.map((l) => (
+                <button key={l.id} type="button" role="radio" aria-checked={look === l.id} className={look === l.id ? 'on' : ''} title={l.title} onClick={() => applyLook(l.id)}>{l.name}</button>
+              ))}
+              <button type="button" role="radio" aria-checked={look === 'custom'} className={look === 'custom' ? 'on' : ''}
+                title={look !== 'custom' && customStash ? 'Back to your own design from before you picked a look' : 'Your own settings: this is chosen as soon as you change anything a look sets'}
+                onClick={() => restoreCustom()}>Custom</button>
             </span>
             <span className="bar-status hint" aria-live="polite">{plotPreview ? (plotSvg ? 'Click-to-edit is off here' : 'Drawing…') : hovered ? `Click to edit: ${hovered}` : 'Click any part of the poster to edit it'}</span>
             <span className="bar-actions">

@@ -58,6 +58,12 @@ describe('grid layout', () => {
     expect(gridLayout(fitBBox(huge, frame), frame, 0).spacingM).toBe(100000);
     expect(gridLayout(fitBBox(rainier, frame), frame, 10000).spacingM).toBe(10000);
   });
+  it('lists the 100 km squares the map covers', () => {
+    const west = { minLat: 46.78, maxLat: 46.82, minLon: -121.82, maxLon: -121.78 };
+    expect(gridLayout(fitBBox(west, frame), frame, 0).squares).toEqual(['ES']);
+    const across = { minLat: 46.76, maxLat: 46.84, minLon: -121.75, maxLon: -121.62 };
+    expect(gridLayout(fitBBox(across, frame), frame, 0).squares).toEqual(['ES', 'FS']);
+  });
   it('finds where each line meets the edges, in order', () => {
     const g = gridLayout(fitBBox(rainier, frame), frame, 0);
     expect(g.edges.top.length).toBeGreaterThan(5);
@@ -93,7 +99,8 @@ describe('grid in the poster', () => {
     expect(gridPaths(s).length).toBeGreaterThanOrEqual(2);
     const texts = gridTexts(s);
     expect(texts).toContain('GRID ZONE DESIGNATION  10T');
-    expect(texts).toContain('100,000 M SQUARE IDENTIFICATION  ES');
+    // the sample's view crosses the 600 km easting, from square ES into FS
+    expect(texts).toContain('100,000 M SQUARE IDENTIFICATION  ES  FS');
     expect(texts.some((t) => t.startsWith('SCALE 1:'))).toBe(true);
     expect(texts).toContain('KILOMETERS');
     expect(texts).toContain('MILES');
@@ -115,5 +122,67 @@ describe('grid in the poster', () => {
   it('is left out of the 3D view', () => {
     const s = buildScene(sample((p) => { p.relief = { ...p.relief, enabled: true }; })).prims;
     expect(s.filter((x) => x.part === 'grid')).toEqual([]);
+  });
+});
+
+describe('map scale', () => {
+  it('a fixed-scale map has that true scale at its middle, at any latitude', async () => {
+    const { fitScale, groundMetersPerMm, haversine } = await import('../src/geo/project');
+    for (const lat of [0, 30, 46.8, 64]) {
+      const f = fitScale(lat, 10, frame, 50000);
+      expect(groundMetersPerMm(f, frame)).toBeCloseTo(50, 1);
+      // 1 km north of the center is 20 mm up the page
+      const [, y0] = f.toMm(lat, 10);
+      const dLat = (1000 / haversine(lat, 10, lat + 1, 10));
+      const [, y1] = f.toMm(lat + dLat, 10);
+      expect(y0 - y1).toBeCloseTo(20, 1);
+    }
+  });
+  it('the poster is drawn at 1:50,000 and says so, with a kilometer that is 20 mm on the scale bar', () => {
+    const c = composeScene(sample((p) => { p.mapScale = 50000; }));
+    expect(c.view!.scale).toBe(50000);
+    const texts = gridTexts(c.scene.prims);
+    expect(texts).toContain('SCALE 1:50,000');
+    const fills = gridPaths(c.scene.prims).find((x) => x.mode === 'fill')!;
+    const first = fills.d.match(/^M[-\d.]+ [-\d.]+h([-\d.]+)/)!;
+    // 5 km in 1 km segments, each 20 mm
+    expect(texts).toEqual(expect.arrayContaining(['0', '1', '2', '3', '4', '5', 'KILOMETERS']));
+    expect(+first[1]!).toBeCloseTo(20, 1);
+  });
+  it('a fitted map prints its true scale, not the Web Mercator one (regression)', async () => {
+    const { groundMetersPerMm } = await import('../src/geo/project');
+    const c = composeScene(sample());
+    const ground = groundMetersPerMm(c.view!.fit, c.view!.frame) * 1000;
+    const line = gridTexts(c.scene.prims).find((t) => t.startsWith('SCALE 1:'))!;
+    const printed = +line.slice('SCALE 1:'.length).replace(/,/g, '');
+    expect(Math.abs(printed - ground) / ground).toBeLessThan(0.01);
+    // and well away from the Mercator figure, which at 46.8°N is about 1.46 times larger
+    expect(Math.abs(printed - c.view!.fit.metersPerMm * 1000) / printed).toBeGreaterThan(0.3);
+  });
+  it('steps to the next standard scale when the whole route does not fit', () => {
+    const c = composeScene(sample((p) => { p.sizeId = '8x10'; p.mapScale = 25000; }));
+    // the route is about 7 km across and the 8x10 map is small: 1:50,000 is too big, 1:100,000 holds it
+    expect(c.view!.scale).toBe(100000);
+    const { fit, frame } = c.view!;
+    for (const q of sampleTrack()) {
+      const [x, y] = fit.toMm(q.lat, q.lon);
+      expect(x).toBeGreaterThanOrEqual(frame.x - 1e-6); expect(x).toBeLessThanOrEqual(frame.x + frame.w + 1e-6);
+      expect(y).toBeGreaterThanOrEqual(frame.y - 1e-6); expect(y).toBeLessThanOrEqual(frame.y + frame.h + 1e-6);
+    }
+  });
+  it('0 keeps fitting the view as before', () => {
+    expect(composeScene(sample()).view!.scale).toBeUndefined();
+  });
+});
+
+describe('MGRS references', () => {
+  it('the coordinates under the title can be an MGRS grid reference to 10 m', () => {
+    const p = sample((q) => { q.grid.enabled = false; q.text.location.coordFormat = 'mgrs'; });
+    const texts = buildScene(p).prims.filter((x): x is TextPrim => x.kind === 'text' && x.part === 'location').map((x) => x.text);
+    expect(texts.some((t) => /^10T [A-Z]{2} \d{4} \d{4}$/.test(t))).toBe(true);
+  });
+  it('the legend gives the grid reference of the high point', () => {
+    const texts = gridTexts(buildScene(sample()).prims);
+    expect(texts.some((t) => /^GRID REFERENCE OF HIGH POINT {2}10T FS \d{4} \d{4}$/.test(t))).toBe(true);
   });
 });
