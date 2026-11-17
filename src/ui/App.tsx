@@ -560,6 +560,12 @@ export function App() {
               </Row>
             )}
             {p.relief.zoom > 100 && p.relief.base.enabled && <div className="hint">Zoomed in, the view is trimmed at the frame, so the base's walls are cut off at its edges.</div>}
+            <Row label="Fade far away"><input type="checkbox" checked={p.relief.fade.enabled} onChange={(e) => set((x) => { x.relief.fade.enabled = e.target.checked; })} /><span>lighter lines in the distance</span></Row>
+            {p.relief.fade.enabled && (<>
+              <Row label="Starts at"><input type="range" min={0} max={90} step={5} value={p.relief.fade.startPct} onChange={(e) => set((x) => { x.relief.fade.startPct = +e.target.value; })} /><span>{p.relief.fade.startPct}% back</span></Row>
+              <Row label="Fewer lines"><input type="checkbox" checked={p.relief.fade.fewer} onChange={(e) => set((x) => { x.relief.fade.fewer = e.target.checked; })} /><span>every 2nd, then every 4th</span></Row>
+              <Row label="Far pen"><PenSelect pens={p.pens} value={p.relief.fade.pen} allowDefault={`Same pen (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.relief.fade.pen; else x.relief.fade.pen = id; })} /></Row>
+            </>)}
             <Row label="Hide behind hills"><input type="checkbox" checked={p.relief.hideHidden} onChange={(e) => set((x) => { x.relief.hideHidden = e.target.checked; })} /><span>cut lines a hill would hide</span></Row>
             <Row label="Solid base"><input type="checkbox" checked={p.relief.base.enabled} onChange={(e) => set((x) => { x.relief.base.enabled = e.target.checked; })} /><span>walls down to a floor, like a terrain model</span></Row>
             {p.relief.base.enabled && (<>

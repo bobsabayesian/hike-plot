@@ -4,14 +4,14 @@ Ideas for making the poster's landscape less plain, roughly in order. Done items
 
 ## Next
 
-- **Lighter lines in the distance**: thin the rows toward the back, or move them to a lighter pen, so the near slopes
-  come forward.
 - **Distant ridges**: the skyline beyond the view, from a wider elevation grid, as one faint line in a light pen.
 - **A deeper map in 3D**: stretch the map area away from the viewer so a tilted block fills a portrait page without
   trimming (goes well with distant ridges).
 
 ## Done
 
+- **Lighter lines in the distance** (3D relief section, "Fade far away"): past a chosen point, every 2nd and then every
+  4th row or contour, and/or a lighter far pen.
 - **More for the route** (Route section, and "+ High point" under Landmarks): mile or km marks with numbers, a route
   raised above the 3D ground with lines dropped to it, and a high point landmark named with its elevation.
 - **Unhide a hidden landmark** (Landmarks section): a Hidden list of every landmark hidden by hand, with Show and

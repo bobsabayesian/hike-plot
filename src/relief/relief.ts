@@ -1,3 +1,4 @@
+import { defaultFade, type FadeSettings } from './fade';
 import { defaultBase, floorZ, type BaseSettings } from './base';
 import { simplifyXY, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
@@ -27,6 +28,8 @@ export interface ReliefSettings extends ViewSettings {
   zoom: number;
   /** what a zoomed view is centered on: the route (when there is one) or the middle of the map */
   zoomOn: 'route' | 'middle';
+  /** lighter lines in the distance */
+  fade: FadeSettings;
 }
 
 export const defaultRelief = (): ReliefSettings => ({
@@ -34,6 +37,7 @@ export const defaultRelief = (): ReliefSettings => ({
   base: defaultBase(),
   zoom: 100,
   zoomOn: 'route',
+  fade: defaultFade(),
 });
 
 export interface Relief {

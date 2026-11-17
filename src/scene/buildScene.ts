@@ -11,6 +11,7 @@ import { cutNearRoute, cutOutHalos } from '../features/halo';
 import { buildRelief, contourLines, needsHiding, pageLines, ridgeRowLines, type Relief } from '../relief/relief';
 import { buildSurface } from '../relief/surface';
 import { baseLines, strataLevels } from '../relief/base';
+import { band, depthOf, splitFar, thinLine } from '../relief/fade';
 import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
 import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
 import { coverMask, markSymbol, patternMarks, type Mask } from '../cover/draw';
@@ -403,22 +404,47 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
         const heavy = { ...paint, ...(majorPen ? { color: colorOf(majorPen), pen: majorPen } : {}) };
         const toPage = (ls: P3[][]) => pageLines(relief, ls, vis);
+        // lighter lines in the distance: fewer of them far back, and/or a lighter pen there
+        const fade = p.relief.fade;
+        const depthT = fade?.enabled ? depthOf(relief) : undefined;
+        const bandAt = (x: number, y: number) => band(depthT!(x, y), fade.startPct);
+        const thin = <T extends readonly number[]>(lines: T[][], indexOf: (k: number) => number): T[][] =>
+          depthT && fade.fewer ? lines.flatMap((l, k) => thinLine(l, indexOf(k), bandAt)) : lines;
+        const farPen = depthT && fade.pen !== undefined && fade.pen !== tc.pen ? fade.pen : undefined;
+        const farPaint = farPen ? { color: colorOf(farPen), pen: farPen } : {};
+        /** draw near lines in their own paint and, with a far pen, the far parts in it */
+        const nearFar = (lines: P3[][], draw: (ls: P3[][], far: boolean) => void) => {
+          if (!farPen) return draw(lines, false);
+          const { near, far } = splitFar(lines, bandAt);
+          draw(near, false);
+          draw(far, true);
+        };
         if (style !== 'rows') {
-          const lines = contourLines(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces);
+          const pieces = contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces;
+          const lines = contourLines(relief, pieces);
+          const levels = pieces.filter((pc) => !pc.heavy).map((pc) => pc.level);
           // 'both' keeps only the heavy index lines over the rows: they read as elevation marks on the slices
           if (style === 'contours' || style === 'rowsAll') {
-            const regular = clearLines(shadeLines(lines.regular, toPage, tc.weightMm, paint));
-            if (regular.length) prims.push({ kind: 'path', d: toD(regular), widthMm: tc.weightMm, ...paint });
+            nearFar(thin(lines.regular, (k) => Math.round(levels[k]! / interval!)), (ls, far) => {
+              const pnt = { ...paint, ...(far ? farPaint : {}) };
+              const regular = clearLines(shadeLines(ls, toPage, tc.weightMm, pnt));
+              if (regular.length) prims.push({ kind: 'path', d: toD(regular), widthMm: tc.weightMm, ...pnt });
+            });
             // a finer contour is lifted to its own level, like the regular ones (with rows, the extra lines are rows)
             if (style === 'contours' && shadeMap && sh.extra) pushExtra(extraContours(([x, y], level): P3 => [x, y, relief.heightMm(level)]), toPage, tc.weightMm);
           }
-          const index = clearLines(toPage(uncover(lines.index)));
-          if (index.length) prims.push({ kind: 'path', d: toD(index), widthMm: tc.indexWeightMm, ...majorPasses, ...heavy });
+          nearFar(lines.index, (ls, far) => {
+            const index = clearLines(toPage(uncover(ls)));
+            if (index.length) prims.push({ kind: 'path', d: toD(index), widthMm: tc.indexWeightMm, ...majorPasses, ...heavy, ...(far ? farPaint : {}) });
+          });
         }
         if (style !== 'contours') {
           const rowPage = (ls: P3[][]) => pageLines(relief, ls, vis, true);
-          const rows = clearLines(shadeLines(ridgeRowLines(relief, p.relief.rows), rowPage, p.relief.rowWeightMm, paint));
-          prims.push({ kind: 'path', d: toD(rows), widthMm: p.relief.rowWeightMm, ...paint });
+          nearFar(thin(ridgeRowLines(relief, p.relief.rows), (k) => k), (ls, far) => {
+            const pnt = { ...paint, ...(far ? farPaint : {}) };
+            const rows = clearLines(shadeLines(ls, rowPage, p.relief.rowWeightMm, pnt));
+            prims.push({ kind: 'path', d: toD(rows), widthMm: p.relief.rowWeightMm, ...pnt });
+          });
           if (shadeMap && sh.extra) {
             const n = Math.max(2, Math.round(p.relief.rows));
             const fine = ridgeRowLines(relief, (n - 1) * (sh.extra + 1) + 1);
