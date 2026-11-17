@@ -11,6 +11,7 @@ import { cutNearRoute, cutOutHalos } from '../features/halo';
 import { buildRelief, contourLines, needsHiding, pageLines, ridgeRowLines, type Relief } from '../relief/relief';
 import { buildSurface } from '../relief/surface';
 import { baseLines, strataLevels } from '../relief/base';
+import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
 import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
 import { coverMask, markSymbol, patternMarks, type Mask } from '../cover/draw';
 import { COVER_CLASSES, type CoverClass } from '../cover/types';
@@ -298,7 +299,14 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const frameHas = ([x, y]: XY) => !zoomed || (x >= frame.x && x <= frame.x + frame.w && y >= frame.y && y <= frame.y + frame.h);
       const onSurface = (lat: number, lon: number): P3 => { const [x, y] = fit.toMm(lat, lon); return [x, y, relief!.heightMm(relief!.surface.sample(x, y))]; };
       const clean = p.points.length >= 2 ? cleanTrack(p.points, fit.metersPerMm * 0.1) : [];
-      const routeXY: XY[] = clean.map((q) => mapFit.toMm(q.lat, q.lon));
+      // in 3D the route can float above the ground (lines dropped from it show the gap)
+      const lift = relief ? Math.max(0, p.route.liftMm ?? 0) : 0;
+      const routeAt = (lat: number, lon: number): XY => {
+        if (!lift) return mapFit.toMm(lat, lon);
+        const q = onSurface(lat, lon);
+        return relief!.camera.project(q[0], q[1], q[2] + lift);
+      };
+      const routeXY: XY[] = clean.map((q) => routeAt(q.lat, q.lon));
 
       const labelObstacles: Box[] = [];
       if (p.north.enabled) {
@@ -608,6 +616,35 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           kind: 'path', part: 'route', d: inFrame([xy]).map(polyline).join(''), color: colorOf(p.route.pen), pen: p.route.pen, mode: 'stroke', widthMm: p.route.weightMm,
           ...dashFor(p.route.style, p.route.weightMm),
         });
+        const rpaint = { color: colorOf(p.route.pen), pen: p.route.pen, mode: 'stroke' as const };
+        if (relief && lift > 0 && (p.route.dropMm ?? 0) > 0) {
+          // lines down from the raised route to the ground; the parts behind a hill are hidden
+          const drops = everyAlong(clean.map((q) => fit.toMm(q.lat, q.lon)), p.route.dropMm).map(([x, y]): P3[] => {
+            const zg = relief.heightMm(relief.surface.sample(x, y));
+            return [[x, y, zg + lift], [x, y, zg]];
+          });
+          const page = inFrame(vis ? visibleRuns(relief, vis, drops) : drops.map((l) => l.map((q) => relief.camera.project(q[0], q[1], q[2]))));
+          if (page.length) prims.push({ kind: 'path', part: 'route', d: toD(page), widthMm: Math.max(0.1, p.route.weightMm * 0.3), ...rpaint });
+        }
+        if (p.route.ticks !== 'off' && p.route.tickEvery > 0) {
+          // a mark across the route every mile (or km), and its number
+          const len = Math.max(1.6, p.route.weightMm * 3);
+          const size = p.route.tickSizePt * PT;
+          const marks: XY[][] = [];
+          for (const tk of distanceTicks(clean, tickMeters(p.route.tickEvery, p.units))) {
+            const at = routeAt(tk.lat, tk.lon);
+            if (!frameHas(at)) continue;
+            const m = tickMark(at, routeAt(tk.before.lat, tk.before.lon), routeAt(tk.after.lat, tk.after.lon), len);
+            marks.push(m.line);
+            if (p.route.ticks === 'numbers') {
+              prims.push({
+                kind: 'text', part: 'route', text: tickLabel(tk.n, p.route.tickEvery), x: m.label[0] + m.nx * size * 0.4, y: m.label[1] + m.ny * size * 0.4 + size * 0.36,
+                anchor: 'middle', sizeMm: size, trackingMm: size * 0.04, fontFamily, fontKey: t.font, color: colorOf(p.route.pen), pen: p.route.pen,
+              });
+            }
+          }
+          if (marks.length) prims.push({ kind: 'path', part: 'route', d: toD(marks), widthMm: Math.max(0.15, p.route.weightMm * 0.5), ...rpaint });
+        }
       }
 
       if (p.north.enabled) {

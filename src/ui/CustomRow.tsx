@@ -17,6 +17,7 @@ export function CustomRow({ c, hasTrack, onChange, onRemove }: {
       <select aria-label="Where" value={c.at} onChange={(e) => onChange({ at: e.target.value as CustomLandmark['at'] })}>
         <option value="start" disabled={!hasTrack}>Start of GPX</option>
         <option value="end" disabled={!hasTrack}>End of GPX</option>
+        <option value="high" disabled={!hasTrack}>High point of GPX</option>
         <option value="latlon">Lat / lon</option>
       </select>
       {c.at === 'latlon' && (

@@ -4,8 +4,6 @@ Ideas for making the poster's landscape less plain, roughly in order. Done items
 
 ## Next
 
-- **More for the route in 3D**: a "curtain" of short drop lines from the route to the floor (or its shadow on the
-  floor), mile or km ticks along it, and a summit marker with its elevation at the high point.
 - **Lighter lines in the distance**: thin the rows toward the back, or move them to a lighter pen, so the near slopes
   come forward.
 - **Distant ridges**: the skyline beyond the view, from a wider elevation grid, as one faint line in a light pen.
@@ -14,6 +12,8 @@ Ideas for making the poster's landscape less plain, roughly in order. Done items
 
 ## Done
 
+- **More for the route** (Route section, and "+ High point" under Landmarks): mile or km marks with numbers, a route
+  raised above the 3D ground with lines dropped to it, and a high point landmark named with its elevation.
 - **Unhide a hidden landmark** (Landmarks section): a Hidden list of every landmark hidden by hand, with Show and
   Show all.
 - **Zoom for the 3D view** (3D relief section): enlarge the view past the frame to fill the page, trimmed at the

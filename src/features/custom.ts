@@ -1,11 +1,11 @@
 import type { TrackPoint } from '../gpx/types';
 import type { Landmark } from './types';
 
-/** A landmark the user adds by hand: at the start or end of the GPX track, or at a latitude and longitude. */
+/** A landmark the user adds by hand: at the start, end or highest point of the GPX track, or at a latitude and longitude. */
 export interface CustomLandmark {
   id: string;
   name: string;
-  at: 'start' | 'end' | 'latlon';
+  at: 'start' | 'end' | 'high' | 'latlon';
   /** for `latlon` */
   lat?: number;
   lon?: number;
@@ -40,9 +40,17 @@ export function resolveCustom(items: CustomLandmark[], points: TrackPoint[]): La
     let pt: { lat: number; lon: number; ele?: number } | undefined;
     if (c.at === 'start') pt = points[0];
     else if (c.at === 'end') pt = points[points.length - 1];
+    else if (c.at === 'high') pt = highPoint(points);
     else if (c.lat !== undefined && c.lon !== undefined && validLat(c.lat) && validLon(c.lon)) pt = { lat: c.lat, lon: c.lon };
     if (!pt) continue;
     out.push({ id: c.id, name, kind: 'waypoint', lat: pt.lat, lon: pt.lon, ele: pt.ele, custom: true });
   }
   return out;
+}
+
+/** The highest point of the track (by its GPX elevations), or undefined when it has none. */
+export function highPoint(points: TrackPoint[]): TrackPoint | undefined {
+  let best: TrackPoint | undefined;
+  for (const q of points) if (q.ele !== undefined && (!best || q.ele > best.ele!)) best = q;
+  return best;
 }

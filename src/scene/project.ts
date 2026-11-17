@@ -153,6 +153,15 @@ export interface Project {
     pen: string; weightMm: number; style: StrokeStyle;
     /** clear paper beside the route, mm beyond its edge: contour and relief lines are cut that close to it; 0 = off */
     clearMm?: number;
+    /** marks across the route every so many miles (or km), with or without their numbers */
+    ticks: 'off' | 'ticks' | 'numbers';
+    /** miles or km between marks, in the poster's units */
+    tickEvery: number;
+    tickSizePt: number;
+    /** in 3D: the route drawn this far above the ground (mm, in the relief's height units); 0 = on the ground */
+    liftMm: number;
+    /** in 3D, for a raised route: mm between the lines dropped from it to the ground; 0 = none */
+    dropMm: number;
   };
   terrain: {
     enabled: boolean;
@@ -235,7 +244,7 @@ export const defaultProject = (): Project => ({
   features: defaultFeatures(),
   units: 'imperial',
   pens: defaultPens(),
-  route: { pen: PEN_RED, weightMm: 0.9, style: 'solid' },
+  route: { pen: PEN_RED, weightMm: 0.9, style: 'solid', ticks: 'off', tickEvery: 1, tickSizePt: 7, liftMm: 0, dropMm: 1.5 },
   terrain: {
     enabled: true, intervalM: 0, indexEvery: 5,
     pen: PEN_INK, weightMm: 0.12, indexWeightMm: 0.25, opacity: 0.8,

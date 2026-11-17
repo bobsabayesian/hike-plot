@@ -12,7 +12,8 @@ import { OpenByCode, SaveGroup, linkFor, useProjectSave } from './SaveGroup';
 import { createShareLink } from '../share';
 import { CustomRow } from './CustomRow';
 import { PhotoPlaces } from './PhotoPlaces';
-import { newCustomId } from '../features/custom';
+import { highPoint, newCustomId } from '../features/custom';
+import { formatFeet, formatMeters } from '../geo/stats';
 import { composeScene, viewBBox, autoValues, featureView, routeView, viewSizeKm } from '../scene/buildScene';
 import { computeStats } from '../geo/stats';
 import { covers, loadTerrain, padBBox } from '../topo/terrain';
@@ -459,6 +460,26 @@ export function App() {
         </Row>
         <Row label="Clear beside route"><input type="range" min={0} max={3} step={0.1} value={p.route.clearMm ?? 0} onChange={(e) => set((x) => { x.route.clearMm = +e.target.value; })} /><span>{p.route.clearMm ? `${p.route.clearMm.toFixed(1)} mm` : 'off'}</span></Row>
         <div className="hint">Cuts the contour and 3D relief lines this far from the route's edge (the edge follows the route's weight or its pen's line, whichever is wider), so the route has clear paper beside it.</div>
+        <Row label={p.units === 'imperial' ? 'Mile marks' : 'Km marks'}>
+          <select value={p.route.ticks} onChange={(e) => set((x) => { x.route.ticks = e.target.value as typeof p.route.ticks; })}>
+            <option value="off">None</option><option value="ticks">Marks</option><option value="numbers">Marks with numbers</option>
+          </select>
+        </Row>
+        {p.route.ticks !== 'off' && (<>
+          <Row label="Every">
+            <select value={p.route.tickEvery} onChange={(e) => set((x) => { x.route.tickEvery = +e.target.value; })}>
+              {[0.5, 1, 2, 5].map((n) => <option key={n} value={n}>{n} {p.units === 'imperial' ? (n === 1 ? 'mile' : 'miles') : 'km'}</option>)}
+            </select>
+          </Row>
+          {p.route.ticks === 'numbers' && <Row label="Number size"><input type="number" min={4} max={20} value={p.route.tickSizePt} onChange={(e) => set((x) => { x.route.tickSizePt = Math.min(20, Math.max(4, +e.target.value || 7)); })} /><span className="unit">pt</span></Row>}
+        </>)}
+        {p.relief.enabled && (<>
+          <Row label="Raise in 3D"><input type="range" min={0} max={30} step={0.5} value={p.route.liftMm} onChange={(e) => set((x) => { x.route.liftMm = +e.target.value; })} /><span>{p.route.liftMm ? `${p.route.liftMm} mm` : 'on the ground'}</span></Row>
+          {p.route.liftMm > 0 && (
+            <Row label="Drop lines"><input type="number" min={0} max={10} step={0.25} value={p.route.dropMm} onChange={(e) => set((x) => { x.route.dropMm = Math.min(10, Math.max(0, +e.target.value || 0)); })} /><span className="unit">mm apart</span></Row>
+          )}
+          {p.route.liftMm > 0 && <div className="hint">The route floats above the ground, with thin lines dropped to the ground below it (0 for none). Lines behind a hill are hidden.</div>}
+        </>)}
         </Group>)}
 
         <Group id="contours" title="Contours" {...gp('contours')}
@@ -663,6 +684,11 @@ export function App() {
             <div className="row">
               <button type="button" disabled={!p.points.length} title={p.points.length ? '' : 'Load a GPX first'} onClick={() => set((x) => { x.customLandmarks = [...(x.customLandmarks ?? []), { id: newCustomId(x.customLandmarks ?? []), name: 'Start', at: 'start' }]; })}>+ Start</button>
               <button type="button" disabled={!p.points.length} title={p.points.length ? '' : 'Load a GPX first'} onClick={() => set((x) => { x.customLandmarks = [...(x.customLandmarks ?? []), { id: newCustomId(x.customLandmarks ?? []), name: 'Finish', at: 'end' }]; })}>+ End</button>
+              <button type="button" disabled={!highPoint(p.points)} title={highPoint(p.points) ? 'The highest point of the GPX, named with its elevation' : 'Needs a GPX with elevations'} onClick={() => set((x) => {
+                const top = highPoint(x.points);
+                if (!top) return;
+                x.customLandmarks = [...(x.customLandmarks ?? []), { id: newCustomId(x.customLandmarks ?? []), name: x.units === 'imperial' ? formatFeet(top.ele!) : formatMeters(top.ele!), at: 'high' }];
+              })}>+ High point</button>
               <button type="button" onClick={() => set((x) => {
                 const mid = need ? { lat: +((need.minLat + need.maxLat) / 2).toFixed(5), lon: +((need.minLon + need.maxLon) / 2).toFixed(5) } : { lat: 0, lon: 0 };
                 x.customLandmarks = [...(x.customLandmarks ?? []), { id: newCustomId(x.customLandmarks ?? []), name: 'My place', at: 'latlon', ...mid }];
