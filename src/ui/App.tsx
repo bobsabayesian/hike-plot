@@ -4,6 +4,7 @@ import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
 import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
+import { COVER_CLASSES, COVER_LABELS, PATTERNS, PATTERN_LABELS, type Pattern } from '../cover/types';
 import { OpenByCode, SaveGroup, linkFor, useProjectSave } from './SaveGroup';
 import { createShareLink } from '../share';
 import { CustomRow } from './CustomRow';
@@ -65,6 +66,7 @@ const PARTS: Record<Part, { group: string; label: string; focus?: string }> = {
   watermark: { group: 'export', label: 'Watermark', focus: '[data-edit="watermark"]' },
   contours: { group: 'contours', label: 'Contours' },
   relief: { group: 'relief', label: '3D relief' },
+  cover: { group: 'cover', label: 'Land cover' },
   water: { group: 'landmarks', label: 'Rivers and lakes', focus: '[data-edit="water"]' },
   profile: { group: 'profile', label: 'Elevation profile' },
   route: { group: 'route', label: 'Route' },
@@ -295,13 +297,14 @@ export function App() {
   // Fetch landmarks/water whenever the visible area, or what we want to show, is not covered by what we have.
   const want = useMemo(() => wantedRequest(p.features), [p.features.kinds, p.features.water, p.features.waterLabels]);
   useEffect(() => {
-    if (!p.features.enabled || !need || requestIsEmpty(want)) return;
+    // the map tiles bring land cover along with the landmarks, so either one needs them
+    if (!(p.features.enabled || p.cover.enabled) || !need || requestIsEmpty(want)) return;
     const c = osm?.covers;
     const inside = c && need.minLat >= c.minLat && need.maxLat <= c.maxLat && need.minLon >= c.minLon && need.maxLon <= c.maxLon;
     if (inside && requestCovers(osm?.requested, want)) return;
     const t = setTimeout(() => loadOsm(padBBox(need, 0.05), want), 600);
     return () => clearTimeout(t);
-  }, [need, p.features.enabled, osm, want, loadOsm]);
+  }, [need, p.features.enabled, p.cover.enabled, osm, want, loadOsm]);
 
   // Fetch terrain whenever the visible map area is not covered by what we already have.
   useEffect(() => {
@@ -543,6 +546,35 @@ export function App() {
             <Row label="Pen"><PenSelect pens={p.pens} value={p.shade.pen} allowDefault={`Contour pen, drawn twice (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.shade.pen; else x.shade.pen = id; })} /></Row>
             <div className="hint">Slopes facing away from the sun are drawn darker, like hillshading made of lines. "In shade" is the share of the land that counts as shaded. Works on the contours and on 3D relief rows; heavy contour lines are left as they are.</div>
           </div>)}
+        </Group>
+
+        <Group id="cover" title="Land cover" {...gp('cover')}
+          toggle={{ on: p.cover.enabled, onChange: (v) => set((x) => { x.cover.enabled = v; }), status: p.cover.enabled && osmStatus === 'loading' ? 'Loading…' : undefined }}>
+          {p.cover.enabled && (<>
+            {osmError && <div className="err">{osmError} <button onClick={retryOsm}>Retry</button></div>}
+            {osm && osm.source !== 'tiles' && <div className="hint">Land cover comes from the map tiles, which could not be reached just now. <button onClick={retryOsm}>Retry</button></div>}
+            {COVER_CLASSES.map((c) => {
+              const cs = p.cover.classes[c];
+              return (
+                <div key={c} className="cover-kind">
+                  <label className="cover-kind-name"><input type="checkbox" checked={cs.on} onChange={(e) => set((x) => { x.cover.classes[c].on = e.target.checked; })} /> {COVER_LABELS[c]}</label>
+                  {cs.on && (<>
+                    <Row label="Pattern">
+                      <select value={cs.pattern} onChange={(e) => set((x) => { x.cover.classes[c].pattern = e.target.value as Pattern; })}>
+                        {PATTERNS.map((pt) => <option key={pt} value={pt}>{PATTERN_LABELS[pt]}</option>)}
+                      </select>
+                    </Row>
+                    {cs.pattern !== 'clear' && (<>
+                      <Row label="Pen"><PenSelect pens={p.pens} value={cs.pen} onChange={(id) => set((x) => { x.cover.classes[c].pen = id!; })} /></Row>
+                      <Row label="Spacing"><input type="number" min={0.8} max={10} step={0.2} value={cs.spacingMm} onChange={(e) => set((x) => { x.cover.classes[c].spacingMm = Math.min(10, Math.max(0.8, +e.target.value || 2.5)); })} /><span className="unit">mm</span></Row>
+                    </>)}
+                  </>)}
+                </div>
+              );
+            })}
+            <Row label="Mark weight"><input type="number" min={0.05} max={1} step={0.05} value={p.cover.weightMm} onChange={(e) => set((x) => { x.cover.weightMm = Math.max(0.05, +e.target.value || 0.15); })} /><span className="unit">mm</span></Row>
+            <div className="hint">What the ground is, from OpenStreetMap through the OpenFreeMap tiles: each kind filled with a pattern a pen can draw. "Clear paper" cuts the terrain lines away instead, so a glacier shows as white snow. Patterns lie on the ground in 3D; trees and tufts stand upright. Marks keep off the route and labels.</div>
+          </>)}
         </Group>
 
         <Group id="landmarks" title="Landmarks" {...gp('landmarks')}

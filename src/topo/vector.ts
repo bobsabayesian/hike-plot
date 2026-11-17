@@ -1,8 +1,9 @@
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
-import { clipPolyline, type XY } from '../geo/clip';
+import { clipPolyline, simplifyXY, type XY } from '../geo/clip';
 import type { BBox } from '../geo/project';
 import type { Landmark, WaterLine, WaterName } from '../features/types';
+import { TILE_CLASSES, type CoverShape } from '../cover/types';
 
 /**
  * Map features from OpenFreeMap's OpenMapTiles vector tiles: peaks, saddles, viewpoints, shelters, rivers, lakes.
@@ -19,7 +20,7 @@ export const CONCURRENCY = 4;
 export const MIN_WATER_AREA_M2 = 20_000;
 
 export interface TileCoord { z: number; x: number; y: number }
-export interface DecodedTile { landmarks: Landmark[]; water: WaterLine[]; waterNames: WaterName[] }
+export interface DecodedTile { landmarks: Landmark[]; water: WaterLine[]; waterNames: WaterName[]; cover: CoverShape[] }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const tileX = (lon: number, z: number) => ((lon + 180) / 360) * 2 ** z;
@@ -67,6 +68,7 @@ export function decodeTile(bytes: Uint8Array, z: number, tx: number, ty: number)
   const landmarks: Landmark[] = [];
   const water: WaterLine[] = [];
   const waterNames: WaterName[] = [];
+  const cover: CoverShape[] = [];
   const tag = `${z}-${tx}-${ty}`;
 
   for (const [layerName, layer] of Object.entries(vt.layers)) {
@@ -117,6 +119,15 @@ export function decodeTile(bytes: Uint8Array, z: number, tx: number, ty: number)
             if (piece.length >= 2) water.push({ id: `t:ww:${name}:${tag}:${i}.${k}.${j}`, kind: 'river', name, coords: piece.map(([x, y]) => toLL(x, y)) });
           });
         });
+      } else if (layerName === 'landcover') {
+        // areas overlap the tile's margin and the neighbors' copies; they are filled as a union later, so that is harmless
+        const cls = TILE_CLASSES[text(p.subclass)] ?? TILE_CLASSES[text(p.class)];
+        if (!cls) continue;
+        const rings = f.loadGeometry()
+          .map((ring) => simplifyXY(ring.map((q): XY => [q.x, q.y]), ext / 2048))
+          .filter((ring) => ring.length >= 3)
+          .map((ring) => ring.map(([x, y]) => toLL(x, y)));
+        if (rings.length) cover.push({ cls, rings });
       } else if (layerName === 'water') {
         if (text(p.class) === 'swimming_pool') continue;
         f.loadGeometry().forEach((ring, k) => {
@@ -131,7 +142,7 @@ export function decodeTile(bytes: Uint8Array, z: number, tx: number, ty: number)
       }
     }
   }
-  return { landmarks, water, waterNames };
+  return { landmarks, water, waterNames, cover };
 }
 
 type Fetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer>; json(): Promise<unknown> }>;
@@ -167,7 +178,7 @@ function getTile(url: string, c: TileCoord, f: Fetcher, signal?: AbortSignal): P
     for (let attempt = 0; attempt < 2; attempt++) {
       const r = await f(url, { signal });
       if (r.ok) return decodeTile(new Uint8Array(await r.arrayBuffer()), c.z, c.x, c.y);
-      if (r.status === 404 || r.status === 204) return { landmarks: [], water: [], waterNames: [] }; // an empty tile
+      if (r.status === 404 || r.status === 204) return { landmarks: [], water: [], waterNames: [], cover: [] }; // an empty tile
       last = r.status;
     }
     throw new Error(`Map tile ${c.z}/${c.x}/${c.y} failed (${last})`);
@@ -192,6 +203,8 @@ export interface VectorResult {
   landmarks: Landmark[];
   water: WaterLine[];
   waterNames: WaterName[];
+  /** forests, rock, ice and so on */
+  cover: CoverShape[];
   /** the area the tiles cover (at least the area asked for) */
   covers: BBox;
   zoom: number;
@@ -217,10 +230,12 @@ export async function loadVectorFeatures(b: BBox, opts: VectorOptions = {}): Pro
   const landmarks = new Map<string, Landmark>();
   const names = new Map<string, WaterName>();
   const water: WaterLine[] = [];
+  const cover: CoverShape[] = [];
   for (const d of decoded) {
+    cover.push(...d.cover);
     for (const l of d.landmarks) landmarks.set(l.id, l);
     for (const n of d.waterNames) if (!names.has(n.name.toLowerCase())) names.set(n.name.toLowerCase(), n);
     water.push(...d.water);
   }
-  return { landmarks: [...landmarks.values()], water, waterNames: [...names.values()], covers: tilesBBox(tiles), zoom, tiles: tiles.length, complete: zoom >= MAX_ZOOM };
+  return { landmarks: [...landmarks.values()], water, waterNames: [...names.values()], cover, covers: tilesBBox(tiles), zoom, tiles: tiles.length, complete: zoom >= MAX_ZOOM };
 }

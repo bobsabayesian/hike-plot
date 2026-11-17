@@ -269,6 +269,7 @@ describe('the hybrid: tiles plus a small Overpass lookup', () => {
     landmarks: [{ id: 't1', name: 'Tile Peak', kind: 'peak' as const, lat: 46.78, lon: -121.74, ele: 2000 }],
     water: [{ id: 'w', kind: 'river' as const, name: 'A River', coords: [[46.77, -121.75], [46.79, -121.73]] as [number, number][] }],
     waterNames: [{ id: 'wn', name: 'A Lake', lat: 46.78, lon: -121.74 }],
+    cover: [],
     covers: { minLat: 46.74, maxLat: 46.83, minLon: -121.8, maxLon: -121.7 },
     zoom: 14, tiles: 9, complete: true, ...over,
   });

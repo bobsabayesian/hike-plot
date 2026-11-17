@@ -11,6 +11,8 @@ import { cutNearRoute, cutOutHalos } from '../features/halo';
 import { buildRelief, contourLines, needsHiding, pageLines, ridgeRowLines, type Relief } from '../relief/relief';
 import { buildSurface } from '../relief/surface';
 import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
+import { coverMask, markSymbol, patternMarks, type Mask } from '../cover/draw';
+import { COVER_CLASSES, type CoverClass } from '../cover/types';
 import { buildVisibility, visibleRuns, type P3 } from '../relief/visibility';
 import type { TerrainField } from '../topo/terrain';
 import { landmarkPrims, waterLinesPrim, waterPrims } from '../features/draw';
@@ -325,6 +327,19 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const majorPen = p.terrain.indexPen !== undefined && p.terrain.indexPen !== p.terrain.pen ? p.terrain.indexPen : undefined;
       const heavyPen = majorPen ?? p.terrain.pen;
       const majorPasses = majorPen ? {} : { minPasses: 2 };
+      // land cover: where each kind is on the flat map; kinds left as clear paper cut the terrain lines away
+      const coverMasks = new Map<CoverClass, Mask>();
+      if (p.cover.enabled && osm?.cover?.length) {
+        for (const c of COVER_CLASSES) {
+          if (!p.cover.classes[c].on) continue;
+          const m = coverMask(osm.cover.filter((s) => s.cls === c), fit.toMm, frame);
+          if (!m.empty) coverMasks.set(c, m);
+        }
+      }
+      const clearMasks = [...coverMasks].filter(([c]) => p.cover.classes[c].pattern === 'clear').map(([, m]) => m);
+      /** terrain lines (flat-map points first) with the parts over clear-paper cover cut away */
+      const uncover = <T extends readonly number[]>(lines: T[][]): T[][] =>
+        clearMasks.length ? splitByShade(lines, (x, y) => clearMasks.some((m) => m.has(x, y))).lit : lines;
       const terrainAt = prims.length;
       // light and shade: where the ground faces away from the sun, lines are drawn darker and extra lines go between them
       const sh = p.shade;
@@ -335,6 +350,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const shadePen = sh.pen ?? p.terrain.pen;
       /** the regular lines (flat-map points, anything after kept) split into lit and dark, drawn through `toPage` */
       const shadeLines = <T extends readonly number[]>(lines: T[][], toPage: (ls: T[][]) => XY[][], weightMm: number, base: Omit<PathPrim, 'kind' | 'd' | 'widthMm'>): XY[][] => {
+        lines = uncover(lines);
         if (!shadeMap) return toPage(lines);
         const { lit, dark } = splitByShade(lines, inShade(sh.amount));
         const darkPage = clearLines(toPage(dark));
@@ -349,7 +365,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       /** in-between lines, step 1..extra between each pair of regular lines: only their parts in the shade */
       const pushExtra = <T extends readonly number[]>(steps: { step: number; lines: T[][] }[], toPage: (ls: T[][]) => XY[][], weightMm: number) => {
         const out: XY[][] = [];
-        for (const { step, lines } of steps) out.push(...toPage(splitByShade(lines, inShade(extraShare(step, sh.extra, sh.amount))).dark));
+        for (const { step, lines } of steps) out.push(...toPage(splitByShade(uncover(lines), inShade(extraShare(step, sh.extra, sh.amount))).dark));
         const cleared = clearLines(out);
         if (cleared.length) prims.push({ kind: 'path', d: toD(cleared), widthMm: weightMm, color: colorOf(shadePen), pen: shadePen, mode: 'stroke', opacity: p.terrain.opacity });
       };
@@ -379,7 +395,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
             // a finer contour is lifted to its own level, like the regular ones
             if (shadeMap && sh.extra) pushExtra(extraContours(([x, y], level): P3 => [x, y, relief.heightMm(level)]), toPage, tc.weightMm);
           }
-          const index = clearLines(toPage(lines.index));
+          const index = clearLines(toPage(uncover(lines.index)));
           if (index.length) prims.push({ kind: 'path', d: toD(index), widthMm: tc.indexWeightMm, ...majorPasses, ...heavy });
         }
         if (style === 'rows' || style === 'both') {
@@ -399,9 +415,9 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const tc = p.terrain;
         let { regular, index } = paths;
         let pieces = paths.pieces;
-        if (halos.length || routeClearR > 0) {
-          // room around labels and beside the route: cut the contours there (the pieces stay consistent for the numbers below)
-          pieces = pieces.flatMap((pc) => clearLines([pc.pts]).map((pts) => ({ ...pc, pts })));
+        if (halos.length || routeClearR > 0 || clearMasks.length) {
+          // room around labels and beside the route, and clear-paper cover: cut the contours there (the pieces stay consistent for the numbers below)
+          pieces = pieces.flatMap((pc) => clearLines(uncover([pc.pts])).map((pts) => ({ ...pc, pts })));
           regular = toD(pieces.filter((x) => !x.heavy).map((x) => x.pts));
           index = toD(pieces.filter((x) => x.heavy).map((x) => x.pts));
         }
@@ -445,6 +461,35 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       }
 
       tagFrom(terrainAt, relief ? 'relief' : 'contours');
+
+      // land cover patterns, one path per kind in its pen: ground lines draped over the relief, upright marks at their spot
+      const coverAt = prims.length;
+      // cover marks always keep off the route, at least a little beyond its edge
+      const routeHalf = routeXY.length >= 2 ? Math.max(p.route.weightMm, inkWidth(penFor(p.pens, p.route.pen))) / 2 : 0;
+      const clearCover = (lines: XY[][]): XY[][] => cutNearRoute(cutOutHalos(lines, halos), routeXY, Math.max(routeClearR, routeHalf + 0.6));
+      for (const [c, mask] of coverMasks) {
+        const cs = p.cover.classes[c];
+        if (cs.pattern === 'clear') continue;
+        const { lines, marks } = patternMarks(mask, cs.pattern, cs.spacingMm, frame, COVER_CLASSES.indexOf(c) * 7);
+        let page: XY[][];
+        let at: XY[];
+        if (relief) {
+          const lift = (x: number, y: number): P3 => [x, y, relief.heightMm(relief.surface.sample(x, y))];
+          page = pageLines(relief, lines.map((l) => densify(l, 1).map(([x, y]) => lift(x, y))), vis);
+          at = marks.map(([x, y]) => lift(x, y)).filter((q) => !vis || vis.isVisible(q[0], q[1], q[2])).map((q) => relief.camera.project(q[0], q[1], q[2]));
+        } else {
+          page = lines;
+          at = marks;
+        }
+        page = clearCover(page);
+        // a mark is dropped where its spot is cleared (beside the route, around a label): test them all as tiny strokes at once
+        const keyOf = (q: XY) => `${q[0]},${q[1]}`;
+        const kept = new Set(clearCover(at.map((q): XY[] => [q, [q[0] + 0.01, q[1]]])).map((l) => keyOf(l[0]!)));
+        at = at.filter((q) => kept.has(keyOf(q)));
+        const d = toD(page) + at.map(([x, y]) => markSymbol(cs.pattern, x, y, cs.spacingMm * 0.7)).join('');
+        if (d) prims.push({ kind: 'path', d, color: colorOf(cs.pen), pen: cs.pen, mode: 'stroke', widthMm: p.cover.weightMm, round: true, opacity: p.terrain.opacity });
+      }
+      tagFrom(coverAt, 'cover');
       const waterAt = prims.length;
       if (p.features.enabled && p.features.water && osm) {
         const waterPen = penFor(p.pens, featurePenId(p.features, 'waterOutline'));
@@ -569,6 +614,18 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
   }
 
   return { scene: { widthMm: W, heightMm: H, paper: p.paper, prims }, view, landmarks, pool, open };
+}
+
+/** A line with extra points so no step is longer than `step` mm (so it can follow the ground). */
+function densify(line: XY[], step: number): XY[] {
+  const out: XY[] = [line[0]!];
+  for (let k = 1; k < line.length; k++) {
+    const [ax, ay] = line[k - 1]!;
+    const [bx, by] = line[k]!;
+    const n = Math.ceil(Math.hypot(bx - ax, by - ay) / step);
+    for (let t = 1; t <= n; t++) out.push([ax + ((bx - ax) * t) / n, ay + ((by - ay) * t) / n]);
+  }
+  return out;
 }
 
 export const composeScene = (p: Project, terrain?: TerrainField, osm?: OsmData): Composed => compose(p, terrain, false, osm);

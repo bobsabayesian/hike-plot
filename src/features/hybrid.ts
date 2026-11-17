@@ -44,6 +44,7 @@ export async function loadFeatures(b: BBox, req: OsmRequest, deps: HybridDeps = 
     landmarks: [...v.landmarks, ...(ok ? extra.value.landmarks : [])],
     water: v.water,
     waterNames: v.waterNames,
+    cover: v.cover,
     source: 'tiles',
     note,
     // trailheads only cover what Overpass covered, so reuse is limited to the overlap

@@ -81,7 +81,7 @@ describe('removing a pen', () => {
     const p = defaultProject();
     const seen: string[] = [];
     mapPenRefs(p, (id) => { seen.push(id); return 'x'; });
-    expect(seen.length).toBe(11 + 2); // route, contours, profile, north, title, title fill, location, info, watermark, border, landmarks default + 2 overrides
+    expect(seen.length).toBe(11 + 2 + 6); // route, contours, profile, north, title, title fill, location, info, watermark, border, landmarks default + 2 overrides + 6 land cover kinds
     expect(p.route.pen).toBe('x');
     expect(p.terrain.pen).toBe('x');
     expect(p.profile.pen).toBe('x');

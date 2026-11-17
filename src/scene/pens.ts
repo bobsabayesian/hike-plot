@@ -1,3 +1,4 @@
+import { COVER_CLASSES, COVER_LABELS, inkedClasses } from '../cover/types';
 import type { FeaturePenKey } from '../features/types';
 import type { Project } from './project';
 
@@ -129,6 +130,7 @@ export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   p.terrain.pen = fn(p.terrain.pen);
   if (p.terrain.indexPen !== undefined) p.terrain.indexPen = fn(p.terrain.indexPen);
   if (p.shade.pen !== undefined) p.shade.pen = fn(p.shade.pen);
+  for (const c of COVER_CLASSES) p.cover.classes[c].pen = fn(p.cover.classes[c].pen);
   p.profile.pen = fn(p.profile.pen);
   p.north.pen = fn(p.north.pen);
   p.text.title.pen = fn(p.text.title.pen);
@@ -210,6 +212,7 @@ export function penSlots(p: Project): PenSlot[] {
       set: (q, id) => { if (id === undefined || id === q.terrain.pen) delete q.shade.pen; else q.shade.pen = id; },
     });
   }
+  for (const c of inkedClasses(p.cover)) add(`cover-${c}`, COVER_LABELS[c], 'cover', (q) => q.cover.classes[c].pen, (q, id) => { q.cover.classes[c].pen = id; });
   if (p.features.enabled) {
     add('landmarks', 'Landmarks', 'landmarks', (q) => q.features.pens.default, (q, id) => {
       q.features.pens.default = id;

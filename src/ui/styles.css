@@ -87,6 +87,9 @@ h3 { font-size: 13px; margin: 14px 0 4px; }
 .overrides { margin: 6px 0; }
 .overrides summary { cursor: pointer; opacity: .7; font-size: 12px; }
 .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; margin: 6px 0; font-size: 12px; }
+.cover-kind { border-top: 1px solid var(--line, #e6e6e6); padding: 6px 0 2px; }
+.cover-kind:first-of-type { border-top: 0; }
+.cover-kind-name { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; margin-bottom: 2px; }
 /* name on its own line, the side, icon and clear controls under it */
 .lm { display: grid; grid-template-columns: 20px 1fr 1fr 64px; gap: 4px; margin: 6px 0 10px; align-items: center; }
 .lm input[type=text] { grid-column: 2 / 5; min-width: 0; }

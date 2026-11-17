@@ -7,6 +7,7 @@ import { defaultBorder, type BorderSettings } from './border';
 import type { HatchDensity } from './types';
 import { defaultRelief, type ReliefSettings } from '../relief/relief';
 import { defaultShade, type ShadeSettings } from '../relief/shade';
+import { defaultCover, type CoverSettings } from '../cover/types';
 
 export type SizeGroup = 'US (inches)' | 'ISO (A series)' | 'Metric (cm)';
 
@@ -128,6 +129,8 @@ export interface Project {
   relief: ReliefSettings;
   /** light and shade: slopes away from the sun drawn darker, with extra lines in between */
   shade: ShadeSettings;
+  /** forests, rock, ice and so on, each filled with a pattern */
+  cover: CoverSettings;
   points: TrackPoint[];
   /**
    * how wide the map around a GPX route is, km: the view grows to at least this in each direction, centered on the
@@ -224,6 +227,7 @@ export const defaultProject = (): Project => ({
   border: defaultBorder(PEN_INK),
   relief: defaultRelief(),
   shade: defaultShade(),
+  cover: defaultCover(),
   points: [],
   waypoints: [],
   customLandmarks: [],

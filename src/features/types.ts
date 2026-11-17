@@ -52,6 +52,8 @@ export interface OsmData {
   water: WaterLine[];
   /** lake names as points (from map tiles) */
   waterNames?: WaterName[];
+  /** forests, rock, ice and so on (from map tiles only) */
+  cover?: import('../cover/types').CoverShape[];
   /** where the data came from: OpenFreeMap vector tiles (plus Overpass for trailheads), or Overpass alone */
   source?: 'tiles' | 'overpass';
   /** something the user should know about this data, e.g. a closer view shows more */
