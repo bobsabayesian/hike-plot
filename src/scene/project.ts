@@ -6,6 +6,7 @@ import { defaultPens, PEN_INK, PEN_RED, type Pen } from './pens';
 import { defaultBorder, type BorderSettings } from './border';
 import type { HatchDensity } from './types';
 import { defaultRelief, type ReliefSettings } from '../relief/relief';
+import { defaultShade, type ShadeSettings } from '../relief/shade';
 
 export type SizeGroup = 'US (inches)' | 'ISO (A series)' | 'Metric (cm)';
 
@@ -125,6 +126,8 @@ export interface Project {
   border: BorderSettings;
   /** the terrain drawn in 3D: turned and tipped back, with hills standing up */
   relief: ReliefSettings;
+  /** light and shade: slopes away from the sun drawn darker, with extra lines in between */
+  shade: ShadeSettings;
   points: TrackPoint[];
   /**
    * how wide the map around a GPX route is, km: the view grows to at least this in each direction, centered on the
@@ -220,6 +223,7 @@ export const defaultProject = (): Project => ({
   page: { margins: { top: DEFAULT_MARGIN_MM, right: DEFAULT_MARGIN_MM, bottom: DEFAULT_MARGIN_MM, left: DEFAULT_MARGIN_MM }, linked: true },
   border: defaultBorder(PEN_INK),
   relief: defaultRelief(),
+  shade: defaultShade(),
   points: [],
   waypoints: [],
   customLandmarks: [],

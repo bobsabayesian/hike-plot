@@ -8,7 +8,9 @@ import {
 import { contourInterval, contourPaths, toD } from '../topo/contours';
 import { resolveCustom } from '../features/custom';
 import { cutNearRoute, cutOutHalos } from '../features/halo';
-import { buildRelief, liftContours, needsHiding, ridgeRows, type Relief } from '../relief/relief';
+import { buildRelief, contourLines, needsHiding, pageLines, ridgeRowLines, type Relief } from '../relief/relief';
+import { buildSurface } from '../relief/surface';
+import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
 import { buildVisibility, visibleRuns, type P3 } from '../relief/visibility';
 import type { TerrainField } from '../topo/terrain';
 import { landmarkPrims, waterLinesPrim, waterPrims } from '../features/draw';
@@ -19,9 +21,9 @@ import type { XY } from '../geo/clip';
 import { northBox, northPrims } from './north';
 import { borderPrims, layoutBorder } from './border';
 import { featurePenId, inkWidth, penFor } from './pens';
-import { formatLevel, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
+import { formatLevel, linesWithGaps, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
 import type { Box } from '../features/select';
-import type { Part, Prim, Scene } from './types';
+import type { Part, PathPrim, Prim, Scene } from './types';
 import { clampMargins, posterMm, type InfoItem, type Placement, type Project, type StrokeStyle } from './project';
 
 const PT = 25.4 / 72;
@@ -324,21 +326,74 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const heavyPen = majorPen ?? p.terrain.pen;
       const majorPasses = majorPen ? {} : { minPasses: 2 };
       const terrainAt = prims.length;
+      // light and shade: where the ground faces away from the sun, lines are drawn darker and extra lines go between them
+      const sh = p.shade;
+      const shadeMap = sh.enabled && terrain && (relief || p.terrain.enabled)
+        ? buildShadeMap(relief?.surface ?? buildSurface(terrain, fit, frame), fit.metersPerMm, sh.sunAzimuth, sh.sunAltitude)
+        : undefined;
+      const inShade = (share: number) => { const cut = shadeMap!.cut(share / 100); return (x: number, y: number) => shadeMap!.darkness(x, y) > cut; };
+      const shadePen = sh.pen ?? p.terrain.pen;
+      /** the regular lines (flat-map points, anything after kept) split into lit and dark, drawn through `toPage` */
+      const shadeLines = <T extends readonly number[]>(lines: T[][], toPage: (ls: T[][]) => XY[][], weightMm: number, base: Omit<PathPrim, 'kind' | 'd' | 'widthMm'>): XY[][] => {
+        if (!shadeMap) return toPage(lines);
+        const { lit, dark } = splitByShade(lines, inShade(sh.amount));
+        const darkPage = clearLines(toPage(dark));
+        if (darkPage.length) {
+          const darkPaint = !sh.darken ? { widthMm: weightMm, ...base }
+            : shadePen === p.terrain.pen ? { widthMm: weightMm * 1.6, ...base, minPasses: 2 }
+            : { widthMm: weightMm, ...base, color: colorOf(shadePen), pen: shadePen };
+          prims.push({ kind: 'path', d: toD(darkPage), ...darkPaint });
+        }
+        return toPage(lit);
+      };
+      /** in-between lines, step 1..extra between each pair of regular lines: only their parts in the shade */
+      const pushExtra = <T extends readonly number[]>(steps: { step: number; lines: T[][] }[], toPage: (ls: T[][]) => XY[][], weightMm: number) => {
+        const out: XY[][] = [];
+        for (const { step, lines } of steps) out.push(...toPage(splitByShade(lines, inShade(extraShare(step, sh.extra, sh.amount))).dark));
+        const cleared = clearLines(out);
+        if (cleared.length) prims.push({ kind: 'path', d: toD(cleared), widthMm: weightMm, color: colorOf(shadePen), pen: shadePen, mode: 'stroke', opacity: p.terrain.opacity });
+      };
+      /** contours at a finer interval, sorted by which in-between step they are; `pt` makes each point (e.g. lifts it to its level) */
+      const extraContours = <T extends readonly number[]>(pt: (q: XY, level: number) => T) => {
+        const sub = interval! / (sh.extra + 1);
+        const steps = new Map<number, T[][]>();
+        for (const pc of contourPaths(terrain!, fit, frame, sub, 0).pieces) {
+          const step = ((Math.round(pc.level / sub) % (sh.extra + 1)) + sh.extra + 1) % (sh.extra + 1);
+          if (step) steps.set(step, [...(steps.get(step) ?? []), pc.pts.map((q) => pt(q, pc.level))]);
+        }
+        return [...steps].map(([step, lines]) => ({ step, lines }));
+      };
       if (relief && terrain) {
         // the terrain in 3D: contours lifted onto the surface, and/or evenly spaced slices across it
         const tc = p.terrain;
         const style = p.relief.style;
         const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
         const heavy = { ...paint, ...(majorPen ? { color: colorOf(majorPen), pen: majorPen } : {}) };
+        const toPage = (ls: P3[][]) => pageLines(relief, ls, vis);
         if (style === 'contours' || style === 'both') {
-          const lifted = liftContours(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces, vis);
-          lifted.regular = clearLines(lifted.regular);
-          lifted.index = clearLines(lifted.index);
+          const lines = contourLines(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces);
           // with rows underneath, only the heavy index lines are kept: they read as elevation marks on the slices
-          if (style === 'contours' && lifted.regular.length) prims.push({ kind: 'path', d: toD(lifted.regular), widthMm: tc.weightMm, ...paint });
-          if (lifted.index.length) prims.push({ kind: 'path', d: toD(lifted.index), widthMm: tc.indexWeightMm, ...majorPasses, ...heavy });
+          if (style === 'contours') {
+            const regular = clearLines(shadeLines(lines.regular, toPage, tc.weightMm, paint));
+            if (regular.length) prims.push({ kind: 'path', d: toD(regular), widthMm: tc.weightMm, ...paint });
+            // a finer contour is lifted to its own level, like the regular ones
+            if (shadeMap && sh.extra) pushExtra(extraContours(([x, y], level): P3 => [x, y, relief.heightMm(level)]), toPage, tc.weightMm);
+          }
+          const index = clearLines(toPage(lines.index));
+          if (index.length) prims.push({ kind: 'path', d: toD(index), widthMm: tc.indexWeightMm, ...majorPasses, ...heavy });
         }
-        if (style === 'rows' || style === 'both') prims.push({ kind: 'path', d: toD(clearLines(ridgeRows(relief, p.relief.rows, vis))), widthMm: p.relief.rowWeightMm, ...paint });
+        if (style === 'rows' || style === 'both') {
+          const rowPage = (ls: P3[][]) => pageLines(relief, ls, vis, true);
+          const rows = clearLines(shadeLines(ridgeRowLines(relief, p.relief.rows), rowPage, p.relief.rowWeightMm, paint));
+          prims.push({ kind: 'path', d: toD(rows), widthMm: p.relief.rowWeightMm, ...paint });
+          if (shadeMap && sh.extra) {
+            const n = Math.max(2, Math.round(p.relief.rows));
+            const fine = ridgeRowLines(relief, (n - 1) * (sh.extra + 1) + 1);
+            const steps = new Map<number, P3[][]>();
+            fine.forEach((line, m) => { const step = m % (sh.extra + 1); if (step) steps.set(step, [...(steps.get(step) ?? []), line]); });
+            pushExtra([...steps].map(([step, lines]) => ({ step, lines })), rowPage, p.relief.rowWeightMm);
+          }
+        }
       } else if (p.terrain.enabled && terrain) {
         const paths = contourPaths(terrain, fit, frame, interval!, p.terrain.indexEvery);
         const tc = p.terrain;
@@ -364,6 +419,13 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
             sizePt: tc.labels.sizePt, format: (lv) => formatLevel(lv, p.units), frame, obstacles: avoid, route: routeXY,
           });
           if (numbers.length && tc.labels.gap) ({ regular, index } = pathsWithGaps(pieces, numbers, tc.labels.sizePt));
+        }
+        if (shadeMap) {
+          // the regular lines as points again (with their number gaps), split into light and shade
+          const lines = numbers.length && tc.labels.gap ? linesWithGaps(pieces, numbers, tc.labels.sizePt).regular : pieces.filter((x) => !x.heavy).map((x) => x.pts);
+          const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
+          regular = toD(shadeLines(lines, (ls) => ls, tc.weightMm, paint));
+          if (sh.extra) pushExtra(extraContours((q) => q), (ls) => ls, tc.weightMm);
         }
         if (regular) prims.push({ kind: 'path', d: regular, color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke', widthMm: tc.weightMm, opacity: tc.opacity });
         // heavy lines are drawn as two passes of the pen in the plotter export, so they stay heavier than the rest

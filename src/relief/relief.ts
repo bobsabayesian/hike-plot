@@ -80,6 +80,15 @@ export function ridgeRowLines(r: Relief, count: number): P3[][] {
   return out;
 }
 
+/** 3D lines as page lines; with `vis`, the parts behind hills are cut away. */
+export function pageLines(r: Relief, lines: P3[][], vis?: Visibility, simplify = false): XY[][] {
+  if (vis) return visibleRuns(r, vis, lines);
+  return lines.map((line) => {
+    const flat = line.map(([x, y, z]) => r.camera.project(x, y, z));
+    return simplify ? simplifyXY(flat, 0.04) : flat;
+  });
+}
+
 /** Evenly spaced slices across the terrain as page lines; with `vis`, the parts behind hills are cut away. */
 export function ridgeRows(r: Relief, count: number, vis?: Visibility): XY[][] {
   const lines = ridgeRowLines(r, count);

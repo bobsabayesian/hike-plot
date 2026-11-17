@@ -38,6 +38,10 @@ const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placeme
   </Row>
 );
 
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+/** "NW (315°)" for a direction in degrees clockwise from north. */
+const compassName = (deg: number) => `${COMPASS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16]} (${deg}°)`;
+
 const Row = ({ label, children }: { label: string; children: ReactNode }) => (
   <div className="row"><label>{label}</label>{children}</div>
 );
@@ -521,6 +525,23 @@ export function App() {
             )}
             <Row label="Hide behind hills"><input type="checkbox" checked={p.relief.hideHidden} onChange={(e) => set((x) => { x.relief.hideHidden = e.target.checked; })} /><span>cut lines a hill would hide</span></Row>
             <div className="hint">Tilt 0 is the flat map. Height is how much the hills are exaggerated (100% is true proportions). Lines use the Contours pen. The route always stays visible; landmarks behind a hill are left out. While you drag a slider the preview is simplified and fills in when you let go.</div>
+          </div>)}
+        </Group>
+
+        <Group id="shade" title="Shading" {...gp('shade')}
+          toggle={{ on: p.shade.enabled, onChange: (v) => set((x) => { x.shade.enabled = v; }) }}>
+          {p.shade.enabled && (<div onPointerDownCapture={(e) => { if ((e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type === 'range') setDraft(true); }}>
+            <Row label="Sun from"><input type="range" min={0} max={359} step={1} value={p.shade.sunAzimuth} onChange={(e) => set((x) => { x.shade.sunAzimuth = +e.target.value; })} /><span>{compassName(p.shade.sunAzimuth)}</span></Row>
+            <Row label="Sun height"><input type="range" min={10} max={70} step={1} value={p.shade.sunAltitude} onChange={(e) => set((x) => { x.shade.sunAltitude = +e.target.value; })} /><span>{p.shade.sunAltitude}°</span></Row>
+            <Row label="In shade"><input type="range" min={5} max={70} step={1} value={p.shade.amount} onChange={(e) => set((x) => { x.shade.amount = +e.target.value; })} /><span>{p.shade.amount}%</span></Row>
+            <Row label="Extra lines">
+              <select value={p.shade.extra} onChange={(e) => set((x) => { x.shade.extra = +e.target.value as typeof p.shade.extra; })}>
+                <option value={0}>None</option><option value={1}>1 between each pair</option><option value={3}>3, deepening in the darkest shade</option>
+              </select>
+            </Row>
+            <Row label="Darker lines"><input type="checkbox" checked={p.shade.darken} onChange={(e) => set((x) => { x.shade.darken = e.target.checked; })} /><span>shaded parts of each line</span></Row>
+            <Row label="Pen"><PenSelect pens={p.pens} value={p.shade.pen} allowDefault={`Contour pen, drawn twice (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.shade.pen; else x.shade.pen = id; })} /></Row>
+            <div className="hint">Slopes facing away from the sun are drawn darker, like hillshading made of lines. "In shade" is the share of the land that counts as shaded. Works on the contours and on 3D relief rows; heavy contour lines are left as they are.</div>
           </div>)}
         </Group>
 

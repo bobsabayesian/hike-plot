@@ -128,6 +128,7 @@ export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   p.route.pen = fn(p.route.pen);
   p.terrain.pen = fn(p.terrain.pen);
   if (p.terrain.indexPen !== undefined) p.terrain.indexPen = fn(p.terrain.indexPen);
+  if (p.shade.pen !== undefined) p.shade.pen = fn(p.shade.pen);
   p.profile.pen = fn(p.profile.pen);
   p.north.pen = fn(p.north.pen);
   p.text.title.pen = fn(p.text.title.pen);
@@ -199,6 +200,14 @@ export function penSlots(p: Project): PenSlot[] {
       base: (q) => ({ id: q.terrain.pen, label: 'the contour lines' }),
       get: (q) => q.terrain.indexPen,
       set: (q, id) => { if (id === undefined || id === q.terrain.pen) delete q.terrain.indexPen; else q.terrain.indexPen = id; },
+    });
+  }
+  if ((p.terrain.enabled || p.relief.enabled) && p.shade.enabled) {
+    out.push({
+      key: 'shade', section: 'Shading', group: 'shade', inherits: true,
+      base: (q) => ({ id: q.terrain.pen, label: 'the contour lines' }),
+      get: (q) => q.shade.pen,
+      set: (q, id) => { if (id === undefined || id === q.terrain.pen) delete q.shade.pen; else q.shade.pen = id; },
     });
   }
   if (p.features.enabled) {

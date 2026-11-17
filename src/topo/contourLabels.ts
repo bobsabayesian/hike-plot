@@ -205,6 +205,12 @@ export function placeContourLabels(pieces: ContourPiece[], o: LabelOptions): Con
 
 /** SVG path data for the regular and heavy lines, with a gap cut out of a heavy line behind each of its numbers. */
 export function pathsWithGaps(pieces: ContourPiece[], labels: ContourLabel[], sizePt: number): { regular: string; index: string } {
+  const { regular, index } = linesWithGaps(pieces, labels, sizePt);
+  return { regular: toD(regular), index: toD(index) };
+}
+
+/** The regular and heavy lines as points, with a gap cut out of a heavy line behind each of its numbers. */
+export function linesWithGaps(pieces: ContourPiece[], labels: ContourLabel[], sizePt: number): { regular: XY[][]; index: XY[][] } {
   const size = sizePt * PT;
   const cuts = new Map<number, [number, number][]>();
   for (const l of labels) {
@@ -219,5 +225,5 @@ export function pathsWithGaps(pieces: ContourPiece[], labels: ContourLabel[], si
     const frags = cuts.has(i) ? cutIntervals(pc.pts, cuts.get(i)!) : [pc.pts];
     (pc.heavy ? index : regular).push(...frags);
   });
-  return { regular: toD(regular), index: toD(index) };
+  return { regular, index };
 }

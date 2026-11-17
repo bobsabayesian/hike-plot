@@ -73,15 +73,17 @@ export interface ContourPaths { regular: string; index: string; pieces: ContourP
 const f = (n: number) => +n.toFixed(2);
 export const toD = (lines: XY[][]) => lines.map((l) => l.map(([x, y], i) => `${i ? 'L' : 'M'}${f(x)} ${f(y)}`).join('')).join('');
 
-let lastKey = '';
-let lastOut: ContourPaths = { regular: '', index: '', pieces: [] };
+/** the last few results: shading asks for a finer interval alongside the regular one */
+const cache = new Map<string, ContourPaths>();
+const CACHE_SIZE = 3;
 
 /** Project contours to poster mm, simplify, and clip to the map frame (real geometry, plotter-safe). */
 export function contourPaths(
   field: TerrainField, fit: Fit, frame: Rect, intervalM: number, indexEvery: number, smooth = 1,
 ): ContourPaths {
   const key = [intervalM, indexEvery, smooth, frame.x, frame.y, frame.w, frame.h, fit.metersPerMm, fit.toMm(0, 0)[0], fit.toMm(0, 0)[1], field.px0, field.py0, field.w, field.z].join('|') + (field.data.length);
-  if (key === lastKey && lastOut) return lastOut;
+  const hit = cache.get(key);
+  if (hit) return hit;
   const world = TILE * 2 ** field.z;
   const toMm = (gx: number, gy: number): XY =>
     fit.mercToMm(((field.px0 + gx) / world - 0.5) * WORLD_M, (0.5 - (field.py0 + gy) / world) * WORLD_M);
@@ -98,8 +100,10 @@ export function contourPaths(
       }
     }
   }
-  lastKey = key;
-  return (lastOut = { regular: toD(regular), index: toD(index), pieces });
+  const out = { regular: toD(regular), index: toD(index), pieces };
+  cache.set(key, out);
+  if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
+  return out;
 }
 
 const rangeCache = new WeakMap<TerrainField, [number, number]>();
