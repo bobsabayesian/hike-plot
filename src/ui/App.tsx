@@ -4,6 +4,7 @@ import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
 import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
+import { suncalcUrl } from './suncalc';
 import { COVER_CLASSES, COVER_LABELS, PATTERNS, PATTERN_LABELS, type Pattern } from '../cover/types';
 import { OpenByCode, SaveGroup, linkFor, useProjectSave } from './SaveGroup';
 import { createShareLink } from '../share';
@@ -40,8 +41,8 @@ const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placeme
 );
 
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-/** "NW (315°)" for a direction in degrees clockwise from north. */
-const compassName = (deg: number) => `${COMPASS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16]} (${deg}°)`;
+/** "NW" for a direction in degrees clockwise from north. */
+const compassPoint = (deg: number) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
 
 const Row = ({ label, children }: { label: string; children: ReactNode }) => (
   <div className="row"><label>{label}</label>{children}</div>
@@ -534,8 +535,8 @@ export function App() {
         <Group id="shade" title="Shading" {...gp('shade')}
           toggle={{ on: p.shade.enabled, onChange: (v) => set((x) => { x.shade.enabled = v; }) }}>
           {p.shade.enabled && (<div onPointerDownCapture={(e) => { if ((e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type === 'range') setDraft(true); }}>
-            <Row label="Sun from"><input type="range" min={0} max={359} step={1} value={p.shade.sunAzimuth} onChange={(e) => set((x) => { x.shade.sunAzimuth = +e.target.value; })} /><span>{compassName(p.shade.sunAzimuth)}</span></Row>
-            <Row label="Sun height"><input type="range" min={10} max={70} step={1} value={p.shade.sunAltitude} onChange={(e) => set((x) => { x.shade.sunAltitude = +e.target.value; })} /><span>{p.shade.sunAltitude}°</span></Row>
+            <Row label="Sun from"><input type="number" min={0} max={359} step={1} value={p.shade.sunAzimuth} onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) set((x) => { x.shade.sunAzimuth = ((Math.round(v) % 360) + 360) % 360; }); }} /><span>° {compassPoint(p.shade.sunAzimuth)}</span></Row>
+            <Row label="Sun height"><input type="number" min={1} max={89} step={1} value={p.shade.sunAltitude} onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) set((x) => { x.shade.sunAltitude = Math.min(89, Math.max(1, Math.round(v))); }); }} /><span>°</span></Row>
             <Row label="In shade"><input type="range" min={5} max={70} step={1} value={p.shade.amount} onChange={(e) => set((x) => { x.shade.amount = +e.target.value; })} /><span>{p.shade.amount}%</span></Row>
             <Row label="Extra lines">
               <select value={p.shade.extra} onChange={(e) => set((x) => { x.shade.extra = +e.target.value as typeof p.shade.extra; })}>
@@ -544,7 +545,7 @@ export function App() {
             </Row>
             <Row label="Darker lines"><input type="checkbox" checked={p.shade.darken} onChange={(e) => set((x) => { x.shade.darken = e.target.checked; })} /><span>shaded parts of each line</span></Row>
             <Row label="Pen"><PenSelect pens={p.pens} value={p.shade.pen} allowDefault={`Contour pen, drawn twice (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.shade.pen; else x.shade.pen = id; })} /></Row>
-            <div className="hint">Slopes facing away from the sun are drawn darker, like hillshading made of lines. "In shade" is the share of the land that counts as shaded. Works on the contours and on 3D relief rows; heavy contour lines are left as they are.</div>
+            <div className="hint">Slopes facing away from the sun are drawn darker, like hillshading made of lines. "Sun from" is degrees clockwise from north (315 is northwest); "Sun height" is degrees above the horizon. {need && <>To match the light on the day, <a href={suncalcUrl(need, p.points)} target="_blank" rel="noopener noreferrer">look up the sun on SunCalc</a> (this map, {p.points.some((q) => q.time !== undefined) ? 'when the hike started' : 'today at noon'}) and copy its azimuth and altitude here. </>}"In shade" is the share of the land that counts as shaded. Works on the contours and on 3D relief rows; heavy contour lines are left as they are.</div>
           </div>)}
         </Group>
 
