@@ -288,10 +288,14 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         return { x: x0, y: y0, w: Math.min(r.x + r.w, W - innerBorder) - x0, h: Math.min(r.y + r.h, H - innerBorder) - y0 };
       };
       // In 3D, every place on the map is found through a fit that follows the terrain; the flat fit still frames the view.
-      const relief: Relief | undefined = p.relief.enabled && terrain ? buildRelief(terrain, fit, frame, p.relief) : undefined;
+      const relief: Relief | undefined = p.relief.enabled && terrain ? buildRelief(terrain, fit, frame, p.relief, p.points) : undefined;
       const mapFit = relief?.fit ?? fit;
       // hills hide what is behind them (the route stays on top)
       const vis = relief && needsHiding(p.relief) ? buildVisibility(relief) : undefined;
+      // a zoomed 3D view runs past the frame: everything drawn on the map is trimmed at its edges
+      const zoomed = !!relief && (p.relief.zoom ?? 100) > 100;
+      const inFrame = (lines: XY[][]): XY[][] => (zoomed ? lines.flatMap((l) => clipPolyline(l, frame)) : lines);
+      const frameHas = ([x, y]: XY) => !zoomed || (x >= frame.x && x <= frame.x + frame.w && y >= frame.y && y <= frame.y + frame.h);
       const onSurface = (lat: number, lon: number): P3 => { const [x, y] = fit.toMm(lat, lon); return [x, y, relief!.heightMm(relief!.surface.sample(x, y))]; };
       const clean = p.points.length >= 2 ? cleanTrack(p.points, fit.metersPerMm * 0.1) : [];
       const routeXY: XY[] = clean.map((q) => mapFit.toMm(q.lat, q.lon));
@@ -311,7 +315,10 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           water: osm?.water ?? [],
           waterNames: osm?.waterNames ?? [],
           fit: mapFit, frame, route: routeXY,
-          visible: vis ? (la, lo) => { const q = onSurface(la, lo); return vis.isVisible(q[0], q[1], q[2]); } : undefined,
+          visible: vis || zoomed ? (la, lo) => {
+            const q = onSurface(la, lo);
+            return frameHas(relief!.camera.project(q[0], q[1], q[2])) && (!vis || vis.isVisible(q[0], q[1], q[2]));
+          } : undefined,
           labelBounds: withinBorder({ x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }), settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,
           obstacles: labelObstacles,
@@ -323,7 +330,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const halos = landmarkOut?.halos ?? [];
       // clear paper beside the route: half of what the route draws (its weight, or the pen's line if that is wider) plus the gap
       const routeClearR = (p.route.clearMm ?? 0) > 0 && routeXY.length >= 2 ? Math.max(p.route.weightMm, inkWidth(penFor(p.pens, p.route.pen))) / 2 + p.route.clearMm! : 0;
-      const clearLines = (lines: XY[][]): XY[][] => cutNearRoute(cutOutHalos(lines, halos), routeXY, routeClearR);
+      const clearLines = (lines: XY[][]): XY[][] => cutNearRoute(cutOutHalos(inFrame(lines), halos), routeXY, routeClearR);
       // heavy lines and their numbers: their own pen if one is set (its tip makes them heavier, so no forced second pass), else the regular pen, drawn twice over
       const majorPen = p.terrain.indexPen !== undefined && p.terrain.indexPen !== p.terrain.pen ? p.terrain.indexPen : undefined;
       const heavyPen = majorPen ?? p.terrain.pen;
@@ -479,7 +486,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const coverAt = prims.length;
       // cover marks always keep off the route, at least a little beyond its edge
       const routeHalf = routeXY.length >= 2 ? Math.max(p.route.weightMm, inkWidth(penFor(p.pens, p.route.pen))) / 2 : 0;
-      const clearCover = (lines: XY[][]): XY[][] => cutNearRoute(cutOutHalos(lines, halos), routeXY, Math.max(routeClearR, routeHalf + 0.6));
+      const clearCover = (lines: XY[][]): XY[][] => cutNearRoute(cutOutHalos(inFrame(lines), halos), routeXY, Math.max(routeClearR, routeHalf + 0.6));
       for (const [c, mask] of coverMasks) {
         const cs = p.cover.classes[c];
         if (cs.pattern === 'clear') continue;
@@ -512,7 +519,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           for (const w of osm.water) for (const piece of clipPolyline(w.coords.map(([la, lo]) => fit.toMm(la, lo)), frame)) {
             lines.push(piece.map(([x, y]): P3 => [x, y, relief.heightMm(relief.surface.sample(x, y))]));
           }
-          prims.push(...waterLinesPrim(visibleRuns(relief, vis, lines), p.features, waterPen));
+          prims.push(...waterLinesPrim(inFrame(visibleRuns(relief, vis, lines)), p.features, waterPen));
         } else prims.push(...waterPrims(osm.water, mapFit, frame, p.features, waterPen));
       }
 
@@ -597,7 +604,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
 
         tagFrom(profileAt, 'profile');
         prims.push({
-          kind: 'path', part: 'route', d: polyline(xy), color: colorOf(p.route.pen), pen: p.route.pen, mode: 'stroke', widthMm: p.route.weightMm,
+          kind: 'path', part: 'route', d: inFrame([xy]).map(polyline).join(''), color: colorOf(p.route.pen), pen: p.route.pen, mode: 'stroke', widthMm: p.route.weightMm,
           ...dashFor(p.route.style, p.route.weightMm),
         });
       }

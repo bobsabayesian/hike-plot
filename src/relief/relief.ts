@@ -22,11 +22,17 @@ export interface ReliefSettings extends ViewSettings {
   hideHidden: boolean;
   /** a solid base under the terrain, with walls on the sides facing the viewer */
   base: BaseSettings;
+  /** percent; above 100 the view is enlarged and trimmed at the frame */
+  zoom: number;
+  /** what a zoomed view is centered on: the route (when there is one) or the middle of the map */
+  zoomOn: 'route' | 'middle';
 }
 
 export const defaultRelief = (): ReliefSettings => ({
   enabled: false, style: 'contours', rows: 70, turn: 0, tilt: 55, perspective: 35, depth: 130, rowWeightMm: 0.18, hideHidden: true,
   base: defaultBase(),
+  zoom: 100,
+  zoomOn: 'route',
 });
 
 export interface Relief {
@@ -39,8 +45,14 @@ export interface Relief {
   frame: Rect;
 }
 
-/** Build the 3D view of `field` for the map frame. The flat `fit` says where each place is on the flat map. */
-export function buildRelief(field: TerrainField, flat: Fit, frame: Rect, s: ReliefSettings): Relief {
+/** Most route points the zoom's centering looks at. */
+const MAX_FOCUS = 400;
+
+/**
+ * Build the 3D view of `field` for the map frame. The flat `fit` says where each place is on the flat map. A zoomed
+ * view is centered on `route` ([lat, lon] points) when there is one and the settings ask for it.
+ */
+export function buildRelief(field: TerrainField, flat: Fit, frame: Rect, s: ReliefSettings, route: { lat: number; lon: number }[] = []): Relief {
   const surface = buildSurface(field, flat, frame);
   const mid = (surface.lo + surface.hi) / 2;
   const mmPerM = (1 / flat.metersPerMm) * (s.depth / 100);
@@ -57,7 +69,11 @@ export function buildRelief(field: TerrainField, flat: Fit, frame: Rect, s: Reli
     const fz = floorZ({ heightMm, surface }, s.base.depthMm);
     for (const [x, y] of [[frame.x, frame.y], [frame.x + frame.w, frame.y], [frame.x, frame.y + frame.h], [frame.x + frame.w, frame.y + frame.h]] as const) corners.push([x, y, fz]);
   }
-  const camera = makeCamera(frame, s, corners);
+  const step = Math.max(1, Math.ceil(route.length / MAX_FOCUS));
+  const focus = (s.zoom ?? 100) > 100 && s.zoomOn !== 'middle'
+    ? route.filter((_, k) => k % step === 0).map((q): [number, number, number] => { const [x, y] = flat.toMm(q.lat, q.lon); return [x, y, heightMm(surface.sample(x, y))]; })
+    : undefined;
+  const camera = makeCamera(frame, s, corners, focus);
 
   const onSurface = (x: number, y: number): XY => camera.project(x, y, heightMm(surface.sample(x, y)));
   const fit: Fit = {

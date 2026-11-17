@@ -528,6 +528,15 @@ export function App() {
             {p.relief.style !== 'contours' && (
               <Row label="Row weight"><input type="number" min={0.05} max={2} step={0.05} value={p.relief.rowWeightMm} onChange={(e) => set((x) => { x.relief.rowWeightMm = Math.max(0.05, +e.target.value || 0.18); })} /><span className="unit">mm</span></Row>
             )}
+            <Row label="Zoom"><input type="range" min={100} max={300} step={5} value={p.relief.zoom} onChange={(e) => set((x) => { x.relief.zoom = +e.target.value; })} /><span>{p.relief.zoom}%</span></Row>
+            {p.relief.zoom > 100 && p.points.length >= 2 && (
+              <Row label="Center on">
+                <select value={p.relief.zoomOn} onChange={(e) => set((x) => { x.relief.zoomOn = e.target.value as typeof p.relief.zoomOn; })}>
+                  <option value="route">The route</option><option value="middle">The middle of the map</option>
+                </select>
+              </Row>
+            )}
+            {p.relief.zoom > 100 && p.relief.base.enabled && <div className="hint">Zoomed in, the view is trimmed at the frame, so the base's walls are cut off at its edges.</div>}
             <Row label="Hide behind hills"><input type="checkbox" checked={p.relief.hideHidden} onChange={(e) => set((x) => { x.relief.hideHidden = e.target.checked; })} /><span>cut lines a hill would hide</span></Row>
             <Row label="Solid base"><input type="checkbox" checked={p.relief.base.enabled} onChange={(e) => set((x) => { x.relief.base.enabled = e.target.checked; })} /><span>walls down to a floor, like a terrain model</span></Row>
             {p.relief.base.enabled && (<>
@@ -545,7 +554,7 @@ export function App() {
               )}
               <Row label="Base pen"><PenSelect pens={p.pens} value={p.relief.base.pen} allowDefault={`Contour pen (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.relief.base.pen; else x.relief.base.pen = id; })} /></Row>
             </>)}
-            <div className="hint">Tilt 0 is the flat map. Height is how much the hills are exaggerated (100% is true proportions). Lines use the Contours pen. The route always stays visible; landmarks behind a hill are left out. While you drag a slider the preview is simplified and fills in when you let go.</div>
+            <div className="hint">Tilt 0 is the flat map. Height is how much the hills are exaggerated (100% is true proportions). Zoom above 100% enlarges the view to fill the page and trims it at the frame, centered on the route. Lines use the Contours pen. The route always stays visible; landmarks behind a hill are left out. While you drag a slider the preview is simplified and fills in when you let go.</div>
           </div>)}
         </Group>
 
