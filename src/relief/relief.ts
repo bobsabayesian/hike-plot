@@ -7,7 +7,8 @@ import { makeCamera, type Camera, type ViewSettings } from './camera';
 import { buildSurface, type Surface } from './surface';
 import { visibleRuns, type P3, type Visibility } from './visibility';
 
-export type ReliefStyle = 'contours' | 'rows' | 'both';
+/** 'both' is rows with only the heavy contours; 'rowsAll' is rows with every contour */
+export type ReliefStyle = 'contours' | 'rows' | 'both' | 'rowsAll';
 
 export interface ReliefSettings extends ViewSettings {
   enabled: boolean;

@@ -515,7 +515,8 @@ export function App() {
               <select value={p.relief.style} onChange={(e) => set((x) => { x.relief.style = e.target.value as typeof p.relief.style; })}>
                 <option value="contours">Contours on the surface</option>
                 <option value="rows">Ridge rows (slices)</option>
-                <option value="both">Both</option>
+                <option value="both">Rows with heavy contours</option>
+                <option value="rowsAll">Rows with all contours</option>
               </select>
             </Row>
             {p.relief.style !== 'contours' && (

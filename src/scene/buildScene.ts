@@ -394,19 +394,19 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const paint = { color: colorOf(tc.pen), pen: tc.pen, mode: 'stroke' as const, opacity: tc.opacity };
         const heavy = { ...paint, ...(majorPen ? { color: colorOf(majorPen), pen: majorPen } : {}) };
         const toPage = (ls: P3[][]) => pageLines(relief, ls, vis);
-        if (style === 'contours' || style === 'both') {
+        if (style !== 'rows') {
           const lines = contourLines(relief, contourPaths(terrain, fit, frame, interval!, tc.indexEvery).pieces);
-          // with rows underneath, only the heavy index lines are kept: they read as elevation marks on the slices
-          if (style === 'contours') {
+          // 'both' keeps only the heavy index lines over the rows: they read as elevation marks on the slices
+          if (style === 'contours' || style === 'rowsAll') {
             const regular = clearLines(shadeLines(lines.regular, toPage, tc.weightMm, paint));
             if (regular.length) prims.push({ kind: 'path', d: toD(regular), widthMm: tc.weightMm, ...paint });
-            // a finer contour is lifted to its own level, like the regular ones
-            if (shadeMap && sh.extra) pushExtra(extraContours(([x, y], level): P3 => [x, y, relief.heightMm(level)]), toPage, tc.weightMm);
+            // a finer contour is lifted to its own level, like the regular ones (with rows, the extra lines are rows)
+            if (style === 'contours' && shadeMap && sh.extra) pushExtra(extraContours(([x, y], level): P3 => [x, y, relief.heightMm(level)]), toPage, tc.weightMm);
           }
           const index = clearLines(toPage(uncover(lines.index)));
           if (index.length) prims.push({ kind: 'path', d: toD(index), widthMm: tc.indexWeightMm, ...majorPasses, ...heavy });
         }
-        if (style === 'rows' || style === 'both') {
+        if (style !== 'contours') {
           const rowPage = (ls: P3[][]) => pageLines(relief, ls, vis, true);
           const rows = clearLines(shadeLines(ridgeRowLines(relief, p.relief.rows), rowPage, p.relief.rowWeightMm, paint));
           prims.push({ kind: 'path', d: toD(rows), widthMm: p.relief.rowWeightMm, ...paint });

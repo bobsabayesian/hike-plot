@@ -299,14 +299,15 @@ describe('3D in the poster', () => {
     expect(Math.min(...nums)).toBeGreaterThanOrEqual(-0.01);
     expect(Math.max(...nums)).toBeLessThanOrEqual(Math.max(tilted.scene.widthMm, tilted.scene.heightMm) + 0.01);
   });
-  it('the line style chooses contours, rows or both', async () => {
-    const weights = async (style: 'contours' | 'rows' | 'both') => {
+  it('the line style chooses contours, rows, rows with heavy contours, or rows with all contours', async () => {
+    const weights = async (style: 'contours' | 'rows' | 'both' | 'rowsAll') => {
       const { p, scene } = await make((q) => { q.relief = { ...q.relief, enabled: true, style, tilt: 50, rowWeightMm: 0.31 }; });
       return { contour: paths(scene.prims).some((x) => x.widthMm === p.terrain.weightMm), index: paths(scene.prims).some((x) => x.widthMm === p.terrain.indexWeightMm), row: paths(scene.prims).some((x) => x.widthMm === 0.31) };
     };
     expect(await weights('contours')).toEqual({ contour: true, index: true, row: false });
     expect(await weights('rows')).toEqual({ contour: false, index: false, row: true });
     expect(await weights('both')).toEqual({ contour: false, index: true, row: true }); // rows plus only the heavy contour lines
+    expect(await weights('rowsAll')).toEqual({ contour: true, index: true, row: true });
   });
   it('3D works with the flat contours switched off, and needs no terrain to avoid breaking', async () => {
     const { scene } = await make((p) => { p.terrain.enabled = false; p.relief = { ...p.relief, enabled: true, style: 'rows', tilt: 50, rowWeightMm: 0.31 }; });
