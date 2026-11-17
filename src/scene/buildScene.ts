@@ -10,6 +10,7 @@ import { resolveCustom } from '../features/custom';
 import { cutNearRoute, cutOutHalos } from '../features/halo';
 import { buildRelief, contourLines, needsHiding, pageLines, ridgeRowLines, type Relief } from '../relief/relief';
 import { buildSurface } from '../relief/surface';
+import { baseLines, strataLevels } from '../relief/base';
 import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
 import { coverMask, markSymbol, patternMarks, type Mask } from '../cover/draw';
 import { COVER_CLASSES, type CoverClass } from '../cover/types';
@@ -409,6 +410,18 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
             fine.forEach((line, m) => { const step = m % (sh.extra + 1); if (step) steps.set(step, [...(steps.get(step) ?? []), line]); });
             pushExtra([...steps].map(([step, lines]) => ({ step, lines })), rowPage, p.relief.rowWeightMm);
           }
+        }
+        const base = p.relief.base;
+        if (base.enabled) {
+          // a solid base: walls on the sides facing the viewer, outlined heavy, with strata or hatching on them
+          const stepM = base.faces === 'strata' ? interval! : base.faces === 'strataHeavy' ? interval! * (tc.indexEvery > 0 ? tc.indexEvery : 5) : 0;
+          const lines = baseLines(relief, base, p.relief, strataLevels(relief, base.depthMm, stepM));
+          const basePen = base.pen ?? tc.pen;
+          const basePaint = { color: colorOf(basePen), pen: basePen, mode: 'stroke' as const, opacity: tc.opacity };
+          const outline = clearLines(lines.outline);
+          const faces = clearLines(lines.faces);
+          if (faces.length) prims.push({ kind: 'path', d: toD(faces), widthMm: tc.weightMm, ...basePaint });
+          if (outline.length) prims.push({ kind: 'path', d: toD(outline), widthMm: tc.indexWeightMm, ...basePaint, ...(basePen === tc.pen ? { minPasses: 2 } : {}) });
         }
       } else if (p.terrain.enabled && terrain) {
         const paths = contourPaths(terrain, fit, frame, interval!, p.terrain.indexEvery);

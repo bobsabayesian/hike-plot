@@ -5,6 +5,7 @@ import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
 import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
 import { suncalcUrl } from './suncalc';
+import type { BaseFaces } from '../relief/base';
 import { COVER_CLASSES, COVER_LABELS, PATTERNS, PATTERN_LABELS, type Pattern } from '../cover/types';
 import { OpenByCode, SaveGroup, linkFor, useProjectSave } from './SaveGroup';
 import { createShareLink } from '../share';
@@ -528,6 +529,22 @@ export function App() {
               <Row label="Row weight"><input type="number" min={0.05} max={2} step={0.05} value={p.relief.rowWeightMm} onChange={(e) => set((x) => { x.relief.rowWeightMm = Math.max(0.05, +e.target.value || 0.18); })} /><span className="unit">mm</span></Row>
             )}
             <Row label="Hide behind hills"><input type="checkbox" checked={p.relief.hideHidden} onChange={(e) => set((x) => { x.relief.hideHidden = e.target.checked; })} /><span>cut lines a hill would hide</span></Row>
+            <Row label="Solid base"><input type="checkbox" checked={p.relief.base.enabled} onChange={(e) => set((x) => { x.relief.base.enabled = e.target.checked; })} /><span>walls down to a floor, like a terrain model</span></Row>
+            {p.relief.base.enabled && (<>
+              <Row label="Base depth"><input type="range" min={0} max={60} step={1} value={p.relief.base.depthMm} onChange={(e) => set((x) => { x.relief.base.depthMm = +e.target.value; })} /><span>{p.relief.base.depthMm} mm</span></Row>
+              <Row label="On the walls">
+                <select value={p.relief.base.faces} onChange={(e) => set((x) => { x.relief.base.faces = e.target.value as BaseFaces; })}>
+                  <option value="plain">Nothing (outline only)</option>
+                  <option value="strata">Strata at each contour</option>
+                  <option value="strataHeavy">Strata at heavy contours</option>
+                  <option value="hatch">Upright hatching</option>
+                </select>
+              </Row>
+              {p.relief.base.faces === 'hatch' && (
+                <Row label="Hatch spacing"><input type="number" min={0.5} max={10} step={0.25} value={p.relief.base.hatchMm} onChange={(e) => set((x) => { x.relief.base.hatchMm = Math.min(10, Math.max(0.5, +e.target.value || 2)); })} /><span className="unit">mm</span></Row>
+              )}
+              <Row label="Base pen"><PenSelect pens={p.pens} value={p.relief.base.pen} allowDefault={`Contour pen (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.relief.base.pen; else x.relief.base.pen = id; })} /></Row>
+            </>)}
             <div className="hint">Tilt 0 is the flat map. Height is how much the hills are exaggerated (100% is true proportions). Lines use the Contours pen. The route always stays visible; landmarks behind a hill are left out. While you drag a slider the preview is simplified and fills in when you let go.</div>
           </div>)}
         </Group>

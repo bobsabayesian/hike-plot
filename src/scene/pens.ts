@@ -130,6 +130,7 @@ export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   p.terrain.pen = fn(p.terrain.pen);
   if (p.terrain.indexPen !== undefined) p.terrain.indexPen = fn(p.terrain.indexPen);
   if (p.shade.pen !== undefined) p.shade.pen = fn(p.shade.pen);
+  if (p.relief.base.pen !== undefined) p.relief.base.pen = fn(p.relief.base.pen);
   for (const c of COVER_CLASSES) p.cover.classes[c].pen = fn(p.cover.classes[c].pen);
   p.profile.pen = fn(p.profile.pen);
   p.north.pen = fn(p.north.pen);
@@ -202,6 +203,14 @@ export function penSlots(p: Project): PenSlot[] {
       base: (q) => ({ id: q.terrain.pen, label: 'the contour lines' }),
       get: (q) => q.terrain.indexPen,
       set: (q, id) => { if (id === undefined || id === q.terrain.pen) delete q.terrain.indexPen; else q.terrain.indexPen = id; },
+    });
+  }
+  if (p.relief.enabled && p.relief.base.enabled) {
+    out.push({
+      key: 'base', section: '3D base', group: 'relief', inherits: true,
+      base: (q) => ({ id: q.terrain.pen, label: 'the contour lines' }),
+      get: (q) => q.relief.base.pen,
+      set: (q, id) => { if (id === undefined || id === q.terrain.pen) delete q.relief.base.pen; else q.relief.base.pen = id; },
     });
   }
   if ((p.terrain.enabled || p.relief.enabled) && p.shade.enabled) {

@@ -1,3 +1,4 @@
+import { defaultBase, floorZ, type BaseSettings } from './base';
 import { simplifyXY, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
 import type { ContourPiece } from '../topo/contours';
@@ -19,10 +20,13 @@ export interface ReliefSettings extends ViewSettings {
   rowWeightMm: number;
   /** cut away the parts of lines that are behind a hill */
   hideHidden: boolean;
+  /** a solid base under the terrain, with walls on the sides facing the viewer */
+  base: BaseSettings;
 }
 
 export const defaultRelief = (): ReliefSettings => ({
   enabled: false, style: 'contours', rows: 70, turn: 0, tilt: 55, perspective: 35, depth: 130, rowWeightMm: 0.18, hideHidden: true,
+  base: defaultBase(),
 });
 
 export interface Relief {
@@ -48,6 +52,11 @@ export function buildRelief(field: TerrainField, flat: Fit, frame: Rect, s: Reli
   const skipJ = Math.max(1, Math.floor(surface.rows / 80));
   for (let j = 0; j < surface.rows; j += skipJ) for (let i = 0; i < surface.cols; i += skipI) corners.push([frame.x + i * surface.stepX, frame.y + j * surface.stepY, heightMm(surface.elev[j * surface.cols + i]!)]);
   for (const [i, j] of [[0, 0], [surface.cols - 1, 0], [0, surface.rows - 1], [surface.cols - 1, surface.rows - 1]] as const) corners.push([frame.x + i * surface.stepX, frame.y + j * surface.stepY, heightMm(surface.elev[j * surface.cols + i]!)]);
+  // the base's floor must fit in the frame too
+  if (s.base?.enabled) {
+    const fz = floorZ({ heightMm, surface }, s.base.depthMm);
+    for (const [x, y] of [[frame.x, frame.y], [frame.x + frame.w, frame.y], [frame.x, frame.y + frame.h], [frame.x + frame.w, frame.y + frame.h]] as const) corners.push([x, y, fz]);
+  }
   const camera = makeCamera(frame, s, corners);
 
   const onSurface = (x: number, y: number): XY => camera.project(x, y, heightMm(surface.sample(x, y)));
