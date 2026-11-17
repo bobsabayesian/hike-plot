@@ -98,6 +98,9 @@ h3 { font-size: 13px; margin: 14px 0 4px; }
 .lm input[type=number] { grid-column: 4; min-width: 0; }
 .lm .hint { grid-column: 2 / 5; margin: 0; }
 .slot { margin: 8px 0; }
+.hidden-lms { margin: 8px 0; }
+.hidden-lm { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; margin: 3px 0; }
+.hidden-lm > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slot select { width: 100%; }
 .results { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
 .res { text-align: left; display: flex; flex-direction: column; padding: 6px 8px; }

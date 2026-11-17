@@ -317,7 +317,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           fit: mapFit, frame, route: routeXY,
           visible: vis || zoomed ? (la, lo) => {
             const q = onSurface(la, lo);
-            return frameHas(relief!.camera.project(q[0], q[1], q[2])) && (!vis || vis.isVisible(q[0], q[1], q[2]));
+            // tested a little above the ground, so a summit is not judged hidden behind its own crest
+            return frameHas(relief!.camera.project(q[0], q[1], q[2])) && (!vis || vis.isVisible(q[0], q[1], q[2] + LANDMARK_LIFT_MM));
           } : undefined,
           labelBounds: withinBorder({ x: frame.x - mg.left * 0.5, y: frame.y - mg.top * 0.5, w: frame.w + (mg.left + mg.right) * 0.5, h: frame.h + mg.top * 0.5 }), settings: p.features, sizeMm,
           markerR: Math.min(W, H) * 0.0045,
@@ -635,6 +636,9 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
 
   return { scene: { widthMm: W, heightMm: H, paper: p.paper, prims }, view, landmarks, pool, open };
 }
+
+/** How far above the ground a landmark's spot is tested for being in view, mm (in the relief's height units). */
+const LANDMARK_LIFT_MM = 1.5;
 
 /** A line with extra points so no step is longer than `step` mm (so it can follow the ground). */
 function densify(line: XY[], step: number): XY[] {

@@ -5,6 +5,7 @@ import { sampleTrack, sampleWaypoints } from '../sample';
 import { describePoolItem } from '../features/format';
 import { ICONS, ICON_LABELS, KIND_LABELS, LANDMARK_KINDS, POINT_KINDS, requestCovers, requestIsEmpty, wantedRequest, type Icon, type Side } from '../features/types';
 import { suncalcUrl } from './suncalc';
+import { hiddenLandmarks, unhide } from '../features/hidden';
 import type { BaseFaces } from '../relief/base';
 import { COVER_CLASSES, COVER_LABELS, PATTERNS, PATTERN_LABELS, type Pattern } from '../cover/types';
 import { OpenByCode, SaveGroup, linkFor, useProjectSave } from './SaveGroup';
@@ -688,6 +689,30 @@ export function App() {
               </div>
             );
           })}
+          {(() => {
+            const hidden = hiddenLandmarks(p.features.overrides, (composed.landmarks ?? []).map((l) => l.id), [
+              ...(composed.pool ?? []),
+              ...(osm?.landmarks ?? []),
+              ...p.waypoints,
+              ...(p.customLandmarks ?? []).map((c) => ({ id: c.id, name: c.name, kind: 'waypoint' as const })),
+              ...(osm?.waterNames ?? []).map((w) => ({ id: w.id, name: w.name, kind: 'lake' as const })),
+              ...(osm?.water ?? []).filter((w) => w.name).map((w) => ({ id: w.id, name: w.name!, kind: w.kind })),
+            ]);
+            if (!hidden.length) return null;
+            return (
+              <div className="hidden-lms">
+                <div className="hint">
+                  Hidden ({hidden.length}){hidden.length > 1 && <> · <button type="button" className="link" onClick={() => set((x) => { for (const h of hidden) x.features.overrides[h.id] = unhide(x.features.overrides[h.id]); })}>Show all</button></>}
+                </div>
+                {hidden.map((h) => (
+                  <div className="hidden-lm" key={h.id}>
+                    <span title={h.kind ? KIND_LABELS[h.kind] : undefined}>{h.name ?? 'A place not in this view'}{h.kind && <span className="hint"> · {KIND_LABELS[h.kind]}</span>}</span>
+                    <button type="button" onClick={() => set((x) => { x.features.overrides[h.id] = unhide(x.features.overrides[h.id]); })}>Show</button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           {(['point', 'water'] as const).map((group) => {
             const open = composed.open?.[group] ?? 0;
             const items = (composed.pool ?? []).filter((it) => it.group === group);
