@@ -3,7 +3,7 @@
 export type HatchDensity = 'solid' | 'medium' | 'light';
 
 /** Which part of the poster a primitive draws; the editor preview uses it to open that part's settings when clicked. */
-export type Part = 'border' | 'title' | 'location' | 'info' | 'watermark' | 'contours' | 'relief' | 'cover' | 'water' | 'profile' | 'route' | 'north' | 'landmarks';
+export type Part = 'border' | 'title' | 'location' | 'info' | 'watermark' | 'contours' | 'relief' | 'cover' | 'water' | 'profile' | 'route' | 'north' | 'grid' | 'landmarks';
 
 export interface PathPrim {
   kind: 'path';

@@ -24,6 +24,7 @@ import type { LandmarkEntry, LandmarkPlacement } from '../features/select';
 import { penKeyOf, type OsmData } from '../features/types';
 import type { XY } from '../geo/clip';
 import { northBox, northPrims } from './north';
+import { gridLabelRoom, gridLayout, gridPrims, legendHeight, legendPrims } from './grid';
 import { borderPrims, layoutBorder } from './border';
 import { featurePenId, inkWidth, penFor } from './pens';
 import { formatLevel, linesWithGaps, pathsWithGaps, placeContourLabels } from '../topo/contourLabels';
@@ -246,6 +247,14 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     });
   }
 
+  // the map grid's legend (scale bars and notes) sits right under the map; what it says is known once the map is
+  const gridOn = p.grid.enabled && !p.relief.enabled && (p.points.length >= 2 || !!p.feature);
+  let legendY: number | undefined;
+  if (gridOn && p.grid.legend) {
+    const lh = legendHeight(p.grid);
+    blocks.bottom.unshift({ part: 'grid', height: lh, gapAfter: lh * 0.35, draw: (y) => { legendY = y; return []; } });
+  }
+
   let topCursor = mg.top;
   if (!layoutOnly) for (const b of blocks.top) { const at = prims.length; prims.push(...b.draw(topCursor)); tagFrom(at, b.part); topCursor += b.height + b.gapAfter; }
   else for (const b of blocks.top) topCursor += b.height + b.gapAfter;
@@ -273,7 +282,10 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     const profileH = p.profile.enabled && p.profile.position === 'bottom' && p.points.length ? H * 0.09 : 0;
     // distance tick labels hang below the profile, so reserve room for them
     const tickPad = p.profile.enabled && p.profile.labels.xTicks && p.points.length ? p.profile.labels.sizePt * PT * 2.4 : 0;
-    const frame: Rect = { x: contentL, y: topCursor, w: innerW, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) - tickPad };
+    // grid numbers go just outside the map: keep room for them above and below (and at the sides if the margin is thin)
+    const padY = gridOn && p.grid.labels ? gridLabelRoom(p.grid) : 0;
+    const padX = padY ? Math.max(0, p.grid.labelSizePt * PT * 4.4 + 2 - Math.min(mg.left, mg.right)) : 0;
+    const frame: Rect = { x: contentL + padX, y: topCursor + padY, w: innerW - 2 * padX, h: bottomCursor - topCursor - (profileH ? profileH + gap : 0) - tickPad - 2 * padY };
     const focus: BBox = p.points.length >= 2 ? routeView(p.points, p.routeSpanKm) : featureView(p.feature!);
     const fit = fitBBox(focus, frame);
     const [la1, lo1] = fit.fromMm(frame.x, frame.y + frame.h);
@@ -559,6 +571,18 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       }
 
       tagFrom(waterAt, 'water');
+      if (gridOn) {
+        // the grid goes over the land and water and under the route, broken where it would cross a landmark's name
+        const grid = gridLayout(fit, frame, p.grid.spacingM);
+        const draw = { pen: p.grid.pen, color: colorOf(p.grid.pen), fontFamily, fontKey: t.font, clear: (ls: XY[][]) => cutOutHalos(ls, halos) };
+        prims.push(...gridPrims(grid, frame, p.grid, draw));
+        if (legendY !== undefined) {
+          prims.push(...legendPrims(p.grid, draw, {
+            layout: grid, center: fit.fromMm(frame.x + frame.w / 2, frame.y + frame.h / 2), metersPerMm: fit.metersPerMm,
+            intervalM: p.terrain.enabled ? interval : undefined, imperial: p.units === 'imperial', x: contentL, y: legendY, w: innerW,
+          }));
+        }
+      }
       if (p.points.length >= 2) {
         const xy = routeXY;
         const profileAt = prims.length;

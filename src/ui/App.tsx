@@ -33,6 +33,8 @@ import { Group, NARROW_QUERY, useGroups, useMediaQuery } from './Group';
 import { FEATURE_PEN_LABELS, penFor } from '../scene/pens';
 import type { FeaturePenKey } from '../features/types';
 import type { Part } from '../scene/types';
+import { applyMilitary } from '../scene/presets';
+import { GRID_SPACINGS } from '../scene/grid';
 import { CUSTOM_SIZE_ID, CUSTOM_SIZE_MAX_MM, CUSTOM_SIZE_MIN_MM, PRINT_SIZES, type SizeGroup, type Corner, type NorthStyle, type Align, type FontKey, type Placement, type StrokeStyle } from '../scene/project';
 
 const PlaceRow = ({ value, onChange }: { value: Placement; onChange: (v: Placement) => void }) => (
@@ -75,6 +77,7 @@ const PARTS: Record<Part, { group: string; label: string; focus?: string }> = {
   profile: { group: 'profile', label: 'Elevation profile' },
   route: { group: 'route', label: 'Route' },
   north: { group: 'north', label: 'North arrow' },
+  grid: { group: 'grid', label: 'Map grid' },
   landmarks: { group: 'landmarks', label: 'Landmarks' },
 };
 
@@ -447,6 +450,9 @@ export function App() {
         )}</GpxDrop>
 
         <div className="side-stage">Map</div>
+        <div className="row presets"><label>Look</label>
+          <button type="button" title="Brown contours, blue water, green woods, a UTM grid with its numbers, scale bars and grid notes" onClick={() => { if (window.confirm('Switch to the military map look? This changes the pens, contours, land cover, landmarks, grid and title settings (page size, margins and border stay).')) set((x) => { applyMilitary(x); }); }}>Military map</button>
+        </div>
         {hasTrack && (<Group id="route" title="Route" {...gp('route')}>
         <Row label="Pen"><PenSelect pens={p.pens} value={p.route.pen} onChange={(id) => set((x) => { x.route.pen = id!; })} /></Row>
         <Row label="Weight">
@@ -489,7 +495,7 @@ export function App() {
           <Row label="Interval">
             <select value={p.terrain.intervalM} onChange={(e) => set((x) => { x.terrain.intervalM = +e.target.value; })}>
               <option value={0}>Auto</option>
-              {[10, 20, 25, 50, 100, 200, 500].map((n) => <option key={n} value={n}>{n} m</option>)}
+              {[10, 20, 25, 40, 50, 100, 200, 500].map((n) => <option key={n} value={n}>{n} m</option>)}
             </select>
           </Row>
           <Row label="Heavy every">
@@ -800,6 +806,26 @@ export function App() {
           <Row label="Label size"><input type="number" min={5} max={30} value={p.profile.labels.sizePt} onChange={(e) => set((x) => { x.profile.labels.sizePt = +e.target.value || 9; })} /></Row>
         </>)}
         </Group>)}
+
+        <Group id="grid" title="Map grid" {...gp('grid')}
+          toggle={{ on: p.grid.enabled, onChange: (v) => set((x) => { x.grid.enabled = v; }) }}>
+        {p.grid.enabled && (<>
+          {p.relief.enabled && <div className="hint">The grid is drawn on the flat map only: turn 3D relief off to see it.</div>}
+          <Row label="Spacing">
+            <select value={p.grid.spacingM} onChange={(e) => set((x) => { x.grid.spacingM = +e.target.value; })}>
+              <option value={0}>Auto</option>
+              {GRID_SPACINGS.map((m) => <option key={m} value={m}>{m / 1000} km</option>)}
+            </select>
+          </Row>
+          <Row label="Pen"><PenSelect pens={p.pens} value={p.grid.pen} onChange={(id) => set((x) => { x.grid.pen = id!; })} /></Row>
+          <Row label="Line weight"><input type="number" min={0.05} max={1} step={0.05} value={p.grid.weightMm} onChange={(e) => set((x) => { x.grid.weightMm = Math.max(0.05, +e.target.value || 0.15); })} /><span className="unit">mm</span></Row>
+          <Row label="Grid numbers"><input type="checkbox" checked={p.grid.labels} onChange={(e) => set((x) => { x.grid.labels = e.target.checked; })} /><span>around the map's edge</span></Row>
+          {(p.grid.labels || p.grid.legend) && <Row label="Text size"><input type="number" min={5} max={20} value={p.grid.labelSizePt} onChange={(e) => set((x) => { x.grid.labelSizePt = Math.min(20, Math.max(5, +e.target.value || 8)); })} /><span className="unit">pt</span></Row>}
+          <Row label="Neat line"><input type="checkbox" checked={p.grid.neatline} onChange={(e) => set((x) => { x.grid.neatline = e.target.checked; })} /><span>a line around the map</span></Row>
+          <Row label="Legend"><input type="checkbox" checked={p.grid.legend} onChange={(e) => set((x) => { x.grid.legend = e.target.checked; })} /><span>scale bars and grid notes under the map</span></Row>
+          <div className="hint">UTM grid lines (WGS 84) in the zone of the map's center, as on a military map: the lines lean a little off true north away from the zone's middle. The legend names the grid zone and 100 km square, so a spot reads as an MGRS reference.</div>
+        </>)}
+        </Group>
 
         <Group id="north" title="North arrow" {...gp('north')}
           toggle={{ on: p.north.enabled, onChange: (v) => set((x) => { x.north.enabled = v; }) }}>

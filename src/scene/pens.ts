@@ -135,6 +135,7 @@ export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   for (const c of COVER_CLASSES) p.cover.classes[c].pen = fn(p.cover.classes[c].pen);
   p.profile.pen = fn(p.profile.pen);
   p.north.pen = fn(p.north.pen);
+  p.grid.pen = fn(p.grid.pen);
   p.text.title.pen = fn(p.text.title.pen);
   p.text.title.fillPen = fn(p.text.title.fillPen);
   p.text.location.pen = fn(p.text.location.pen);
@@ -247,6 +248,7 @@ export function penSlots(p: Project): PenSlot[] {
     }
   }
   if (p.profile.enabled && p.points.length) add('profile', 'Elevation profile', 'profile', (q) => q.profile.pen, (q, id) => { q.profile.pen = id; });
+  if (p.grid.enabled) add('grid', 'Map grid', 'grid', (q) => q.grid.pen, (q, id) => { q.grid.pen = id; });
   if (p.north.enabled) add('north', 'North arrow', 'north', (q) => q.north.pen, (q, id) => { q.north.pen = id; });
   if (p.text.title.visible) {
     add('title', p.text.title.style === 'fill' ? 'Title' : 'Title outline', 'typography', (q) => q.text.title.pen, (q, id) => { q.text.title.pen = id; });

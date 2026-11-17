@@ -8,6 +8,7 @@ import type { HatchDensity } from './types';
 import { defaultRelief, type ReliefSettings } from '../relief/relief';
 import { defaultShade, type ShadeSettings } from '../relief/shade';
 import { defaultCover, type CoverSettings } from '../cover/types';
+import { defaultGrid, type GridSettings } from './grid';
 
 export type SizeGroup = 'US (inches)' | 'ISO (A series)' | 'Metric (cm)';
 
@@ -207,6 +208,8 @@ export interface Project {
       sizePt: number;
     };
   };
+  /** a military-style UTM / MGRS grid over the flat map, with grid numbers, scale bars and notes */
+  grid: GridSettings;
   north: {
     enabled: boolean;
     style: NorthStyle;
@@ -254,6 +257,7 @@ export const defaultProject = (): Project => ({
     enabled: true, position: 'bottom', pen: PEN_INK, opacity: 0.12, hatch: 'off',
     labels: { extremes: false, yTicks: false, xTicks: false, sizePt: 9 },
   },
+  grid: defaultGrid(PEN_INK),
   north: { enabled: false, style: 'arrow', corner: 'tr', sizeMm: 22, pen: PEN_INK, weightMm: 0.35 },
   text: {
     font: 'sans',
