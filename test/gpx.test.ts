@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseGpx } from '../src/gpx/parse';
 import { cleanTrack, collapseStationary, douglasPeucker, removeElevationSpikes } from '../src/gpx/clean';
 import { computeStats, elevationGain, formatFeet, formatMiles } from '../src/geo/stats';
-import { bbox, fitBBox, haversine } from '../src/geo/project';
+import { bbox, fitBBox, groundMetersPerMm, haversine } from '../src/geo/project';
 
 const pt = (lat: number, lon: number, ele?: number, time?: string) =>
   `<trkpt lat="${lat}" lon="${lon}">${ele === undefined ? '' : `<ele>${ele}</ele>`}${time ? `<time>${time}</time>` : ''}</trkpt>`;
@@ -58,6 +58,16 @@ describe('cleaning', () => {
 });
 
 describe('stats and projection', () => {
+  it('ground meters per mm are the Mercator meters per mm times cos(latitude), and match a measured distance', () => {
+    for (const lat of [0, 46.8, 64]) {
+      const frame = { x: 10, y: 20, w: 200, h: 300 };
+      const fit = fitBBox({ minLat: lat - 0.05, maxLat: lat + 0.05, minLon: 10, maxLon: 10.1 }, frame);
+      const g = groundMetersPerMm(fit, frame);
+      expect(g / (fit.metersPerMm * Math.cos((lat * Math.PI) / 180))).toBeCloseTo(1, 4);
+      const [a, b] = [fit.fromMm(60, 170), fit.fromMm(160, 170)];
+      expect(haversine(a[0], a[1], b[0], b[1]) / 100).toBeCloseTo(g, 1);
+    }
+  });
   it('haversine: 1 degree latitude ~ 111.2 km', () => {
     expect(haversine(0, 0, 1, 0)).toBeGreaterThan(111000);
     expect(haversine(0, 0, 1, 0)).toBeLessThan(111400);

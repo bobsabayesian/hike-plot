@@ -88,7 +88,7 @@ export function douglasPeucker(pts: TrackPoint[], toleranceM: number): TrackPoin
   return pts.filter((_, i) => keep[i]);
 }
 
-/** Full pipeline. `toleranceM` should be ~0.1 mm on paper (metersPerMm * 0.1). */
+/** Full pipeline. `toleranceM` should be ~0.1 mm on paper (groundMetersPerMm * 0.1). */
 export function cleanTrack(pts: TrackPoint[], toleranceM: number): TrackPoint[] {
   return douglasPeucker(collapseStationary(removeElevationSpikes(pts)), toleranceM);
 }

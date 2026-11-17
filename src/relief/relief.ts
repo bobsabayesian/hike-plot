@@ -1,7 +1,7 @@
 import { defaultFade, type FadeSettings } from './fade';
 import { defaultBase, floorZ, type BaseSettings } from './base';
 import { simplifyXY, type Rect, type XY } from '../geo/clip';
-import type { Fit } from '../geo/project';
+import { groundMetersPerMm, type Fit } from '../geo/project';
 import type { ContourPiece } from '../topo/contours';
 import type { TerrainField } from '../topo/terrain';
 import { makeCamera, type Camera, type ViewSettings } from './camera';
@@ -60,7 +60,8 @@ const MAX_FOCUS = 400;
 export function buildRelief(field: TerrainField, flat: Fit, frame: Rect, s: ReliefSettings, route: { lat: number; lon: number }[] = []): Relief {
   const surface = buildSurface(field, flat, frame);
   const mid = (surface.lo + surface.hi) / 2;
-  const mmPerM = (1 / flat.metersPerMm) * (s.depth / 100);
+  // at depth 100 a meter of height is drawn as long as a meter of ground at the map's true scale
+  const mmPerM = (s.depth / 100) / groundMetersPerMm(flat, frame);
   const heightMm = (e: number) => (e - mid) * mmPerM;
 
   // the surface's own nodes decide how big the tilted map is (a sparse sample is enough for its outline)

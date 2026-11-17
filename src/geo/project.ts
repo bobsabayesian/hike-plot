@@ -40,7 +40,10 @@ export interface Fit {
   fromMm(x: number, y: number): [number, number];
   /** Web Mercator meters -> poster mm (linear) */
   mercToMm(mx: number, my: number): [number, number];
-  /** meters on ground per mm on paper */
+  /**
+   * Web Mercator meters per mm on paper. This is not ground distance: ground meters per mm are this times
+   * cos(latitude) (see `groundMetersPerMm`).
+   */
   metersPerMm: number;
 }
 
@@ -67,4 +70,12 @@ export function fitBBox(b: BBox, frame: { x: number; y: number; w: number; h: nu
     toMm: (lat, lon) => mercToMm(...mercator(lat, lon)),
     fromMm: (x, y) => inverseMercator(x0 + (x - offX) / scale, y1 - (y - offY) / scale),
   };
+}
+
+/** Ground meters per mm on paper at the middle of `frame`: the map's true scale there. */
+export function groundMetersPerMm(fit: Fit, frame: { x: number; y: number; w: number; h: number }): number {
+  const cx = frame.x + frame.w / 2, cy = frame.y + frame.h / 2, half = Math.max(1, frame.w / 4);
+  const [la1, lo1] = fit.fromMm(cx - half, cy);
+  const [la2, lo2] = fit.fromMm(cx + half, cy);
+  return haversine(la1, lo1, la2, lo2) / (2 * half);
 }

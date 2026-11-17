@@ -48,11 +48,11 @@ describe('shade map', () => {
     const scene = buildScene(p, terrain);
     expect(scene.prims.length).toBeGreaterThan(0);
     // a flat fit over a square frame around the peak
-    const { fitBBox } = await import('../src/geo/project');
+    const { fitBBox, groundMetersPerMm } = await import('../src/geo/project');
     const frame = { x: 0, y: 0, w: 200, h: 200 };
     const fit = fitBBox(viewBBox(p)!, frame);
     const surface = buildSurface(terrain, fit, frame);
-    const map = buildShadeMap(surface, fit.metersPerMm, 315, 35);
+    const map = buildShadeMap(surface, groundMetersPerMm(fit, frame), 315, 35);
     const [px, py] = fit.toMm(46.82, -121.7);
     const nw = map.darkness(px - 15, py - 15);
     const se = map.darkness(px + 15, py + 15);
@@ -63,6 +63,29 @@ describe('shade map', () => {
     for (let y = 1; y < 200; y += 3) for (let x = 1; x < 200; x += 3) { n++; if (map.darkness(x, y) > cut) dark++; }
     expect(dark / n).toBeGreaterThan(0.3);
     expect(dark / n).toBeLessThan(0.5);
+  });
+});
+
+describe('shade map at a high latitude', () => {
+  it('a plane rising east at 30° gets the darkness of a true 30° slope at 64°N', async () => {
+    const { fitBBox, groundMetersPerMm } = await import('../src/geo/project');
+    const z = 12, w = 400, h = 400, lat = 64.1, lon = -21.9;
+    const px0 = Math.floor(lonToPx(lon, z)) - w / 2;
+    const py0 = Math.floor(latToPx(lat, z)) - h / 2;
+    // rise per pixel = tan(30°) × ground meters per pixel at this latitude
+    const rise = Math.tan(Math.PI / 6) * (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (TILE * 2 ** z);
+    const data = new Float32Array(w * h);
+    for (let r = 0; r < h; r++) for (let q = 0; q < w; q++) data[r * w + q] = 500 + rise * q;
+    const field = { z, px0, py0, w, h, data, covers: { minLat: lat - 0.3, maxLat: lat + 0.3, minLon: lon - 0.6, maxLon: lon + 0.6 } };
+    const frame = { x: 0, y: 0, w: 200, h: 200 };
+    const fit = fitBBox({ minLat: lat - 0.01, maxLat: lat + 0.01, minLon: lon - 0.02, maxLon: lon + 0.02 }, frame);
+    const surface = buildSurface(field, fit, frame);
+    // sun in the west at 30°: a 30° slope facing west gets lit = sin(60°)
+    const map = buildShadeMap(surface, groundMetersPerMm(fit, frame), 270, 30);
+    expect(map.darkness(100, 100)).toBeCloseTo(1 - Math.sin(Math.PI / 3), 2);
+    // with Mercator meters per mm the slope reads as only ~14° (far too lit)
+    const wrong = buildShadeMap(surface, fit.metersPerMm, 270, 30);
+    expect(wrong.darkness(100, 100)).toBeGreaterThan(1 - Math.sin(Math.PI / 3) + 0.05);
   });
 });
 

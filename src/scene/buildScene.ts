@@ -1,5 +1,5 @@
 import { cleanTrack } from '../gpx/clean';
-import { bbox, fitBBox, haversine, type BBox, type Fit } from '../geo/project';
+import { bbox, fitBBox, groundMetersPerMm, haversine, type BBox, type Fit } from '../geo/project';
 import type { Rect } from '../geo/clip';
 import {
   computeStats, metersToFeet, formatCoords, formatDuration, formatFeet, formatKm, formatMeters, formatMiles,
@@ -299,7 +299,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const inFrame = (lines: XY[][]): XY[][] => (zoomed ? lines.flatMap((l) => clipPolyline(l, frame)) : lines);
       const frameHas = ([x, y]: XY) => !zoomed || (x >= frame.x && x <= frame.x + frame.w && y >= frame.y && y <= frame.y + frame.h);
       const onSurface = (lat: number, lon: number): P3 => { const [x, y] = fit.toMm(lat, lon); return [x, y, relief!.heightMm(relief!.surface.sample(x, y))]; };
-      const clean = p.points.length >= 2 ? cleanTrack(p.points, fit.metersPerMm * 0.1) : [];
+      const clean = p.points.length >= 2 ? cleanTrack(p.points, groundMetersPerMm(fit, frame) * 0.1) : [];
       // in 3D the route can float above the ground (lines dropped from it show the gap)
       const lift = relief ? Math.max(0, p.route.liftMm ?? 0) : 0;
       const routeAt = (lat: number, lon: number): XY => {
@@ -362,7 +362,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       // light and shade: where the ground faces away from the sun, lines are drawn darker and extra lines go between them
       const sh = p.shade;
       const shadeMap = sh.enabled && terrain && (relief || p.terrain.enabled)
-        ? buildShadeMap(relief?.surface ?? buildSurface(terrain, fit, frame), fit.metersPerMm, sh.sunAzimuth, sh.sunAltitude)
+        ? buildShadeMap(relief?.surface ?? buildSurface(terrain, fit, frame), groundMetersPerMm(fit, frame), sh.sunAzimuth, sh.sunAltitude)
         : undefined;
       const inShade = (share: number) => { const cut = shadeMap!.cut(share / 100); return (x: number, y: number) => shadeMap!.darkness(x, y) > cut; };
       const shadePen = sh.pen ?? p.terrain.pen;

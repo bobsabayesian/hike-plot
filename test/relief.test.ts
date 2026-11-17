@@ -4,7 +4,7 @@ import { buildSurface, MAX_STEP_MM, MIN_STEP_MM } from '../src/relief/surface';
 import { buildRelief, defaultRelief, liftContours, ridgeRows } from '../src/relief/relief';
 import { contourPaths } from '../src/topo/contours';
 import { latToPx, loadTerrain, lonToPx, TILE, type TerrainField } from '../src/topo/terrain';
-import { fitBBox, type BBox } from '../src/geo/project';
+import { fitBBox, groundMetersPerMm, haversine, type BBox } from '../src/geo/project';
 import { buildScene, composeScene, viewBBox } from '../src/scene/buildScene';
 import { defaultProject, type Project } from '../src/scene/project';
 import { sceneToSvg } from '../src/export/svg';
@@ -142,6 +142,13 @@ describe('the terrain surface', () => {
     expect(surf.sample(frame.x - 500, frame.y - 500)).toBeCloseTo(surf.sample(frame.x, frame.y), 9);
     expect(surf.sample(frame.x + 9999, frame.y + 9999)).toBeCloseTo(surf.sample(frame.x + frame.w, frame.y + frame.h), 9);
   });
+  it('spaces its nodes about one elevation pixel apart (a pixel in mm is its Mercator size over Mercator meters per mm)', () => {
+    const pxMm = 40075016.686 / (TILE * 2 ** field.z) / fit.metersPerMm;
+    expect(pxMm).toBeGreaterThan(MIN_STEP_MM);
+    expect(pxMm).toBeLessThan(MAX_STEP_MM);
+    // it used to divide ground meters by Mercator meters and came out cos(lat) too fine
+    expect(surf.stepX).toBeCloseTo(pxMm, 1);
+  });
   it('is reused when asked for again with the same inputs, and rebuilt when they change', () => {
     const a = buildSurface(field, fit, frame);
     expect(buildSurface(field, fit, frame)).toBe(a);
@@ -186,6 +193,18 @@ describe('the 3D map fit', () => {
   it('taller exaggeration moves the same hill further up the page', () => {
     const y = (depth: number) => buildRelief(field, fit, frame, { ...defaultRelief(), enabled: true, tilt: 60, perspective: 0, depth }).fit.toMm(46.862, -121.745)[1];
     expect(y(300)).not.toBeCloseTo(y(100), 3);
+  });
+  it('at depth 100, 100 m of height is drawn as long as 100 m of ground (true proportions at 47°N)', () => {
+    const r = buildRelief(field, fit, frame, { ...defaultRelief(), enabled: true, depth: 100 });
+    // 100 m of ground east-west, measured on the flat map
+    const lat = 46.85, lon = -121.76;
+    const dLon = (100 / haversine(lat, lon, lat, lon + 0.001)) * 0.001;
+    expect(haversine(lat, lon, lat, lon + dLon)).toBeCloseTo(100, 6);
+    const groundMm = fit.toMm(lat, lon + dLon)[0] - fit.toMm(lat, lon)[0];
+    expect(r.heightMm(1100) - r.heightMm(1000)).toBeCloseTo(groundMm, 3);
+    expect(r.heightMm(1100) - r.heightMm(1000)).toBeCloseTo(100 / groundMetersPerMm(fit, frame), 9);
+    // (the Mercator meters per mm would have made it cos(47°) ≈ 0.68 as tall)
+    expect(groundMm / (100 / fit.metersPerMm)).toBeGreaterThan(1.4);
   });
   it('keeps the flat inverse (used only to frame the view)', () => {
     const r = buildRelief(field, fit, frame, { ...defaultRelief(), enabled: true });

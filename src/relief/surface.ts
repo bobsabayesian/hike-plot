@@ -1,4 +1,4 @@
-import type { Fit } from '../geo/project';
+import { groundMetersPerMm, type Fit } from '../geo/project';
 import type { Rect } from '../geo/clip';
 import { blur } from '../topo/contours';
 import { latToPx, lonToPx, TILE, type TerrainField } from '../topo/terrain';
@@ -39,10 +39,10 @@ export function buildSurface(field: TerrainField, fit: Fit, frame: Rect): Surfac
   const key = [fit.metersPerMm, ox, oy, frame.x, frame.y, frame.w, frame.h].join('|');
   if (last && last.field === field && last.key === key) return last.surface;
 
-  // an elevation pixel in mm on the page: ground meters per world pixel at this latitude, over meters per mm
+  // an elevation pixel in mm on the page: ground meters per world pixel at this latitude, over ground meters per mm
   const [midLat] = fit.fromMm(frame.x + frame.w / 2, frame.y + frame.h / 2);
   const mPerPx = (40075016.686 * Math.cos((midLat * Math.PI) / 180)) / (TILE * 2 ** field.z);
-  let step = Math.min(MAX_STEP_MM, Math.max(MIN_STEP_MM, mPerPx / fit.metersPerMm));
+  let step = Math.min(MAX_STEP_MM, Math.max(MIN_STEP_MM, mPerPx / groundMetersPerMm(fit, frame)));
   while ((frame.w / step + 1) * (frame.h / step + 1) > MAX_NODES) step *= 1.1;
   const cols = Math.max(2, Math.round(frame.w / step) + 1);
   const rows = Math.max(2, Math.round(frame.h / step) + 1);

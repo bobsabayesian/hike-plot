@@ -54,9 +54,10 @@ export interface ShadeMap {
 
 /**
  * The darkness of every node of the surface under a sun at `azimuth`/`altitude` (degrees), with slopes at true
- * proportions. x runs east on the page, y runs south.
+ * proportions. x runs east on the page, y runs south. `groundMetersPerMm` is true ground distance per mm (not the
+ * Mercator `Fit.metersPerMm`), so slopes come out right at any latitude.
  */
-export function buildShadeMap(surface: Surface, metersPerMm: number, azimuth: number, altitude: number): ShadeMap {
+export function buildShadeMap(surface: Surface, groundMetersPerMm: number, azimuth: number, altitude: number): ShadeMap {
   const { cols, rows, elev, stepX, stepY, frame } = surface;
   const az = (azimuth * Math.PI) / 180;
   const alt = (altitude * Math.PI) / 180;
@@ -64,8 +65,8 @@ export function buildShadeMap(surface: Surface, metersPerMm: number, azimuth: nu
   const lx = Math.sin(az) * Math.cos(alt);
   const ly = -Math.cos(az) * Math.cos(alt);
   const lz = Math.sin(alt);
-  const dx = stepX * metersPerMm;
-  const dy = stepY * metersPerMm;
+  const dx = stepX * groundMetersPerMm;
+  const dy = stepY * groundMetersPerMm;
   const dark = new Float32Array(cols * rows);
   for (let j = 0; j < rows; j++) {
     const j0 = Math.max(0, j - 1);
