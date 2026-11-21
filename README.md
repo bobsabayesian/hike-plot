@@ -77,6 +77,8 @@ At the bottom of Landmarks, "Add places from photos…" reads where a photo was 
 
 Plotter text: under Export, "Text" chooses how text is written for a pen plotter. Single strokes draw each letter as a few lines of the pen (fast, and small labels stay readable); filled letters are outlined and hatched (heavier, but small ones clot with a wide pen); the default, Auto, uses single strokes for text up to 6 mm and filled letters for larger text such as the title. Text with a character the single-stroke set lacks (an accent, say) keeps the filled letters. The single-stroke shapes are the Hershey vector fonts (Dr. A. V. Hershey, U.S. National Bureau of Standards), "Sans 1-stroke" and "Serif medium", taken from the MIT-licensed `hersheytext` project (https://github.com/techninja/hersheytextjs); only the letter data is included, in `src/export/hersheyData.ts`.
 
+Land cover can thin the contours under it: each inked kind has a "Clear lines" slider (0 to 100%). The terrain lines under that cover are broken into dashes, a bigger share of every 3 mm stretch left open the higher the slider, so the cover shows through while the shape of the ground still reads; 100% is the same as bare paper. It applies to contours (flat and 3D) and the in-between shade lines, and it means more pen lifts in the plotter file. The "Clear paper" pattern remains the all-the-way version.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.

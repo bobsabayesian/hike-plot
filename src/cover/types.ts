@@ -30,6 +30,8 @@ export interface CoverClassSettings {
   pen: string;
   /** mm between marks or lines */
   spacingMm: number;
+  /** how much of the terrain lines under this cover to clear, 0 to 100 (broken into dashes; 100 is bare paper) */
+  clearPct: number;
 }
 
 export interface CoverSettings {
@@ -47,12 +49,12 @@ export const defaultCover = (): CoverSettings => ({
   enabled: false,
   weightMm: 0.15,
   classes: {
-    wood: { on: true, pattern: 'trees', pen: PEN_INK, spacingMm: 2.6 },
-    rock: { on: true, pattern: 'dashes', pen: PEN_INK, spacingMm: 2.2 },
-    ice: { on: true, pattern: 'clear', pen: PEN_BLUE, spacingMm: 1.5 },
-    grass: { on: false, pattern: 'dots', pen: PEN_INK, spacingMm: 2.5 },
-    wetland: { on: false, pattern: 'reeds', pen: PEN_BLUE, spacingMm: 3 },
-    sand: { on: false, pattern: 'dots', pen: PEN_INK, spacingMm: 1.6 },
+    wood: { on: true, pattern: 'trees', pen: PEN_INK, spacingMm: 2.6, clearPct: 0 },
+    rock: { on: true, pattern: 'dashes', pen: PEN_INK, spacingMm: 2.2, clearPct: 0 },
+    ice: { on: true, pattern: 'clear', pen: PEN_BLUE, spacingMm: 1.5, clearPct: 0 },
+    grass: { on: false, pattern: 'dots', pen: PEN_INK, spacingMm: 2.5, clearPct: 0 },
+    wetland: { on: false, pattern: 'reeds', pen: PEN_BLUE, spacingMm: 3, clearPct: 0 },
+    sand: { on: false, pattern: 'dots', pen: PEN_INK, spacingMm: 1.6, clearPct: 0 },
   },
 });
 

@@ -688,13 +688,17 @@ export function App() {
                     {cs.pattern !== 'clear' && (<>
                       <Row label="Pen"><PenSelect pens={p.pens} value={cs.pen} onChange={(id) => set((x) => { x.cover.classes[c].pen = id!; })} /></Row>
                       <Row label="Spacing"><input type="number" min={0.8} max={10} step={0.2} value={cs.spacingMm} onChange={(e) => set((x) => { x.cover.classes[c].spacingMm = Math.min(10, Math.max(0.8, +e.target.value || 2.5)); })} /><span className="unit">mm</span></Row>
+                      <Row label="Clear lines">
+                        <input type="range" min={0} max={100} step={5} value={cs.clearPct ?? 0} aria-label={`Clear terrain lines under ${COVER_LABELS[c]}`} onChange={(e) => set((x) => { x.cover.classes[c].clearPct = +e.target.value; })} />
+                        <span>{cs.clearPct ? `${cs.clearPct}%` : 'off'}</span>
+                      </Row>
                     </>)}
                   </>)}
                 </div>
               );
             })}
             <Row label="Mark weight"><input type="number" min={0.05} max={1} step={0.05} value={p.cover.weightMm} onChange={(e) => set((x) => { x.cover.weightMm = Math.max(0.05, +e.target.value || 0.15); })} /><span className="unit">mm</span></Row>
-            <div className="hint">What the ground is, from OpenStreetMap through the OpenFreeMap tiles: each kind filled with a pattern a pen can draw. "Clear paper" cuts the terrain lines away instead, so a glacier shows as white snow. Patterns lie on the ground in 3D; trees and tufts stand upright. Marks keep off the route and labels.</div>
+            <div className="hint">What the ground is, from OpenStreetMap through the OpenFreeMap tiles: each kind filled with a pattern a pen can draw. "Clear paper" cuts the terrain lines away instead, so a glacier shows as white snow. "Clear lines" on a kind breaks the contours under it into dashes, a bigger share of each stretch left open the higher it goes (100% is bare paper), so the cover shows through without losing the shape of the ground; it also means more pen lifts in the plotter file. Patterns lie on the ground in 3D; trees and tufts stand upright. Marks keep off the route and labels.</div>
           </>)}
         </Group>
 

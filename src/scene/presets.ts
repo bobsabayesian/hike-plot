@@ -47,12 +47,12 @@ export function applyMilitary(p: Project): void {
   p.cover = {
     ...p.cover, enabled: true, weightMm: 0.15,
     classes: {
-      wood: { on: true, pattern: 'hatch', pen: green, spacingMm: 1.1 },
-      rock: { on: false, pattern: 'dashes', pen: brown, spacingMm: 2.2 },
-      ice: { on: true, pattern: 'clear', pen: blue, spacingMm: 1.5 },
-      grass: { on: false, pattern: 'dots', pen: green, spacingMm: 2.5 },
-      wetland: { on: true, pattern: 'reeds', pen: blue, spacingMm: 3 },
-      sand: { on: false, pattern: 'dots', pen: brown, spacingMm: 1.6 },
+      wood: { on: true, pattern: 'hatch', pen: green, spacingMm: 1.1, clearPct: 0 },
+      rock: { on: false, pattern: 'dashes', pen: brown, spacingMm: 2.2, clearPct: 0 },
+      ice: { on: true, pattern: 'clear', pen: blue, spacingMm: 1.5, clearPct: 0 },
+      grass: { on: false, pattern: 'dots', pen: green, spacingMm: 2.5, clearPct: 0 },
+      wetland: { on: true, pattern: 'reeds', pen: blue, spacingMm: 3, clearPct: 0 },
+      sand: { on: false, pattern: 'dots', pen: brown, spacingMm: 1.6, clearPct: 0 },
     },
   };
   p.features = {

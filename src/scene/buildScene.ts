@@ -14,6 +14,7 @@ import { buildSurface } from '../relief/surface';
 import { baseLines, strataLevels } from '../relief/base';
 import { band, depthOf, splitFar, thinLine } from '../relief/fade';
 import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
+import { thinUnder } from '../cover/thin';
 import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
 import { coverMask, markSymbol, patternMarks, type Mask } from '../cover/draw';
 import { COVER_CLASSES, type CoverClass } from '../cover/types';
@@ -389,9 +390,15 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         }
       }
       const clearMasks = [...coverMasks].filter(([c]) => p.cover.classes[c].pattern === 'clear').map(([, m]) => m);
-      /** terrain lines (flat-map points first) with the parts over clear-paper cover cut away */
-      const uncover = <T extends readonly number[]>(lines: T[][]): T[][] =>
-        clearMasks.length ? splitByShade(lines, (x, y) => clearMasks.some((m) => m.has(x, y))).lit : lines;
+      // kinds that only thin the terrain lines under them: how much to clear (0 to 1), where each one is
+      const thinMasks = [...coverMasks].filter(([c]) => p.cover.classes[c].pattern !== 'clear' && (p.cover.classes[c].clearPct ?? 0) > 0)
+        .map(([c, mask]) => ({ mask, share: Math.min(1, (p.cover.classes[c].clearPct ?? 0) / 100) }));
+      const thinShare = (x: number, y: number): number => { let f = 0; for (const t of thinMasks) if (t.share > f && t.mask.has(x, y)) f = t.share; return f; };
+      /** terrain lines (flat-map points first) with the parts over clear-paper cover cut away, and those over thinning cover broken into dashes */
+      const uncover = <T extends readonly number[]>(lines: T[][]): T[][] => {
+        const bare = clearMasks.length ? splitByShade(lines, (x, y) => clearMasks.some((m) => m.has(x, y))).lit : lines;
+        return thinMasks.length ? thinUnder(bare, thinShare) : bare;
+      };
       const terrainAt = prims.length;
       // light and shade: where the ground faces away from the sun, lines are drawn darker and extra lines go between them
       const sh = p.shade;
@@ -504,7 +511,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const tc = p.terrain;
         let { regular, index } = paths;
         let pieces = paths.pieces;
-        if (halos.length || routeClearR > 0 || clearMasks.length) {
+        if (halos.length || routeClearR > 0 || clearMasks.length || thinMasks.length) {
           // room around labels and beside the route, and clear-paper cover: cut the contours there (the pieces stay consistent for the numbers below)
           pieces = pieces.flatMap((pc) => clearLines(uncover([pc.pts])).map((pts) => ({ ...pc, pts })));
           regular = toD(pieces.filter((x) => !x.heavy).map((x) => x.pts));
