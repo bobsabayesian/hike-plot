@@ -13,8 +13,10 @@ import type { PathPrim } from '../src/scene/types';
 import type { XY } from '../src/geo/clip';
 
 const frame = { x: 20, y: 20, w: 300, h: 380 };
+const everything = Object.fromEntries(DOODLE_KINDS.map((k) => [k, true])) as ReturnType<typeof defaultDoodles>['kinds'];
+const allOn = (over: Partial<ReturnType<typeof defaultDoodles>> = {}) => ({ ...defaultDoodles(), kinds: everything, ...over });
 const flat = (over: Partial<PlaceOptions> = {}): PlaceOptions => ({
-  settings: { ...defaultDoodles(), enabled: true, density: 60 }, frame, route: [], halos: [], obstacles: [], ground: (x, y) => [x, y], ...over,
+  settings: allOn({ enabled: true, density: 60 }), frame, route: [], halos: [], obstacles: [], ground: (x, y) => [x, y], ...over,
 });
 
 describe('the drawings', () => {
@@ -39,7 +41,7 @@ describe('the drawings', () => {
 
 describe('how many', () => {
   it('none when off or at 0, more with density, fewer when they are big, never past the cap', () => {
-    const on = { ...defaultDoodles(), enabled: true };
+    const on = allOn({ enabled: true });
     expect(doodleCount(frame, { ...on, enabled: false })).toBe(0);
     expect(doodleCount(frame, { ...on, density: 0 })).toBe(0);
     expect(doodleCount(frame, { ...on, density: 80 })).toBeGreaterThan(doodleCount(frame, { ...on, density: 20 }));
@@ -136,12 +138,14 @@ describe('placing them', () => {
 });
 
 describe('the setting', () => {
-  it('is off by default, is repaired when read, and survives saving; an older file opens with it off', () => {
+  it('is off by default with only the sun ticked, is repaired when read, and survives saving; an older file opens with it off', () => {
     expect(defaultDoodles().enabled).toBe(false);
+    expect(Object.entries(defaultDoodles().kinds).filter(([, on]) => on).map(([k]) => k)).toEqual(['sun']);
     const n = normalizeDoodles({ enabled: true, density: 500, sizeMm: 1, seed: 3.7, kinds: { tent: false, nonsense: true }, pen: 4 });
     expect(n).toMatchObject({ enabled: true, density: 100, sizeMm: 3, seed: 3, pen: 'ink' });
     expect(n.kinds.tent).toBe(false);
-    expect(n.kinds.pine).toBe(true);
+    expect(n.kinds.pine).toBe(false); // missing kinds are as they are by default: only the sun is on
+    expect(n.kinds.sun).toBe(true);
     expect(normalizeDoodles(undefined)).toEqual(defaultDoodles());
     const p = defaultProject();
     p.doodles = { ...defaultDoodles(), enabled: true, density: 70, seed: 42 };
@@ -186,7 +190,7 @@ describe('on a poster', () => {
   it('off: no doodles and the poster is as it was; on: doodles in the pens, tagged as their own part, and the lines under them are cut away', async () => {
     const off = await build();
     expect(doodleLen(off.scene)).toBe(0);
-    const on = await build((p) => { p.doodles = { ...defaultDoodles(), enabled: true, density: 80 }; });
+    const on = await build((p) => { p.doodles = allOn({ enabled: true, density: 80 }); });
     expect(doodleLen(on.scene)).toBeGreaterThan(200);
     const prims = on.scene.prims.filter((x) => x.part === 'doodles') as PathPrim[];
     expect(prims.every((x) => x.mode === 'stroke' && x.widthMm === 0.25)).toBe(true);
@@ -201,7 +205,7 @@ describe('on a poster', () => {
   it('in 3D the sky gets the sun, clouds and birds in the sky pen, only above the terrain', async () => {
     const { p, scene } = await build((q) => {
       q.relief.enabled = true; q.relief.tilt = 60;
-      q.doodles = { ...defaultDoodles(), enabled: true, density: 100, skyPen: 'blue' };
+      q.doodles = allOn({ enabled: true, density: 100, skyPen: 'blue' });
     });
     const sky = scene.prims.filter((x): x is PathPrim => x.kind === 'path' && x.part === 'doodles' && x.pen === 'blue');
     const ground = scene.prims.filter((x): x is PathPrim => x.kind === 'path' && x.part === 'doodles' && x.pen === 'ink');
@@ -209,10 +213,10 @@ describe('on a poster', () => {
     expect(p.doodles.skyPen).toBe('blue');
   });
   it('the same seed gives the same poster, and Hand-drawn applies to the doodles', async () => {
-    const a = await build((p) => { p.doodles = { ...defaultDoodles(), enabled: true }; });
-    const b = await build((p) => { p.doodles = { ...defaultDoodles(), enabled: true }; });
+    const a = await build((p) => { p.doodles = allOn({ enabled: true }); });
+    const b = await build((p) => { p.doodles = allOn({ enabled: true }); });
     expect(JSON.stringify(a.scene)).toBe(JSON.stringify(b.scene));
-    const w = await build((p) => { p.doodles = { ...defaultDoodles(), enabled: true }; p.hand = { ...p.hand, amount: 80 }; });
+    const w = await build((p) => { p.doodles = allOn({ enabled: true }); p.hand = { ...p.hand, amount: 80 }; });
     expect(JSON.stringify(w.scene.prims.filter((x) => x.part === 'doodles'))).not.toBe(JSON.stringify(a.scene.prims.filter((x) => x.part === 'doodles')));
   });
 });
