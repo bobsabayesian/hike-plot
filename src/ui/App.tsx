@@ -984,6 +984,19 @@ export function App() {
               <option value="justify">Justified (fill the width)</option>
             </select>
           </Row>
+          <Row label="Lettering">
+            <select value={p.text.title.lettering ?? 'font'} onChange={(e) => set((x) => { x.text.title.lettering = e.target.value as typeof p.text.title.lettering; })}>
+              <option value="font">Printed (the text font)</option>
+              <option value="script">Handwritten script</option>
+              <option value="scriptFull">Handwritten script, fuller</option>
+            </select>
+          </Row>
+          {(p.text.title.lettering ?? 'font') !== 'font' && (<>
+            <Row label="Pen"><PenSelect pens={p.pens} value={p.text.title.pen} onChange={(id) => set((x) => { x.text.title.pen = id!; })} /></Row>
+            <Row label="Line weight"><input type="number" min={0.1} max={3} step={0.05} value={p.text.title.scriptMm} onChange={(e) => set((x) => { x.text.title.scriptMm = Math.max(0.1, +e.target.value || 0.6); })} /><span className="unit">mm</span></Row>
+            <div className="hint">The title is written out as pen strokes, in the case you type (not capitals), so it plots as a single line. Letters the script lacks (an accent, say) keep the printed lettering.</div>
+          </>)}
+          {(p.text.title.lettering ?? 'font') === 'font' && (<>
           <Row label="Style">
             <select value={p.text.title.style} onChange={(e) => set((x) => { x.text.title.style = e.target.value as typeof p.text.title.style; })}>
               <option value="fill">Filled letters</option>
@@ -1002,6 +1015,7 @@ export function App() {
                 <option value="solid">Solid hatching</option><option value="medium">Medium hatching</option><option value="light">Light hatching</option>
               </select>
             </Row>
+          </>)}
           </>)}
           <PlaceRow value={p.text.title.placement} onChange={(v) => set((x) => { x.text.title.placement = v; })} />
         </div>

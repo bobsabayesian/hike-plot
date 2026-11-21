@@ -16,6 +16,7 @@ import { band, depthOf, splitFar, thinLine } from '../relief/fade';
 import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
 import { thinUnder } from '../cover/thin';
 import { applyHand } from './hand';
+import { canStroke, textToStrokes } from '../export/strokefont';
 import { GLYPH_BY_KIND } from '../doodles/glyphs';
 import { doodleHalos, doodleLines, placeDoodles, type Placed } from '../doodles/place';
 import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
@@ -207,6 +208,11 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       draw: (y) => {
         const base = y + size * 0.72;
         const outline = { ...place, mode: 'stroke' as const, strokeMm: ts.outlineMm };
+        if (ts.lettering !== 'font' && canStroke(title, ts.lettering)) {
+          // written out by hand: the letters as pen strokes, the case as typed; a title with a character the face lacks keeps the font
+          const d = textToStrokes(text(ts.pen, title, base, size, place, titleX) as Extract<Prim, { kind: 'text' }>, ts.lettering);
+          if (d) return [{ kind: 'path', d, color: colorOf(ts.pen), pen: ts.pen, mode: 'stroke', widthMm: ts.scriptMm, round: true } as Prim];
+        }
         if (ts.style === 'outline') return [text(ts.pen, title.toUpperCase(), base, size, outline, titleX)];
         // inside first, so the outline sits on top of it
         if (ts.style === 'outlineFill') return [

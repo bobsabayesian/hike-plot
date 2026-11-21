@@ -80,3 +80,28 @@ describe('plotter text mode', () => {
     expect(out[0]!.widthMm).toBe(1.5);
   });
 });
+
+describe('handwriting faces', () => {
+  it('draw capitals and lowercase with lines, a bit larger than the print faces, and have the punctuation of a title', () => {
+    for (const face of ['script', 'scriptFull'] as const) {
+      expect(canStroke("Mount Rainier, WA (Mt. Si) - 1st & 2nd's", face)).toBe(true);
+      expect(canStroke('Café', face)).toBe(false);
+      const d = textToStrokes(text({ text: 'H', sizeMm: 10 }), face)!;
+      const ys = pts(d).map((p) => p[1]);
+      expect(Math.max(...ys)).toBeCloseTo(20, 1); // sits on the baseline
+      expect(20 - Math.min(...ys)).toBeCloseTo(8.5, 0); // a capital is 0.85 of the size
+    }
+    expect(textToStrokes(text({ text: 'Hello' }), 'script')).not.toBe(textToStrokes(text({ text: 'Hello' }), 'sans'));
+    expect(textToStrokes(text({ text: 'Hello' }), 'script')).not.toBe(textToStrokes(text({ text: 'Hello' }), 'scriptFull'));
+  });
+  it('lowercase and capitals differ (the case is kept)', () => {
+    expect(textToStrokes(text({ text: 'abc' }), 'script')).not.toBe(textToStrokes(text({ text: 'ABC' }), 'script'));
+  });
+  it('anchors and justifies like the other faces', () => {
+    const xs = (anchor: 'start' | 'middle' | 'end') => pts(textToStrokes(text({ text: 'Hello', anchor, x: 50, sizeMm: 10 }), 'script')!).map((p) => p[0]);
+    expect(Math.min(...xs('start'))).toBeGreaterThanOrEqual(49);
+    expect(Math.max(...xs('end'))).toBeLessThanOrEqual(51.5);
+    const wide = pts(textToStrokes(text({ text: 'Hello', sizeMm: 8, fitWidthMm: 80 }), 'script')!).map((p) => p[0]);
+    expect(Math.max(...wide) - Math.min(...wide)).toBeGreaterThan(60);
+  });
+});

@@ -1,13 +1,17 @@
 import type { TextPrim } from '../scene/types';
-import { SANS, SERIF } from './hersheyData';
+import { SANS, SCRIPT, SCRIPT_FULL, SERIF } from './hersheyData';
+
+/** The faces of single-stroke letters: the two the regular text stands in for, and two handwriting faces for lettering. */
+export type StrokeFace = 'sans' | 'serif' | 'script' | 'scriptFull';
+const SETS: Record<StrokeFace, string[]> = { sans: SANS, serif: SERIF, script: SCRIPT, scriptFull: SCRIPT_FULL };
 
 type Pt = [number, number];
 interface Glyph { /** the letter's full advance, in font units */ adv: number; strokes: Pt[][] }
 
 const BASELINE = 22;
 const CAP_HEIGHT = 21;
-/** The sans face's capital height as a share of its size, so single-stroke text is about as tall as the regular text it stands in for. */
-const CAP_SHARE = 0.72;
+/** A face's capital height as a share of its size, so single-stroke text is about as tall as the regular text it stands in for (the handwriting faces have small lowercase, so they are drawn a little larger). */
+const CAP_SHARE_BY_FACE: Record<StrokeFace, number> = { sans: 0.72, serif: 0.72, script: 0.85, scriptFull: 0.85 };
 const SPACE_ADV = 16;
 
 function parse(row: string): Glyph {
@@ -39,12 +43,12 @@ const EXTRA: Record<string, Glyph> = {
 
 const cache = new Map<string, Glyph | null>();
 /** The glyph for a character in a face, or null if the set has none (and so single-stroke text cannot be used for that text). */
-function glyphOf(face: 'sans' | 'serif', ch: string): Glyph | null {
+function glyphOf(face: StrokeFace, ch: string): Glyph | null {
   const key = face + ch;
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
   const code = ch.charCodeAt(0);
-  const set = face === 'sans' ? SANS : SERIF;
+  const set = SETS[face];
   let g: Glyph | null = null;
   if (ch === ' ') g = { adv: SPACE_ADV, strokes: [] };
   else if (code >= 33 && code <= 126 && set[code - 33]) g = parse(set[code - 33]!);
@@ -54,7 +58,7 @@ function glyphOf(face: 'sans' | 'serif', ch: string): Glyph | null {
 }
 
 /** Can every character of this text be drawn with single strokes? */
-export const canStroke = (text: string, face: 'sans' | 'serif'): boolean => [...text].every((c) => glyphOf(face, c) !== null);
+export const canStroke = (text: string, face: StrokeFace): boolean => [...text].every((c) => glyphOf(face, c) !== null);
 
 const f = (n: number) => +n.toFixed(3);
 
@@ -62,10 +66,10 @@ const f = (n: number) => +n.toFixed(3);
  * The text as lines for a pen: path data of `M x y L x y …` strokes in poster mm, placed like the filled text it replaces
  * (anchor, letter-spacing, justified width, turn about its anchor point). Undefined if a character has no single-stroke shape.
  */
-export function textToStrokes(t: TextPrim): string | undefined {
-  if (!canStroke(t.text, t.fontKey)) return undefined;
-  const glyphs = [...t.text].map((c) => glyphOf(t.fontKey, c)!);
-  const k = (t.sizeMm * CAP_SHARE) / CAP_HEIGHT;
+export function textToStrokes(t: TextPrim, face: StrokeFace = t.fontKey): string | undefined {
+  if (!canStroke(t.text, face)) return undefined;
+  const glyphs = [...t.text].map((c) => glyphOf(face, c)!);
+  const k = (t.sizeMm * CAP_SHARE_BY_FACE[face]) / CAP_HEIGHT;
   let tracking = t.trackingMm;
   const natural = glyphs.reduce((a, g) => a + g.adv * k, 0);
   if (t.fitWidthMm !== undefined && glyphs.length > 1) tracking = Math.max(-0.05 * t.sizeMm, (t.fitWidthMm - natural) / (glyphs.length - 1));

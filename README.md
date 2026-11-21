@@ -97,6 +97,10 @@ The "Hand-drawn feel" group adds a steady, gentle wander to lines, as if drawn f
 
 The "Doodles" group scatters little single-stroke drawings (pines, round trees, tents, mountains, flags, cairns, birds, clouds, a sun) over the map where there is room: not on the route, the landmark labels, the north arrow or each other, and inside the map. How many, how big, Shuffle (a new scatter from a new seed), the pens (one for the ground, one for the sky) and which kinds are on are settings. Trees come in groves and birds in flocks, at most one sun. Each doodle clears the terrain lines and land cover marks under it (a rounded box with the "Clear around" gap), the same way a landmark label does. In the 3D view the trees, tents, mountains, flags and cairns stand on terrain you can see, and the cloud, sun and birds go where there is no terrain (the sky above the relief); on a flat map everything goes on the map. Doodles are their own layer ("Doodles") in the layer sorter, and the hand-drawn wander applies to them by default.
 
+## Handwritten title
+
+Typography → Title → Lettering: "Printed" (the text font, with the filled / outline styles) or "Handwritten script" or "Handwritten script, fuller" (a double-line version). Handwriting is drawn as pen strokes in the title pen at its own line weight (0.6 mm to begin with, drawn as several passes if the pen is thinner), in the case you type rather than capitals, so it plots as single lines and is fast. It follows the title's size, alignment and justified width. A title with a character the script lacks (an accent, say) keeps the printed lettering. The letter shapes are the Hershey "Script 1-stroke" and "Script medium" faces, from the same data as the single-stroke plotter text.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.
