@@ -94,6 +94,18 @@ describe('placing them', () => {
     expect(new Set(items.map((i) => i.kind))).toEqual(new Set(['tent']));
     expect(place({ settings: only() })).toEqual([]);
   });
+  it('with only the sun on there is one sun and no crash, in any seed, on a flat map or in the sky', () => {
+    const only = { ...flat().settings, density: 100, kinds: Object.fromEntries(DOODLE_KINDS.map((k) => [k, k === 'sun'])) as never };
+    for (const seed of [1, 2, 3, 99, 12345]) {
+      expect(place({ settings: { ...only, seed } }).length).toBeLessThanOrEqual(1);
+      expect(() => place({ settings: { ...only, seed }, ground: (x, y) => [x, y], sky: () => true })).not.toThrow();
+    }
+    expect(place({ settings: only })).toHaveLength(1);
+  });
+  it('with only the kinds that cap out or cannot fit anywhere, it stops instead of looping or failing', () => {
+    expect(() => place({ ground: () => undefined, settings: { ...flat().settings, density: 100 } })).not.toThrow();
+    expect(place({ ground: () => undefined })).toEqual([]);
+  });
   it('trees come in groves, birds in flocks, and there is at most one sun', () => {
     const items = place({ settings: { ...flat().settings, density: 100 } });
     expect(items.filter((i) => i.kind === 'sun').length).toBeLessThanOrEqual(1);
@@ -202,5 +214,20 @@ describe('on a poster', () => {
     expect(JSON.stringify(a.scene)).toBe(JSON.stringify(b.scene));
     const w = await build((p) => { p.doodles = { ...defaultDoodles(), enabled: true }; p.hand = { ...p.hand, amount: 80 }; });
     expect(JSON.stringify(w.scene.prims.filter((x) => x.part === 'doodles'))).not.toBe(JSON.stringify(a.scene.prims.filter((x) => x.part === 'doodles')));
+  });
+});
+
+describe('a whole poster with only the sun', () => {
+  it('builds, flat and in 3D, with at most one sun', async () => {
+    for (const relief of [false, true]) {
+      const p: Project = { ...defaultProject(), points: sampleTrack() };
+      p.terrain.intervalM = 50; p.features.enabled = false;
+      if (relief) { p.relief.enabled = true; p.relief.tilt = 60; }
+      p.doodles = { ...defaultDoodles(), enabled: true, density: 100, kinds: Object.fromEntries(DOODLE_KINDS.map((k) => [k, k === 'sun'])) as never };
+      const terrain = await loadTerrain(viewBBox(p)!, cone);
+      const sc = buildScene(p, terrain);
+      const d = sc.prims.filter((x): x is PathPrim => x.kind === 'path' && x.part === 'doodles');
+      expect(d.length).toBeLessThanOrEqual(2); // the sun is one path in the sky pen
+    }
   });
 });

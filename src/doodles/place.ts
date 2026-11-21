@@ -131,8 +131,10 @@ export function placeDoodles(o: PlaceOptions): Placed[] {
   };
 
   let suns = 0;
-  const pick = (): DoodleKind => {
+  /** the next kind to try, or undefined when nothing is left to place (only the sun is on, and it is already there) */
+  const pick = (): DoodleKind | undefined => {
     const pool = kinds.filter((g) => g.kind !== 'sun' || suns < 1);
+    if (!pool.length) return undefined;
     let r = rnd() * pool.reduce((a, g) => a + g.weight, 0);
     for (const g of pool) { r -= g.weight; if (r <= 0) return g.kind; }
     return pool[pool.length - 1]!.kind;
@@ -140,6 +142,7 @@ export function placeDoodles(o: PlaceOptions): Placed[] {
 
   for (let tries = 0; tries < target * 80 && items.length < target; tries++) {
     const kind = pick();
+    if (!kind) break;
     const g = GLYPH_BY_KIND[kind];
     const x = f.x + rnd() * f.w;
     // sky things hug the top of the picture, where the sky is
