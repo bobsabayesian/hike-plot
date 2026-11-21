@@ -112,6 +112,12 @@ export interface FeatureSettings {
   /** terrain lines are cut this many mm around every label (0 = leave them) */
   clearMm: number;
   waterWeightMm: number;
+  /** rings that follow each lake's shore a little way in (0 = none) */
+  rippleRings: number;
+  /** how far apart the shore and the rings are, mm */
+  rippleGapMm: number;
+  /** small wave marks over the open water of lakes */
+  waves: boolean;
   overrides: Record<string, FeatureOverride>;
 }
 
@@ -149,6 +155,9 @@ export const defaultFeatures = (): FeatureSettings => ({
   icons: {},
   clearMm: 0,
   waterWeightMm: 0.2,
+  rippleRings: 0,
+  rippleGapMm: 1.2,
+  waves: false,
   overrides: {},
 });
 

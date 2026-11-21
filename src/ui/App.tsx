@@ -771,6 +771,9 @@ export function App() {
               <label key={k}><input type="checkbox" checked={p.features.kinds[k]} onChange={(e) => set((x) => { x.features.kinds[k] = e.target.checked; })} /> {KIND_LABELS[k]}</label>
             ))}
             <label title="Draw rivers and lake shapes"><input type="checkbox" data-edit="water" checked={p.features.water} onChange={(e) => set((x) => { x.features.water = e.target.checked; })} /> Water outlines</label>
+            <label title="Rings that follow each lake's shore a little way in">Lake ripples <select value={p.features.rippleRings ?? 0} onChange={(e) => set((x) => { x.features.rippleRings = +e.target.value; })}>{[0, 1, 2, 3, 4].map((n) => <option key={n} value={n}>{n ? `${n} ring${n > 1 ? 's' : ''}` : 'none'}</option>)}</select></label>
+            {(p.features.rippleRings ?? 0) > 0 && <label title="Distance between the shore and the rings">Ring gap <input type="number" min={0.4} max={5} step={0.2} value={p.features.rippleGapMm ?? 1.2} onChange={(e) => set((x) => { x.features.rippleGapMm = Math.min(5, Math.max(0.4, +e.target.value || 1.2)); })} /> mm</label>}
+            <label title="Small wave marks over open water"><input type="checkbox" checked={p.features.waves ?? false} onChange={(e) => set((x) => { x.features.waves = e.target.checked; })} /> Wave marks on lakes</label>
             <label title="Write river and lake names"><input type="checkbox" checked={p.features.waterLabels} onChange={(e) => set((x) => { x.features.waterLabels = e.target.checked; })} /> Water labels</label>
           </div>
           <Row label="Clear around labels"><input type="range" min={0} max={20} step={0.5} value={p.features.clearMm ?? 0} onChange={(e) => set((x) => { x.features.clearMm = +e.target.value; })} /><span>{p.features.clearMm ? `${p.features.clearMm} mm` : 'off'}</span></Row>

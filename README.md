@@ -123,3 +123,7 @@ If you run a service that draws text as single-line SVG (`GET /api/v1/text.svg`,
 ## Landmark icons and hatch angle
 
 Landmark icons now include a tent, flag, camera, coffee cup and bear paw (pick one per kind or per landmark). Places added from photos are drawn with a camera. In the plotter view, "Hatch angle" (30° to 90°, 90° is upright) sets the direction of the hatch lines that fill shapes in the plotter file; the default is 45°.
+
+## Water ripples
+
+Under Landmarks, "Lake ripples" draws 1 to 4 rings that follow each lake's shore a little way in (the gap is adjustable), and "Wave marks on lakes" scatters small tilde marks over the open water. Both are drawn in the water pen, are off by default, and work in the 3D view too. Rings stop where a narrow neck or bay is too tight for them.

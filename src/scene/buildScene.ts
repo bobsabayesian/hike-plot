@@ -25,6 +25,7 @@ import { coverMask, markSymbol, patternMarks, type Mask } from '../cover/draw';
 import { COVER_CLASSES, type CoverClass } from '../cover/types';
 import { buildVisibility, visibleRuns, type P3 } from '../relief/visibility';
 import type { TerrainField } from '../topo/terrain';
+import { lakeRipples } from '../features/ripples';
 import { landmarkPrims, waterLinesPrim, waterPrims } from '../features/draw';
 import { clipPolyline } from '../geo/clip';
 import type { LandmarkEntry, LandmarkPlacement } from '../features/select';
@@ -630,14 +631,22 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       const waterAt = prims.length;
       if (p.features.enabled && p.features.water && osm) {
         const waterPen = penFor(p.pens, featurePenId(p.features, 'waterOutline'));
+        // ripples and wave marks inside lakes (page mm; the lake rings are not clipped, so a shore running off the page still gets rings)
+        const ripples = p.features.rippleRings > 0 || p.features.waves
+          ? lakeRipples(osm.water.filter((w) => w.kind === 'lake').map((w) => w.coords.map(([la, lo]) => fit.toMm(la, lo) as XY)), frame, { rings: p.features.rippleRings, gapMm: p.features.rippleGapMm, waves: p.features.waves })
+          : [];
         if (relief && vis) {
           // water follows the ground, so a stream behind a hill is cut away like any other line
           const lines: P3[][] = [];
           for (const w of osm.water) for (const piece of clipPolyline(w.coords.map(([la, lo]) => fit.toMm(la, lo)), frame)) {
             lines.push(piece.map(([x, y]): P3 => [x, y, relief.heightMm(relief.surface.sample(x, y))]));
           }
+          for (const piece of ripples) lines.push(piece.map(([x, y]): P3 => [x, y, relief.heightMm(relief.surface.sample(x, y))]));
           prims.push(...waterLinesPrim(inFrame(visibleRuns(relief, vis, lines)), p.features, waterPen));
-        } else prims.push(...waterPrims(osm.water, mapFit, frame, p.features, waterPen));
+        } else {
+          prims.push(...waterPrims(osm.water, mapFit, frame, p.features, waterPen));
+          prims.push(...waterLinesPrim(ripples, p.features, waterPen));
+        }
       }
 
       tagFrom(waterAt, 'water');
