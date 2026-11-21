@@ -94,17 +94,22 @@ export function cutOutHalos(lines: XY[][], halos: Halo[]): XY[][] {
 }
 
 /**
- * Cut lines wherever they come within `r` mm of a route (a polyline), so the route has clear paper beside it. Works on
- * the lines as they are drawn, so it holds in the 3D view too. Route segments are binned in a grid so long tracks stay fast;
- * a line segment far from the route is copied as it is, and near it is sampled every 0.25 mm.
+ * Cut lines wherever they come within `r` mm of any of the `cutters` (polylines), so they have clear paper beside them. Works on
+ * the lines as they are drawn, so it holds in the 3D view too. Cutter segments are binned in a grid so many long cutters stay fast;
+ * a line segment far from all of them is copied as it is, and near one is sampled every 0.25 mm.
  */
-export function cutNearRoute(lines: XY[][], route: XY[], r: number): XY[][] {
-  if (!(r > 0) || route.length < 2) return lines;
+export function cutNearPolylines(lines: XY[][], cutters: XY[][], r: number): XY[][] {
+  if (!(r > 0)) return lines;
+  // every segment of every cutter, as x0 y0 x1 y1
+  const seg: number[] = [];
+  for (const c of cutters) for (let i = 0; i + 1 < c.length; i++) seg.push(c[i]![0], c[i]![1], c[i + 1]![0], c[i + 1]![1]);
+  const count = seg.length / 4;
+  if (!count) return lines;
   const cell = Math.max(2 * r, 2);
   const grid = new Map<string, number[]>();
   const key = (cx: number, cy: number) => `${cx},${cy}`;
-  for (let i = 0; i + 1 < route.length; i++) {
-    const [ax, ay] = route[i]!, [bx, by] = route[i + 1]!;
+  for (let i = 0; i < count; i++) {
+    const ax = seg[4 * i]!, ay = seg[4 * i + 1]!, bx = seg[4 * i + 2]!, by = seg[4 * i + 3]!;
     const x0 = Math.floor((Math.min(ax, bx) - r) / cell), x1 = Math.floor((Math.max(ax, bx) + r) / cell);
     const y0 = Math.floor((Math.min(ay, by) - r) / cell), y1 = Math.floor((Math.max(ay, by) + r) / cell);
     for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
@@ -113,7 +118,7 @@ export function cutNearRoute(lines: XY[][], route: XY[], r: number): XY[][] {
       if (list) list.push(i); else grid.set(k, [i]);
     }
   }
-  /** route segments that could be within r of anything in the box */
+  /** cutter segments that could be within r of anything in the box */
   const candidates = (x0: number, y0: number, x1: number, y1: number): Set<number> => {
     const out = new Set<number>();
     for (let cx = Math.floor((x0 - r) / cell); cx <= Math.floor((x1 + r) / cell); cx++)
@@ -124,8 +129,8 @@ export function cutNearRoute(lines: XY[][], route: XY[], r: number): XY[][] {
   const r2 = r * r;
   const tooClose = (p: XY, segs: Set<number>): boolean => {
     for (const i of segs) {
-      const [ax, ay] = route[i]!, [bx, by] = route[i + 1]!;
-      const dx = bx - ax, dy = by - ay;
+      const ax = seg[4 * i]!, ay = seg[4 * i + 1]!;
+      const dx = seg[4 * i + 2]! - ax, dy = seg[4 * i + 3]! - ay;
       const l2 = dx * dx + dy * dy;
       const t = l2 ? Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / l2)) : 0;
       const ex = ax + t * dx - p[0], ey = ay + t * dy - p[1];
@@ -133,8 +138,30 @@ export function cutNearRoute(lines: XY[][], route: XY[], r: number): XY[][] {
     }
     return false;
   };
-  return cutLines(lines, (a, b) => {
-    const segs = candidates(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1]));
-    return segs.size ? (p) => tooClose(p, segs) : undefined;
-  });
+  const out: XY[][] = [];
+  for (const line of lines) {
+    let run: XY[] = [];
+    const flush = () => { if (run.length > 1) out.push(run); run = []; };
+    for (let i = 0; i < line.length; i++) {
+      const b = line[i]!;
+      if (i === 0) {
+        if (!tooClose(b, candidates(b[0], b[1], b[0], b[1]))) run.push(b);
+        continue;
+      }
+      const a = line[i - 1]!;
+      const segs = candidates(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1]));
+      if (!segs.size) { run.push(b); continue; }
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const n = Math.max(1, Math.ceil(len / STEP_MM));
+      for (let k = 1; k <= n; k++) {
+        const p: XY = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n];
+        if (tooClose(p, segs)) flush(); else run.push(p);
+      }
+    }
+    flush();
+  }
+  return out;
 }
+
+/** Cut lines wherever they come within `r` mm of a route (a polyline). */
+export const cutNearRoute = (lines: XY[][], route: XY[], r: number): XY[][] => (route.length < 2 ? lines : cutNearPolylines(lines, [route], r));

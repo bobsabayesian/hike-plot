@@ -26,6 +26,9 @@ import { loadFonts } from '../export/fonts';
 import { SPAN_MAX_KM, SPAN_MIN_KM, wheelSpan } from './wheel';
 import { isDarkPaper } from '../scene/pens';
 import { prepareScene, tipFor, type ExportMode, type PlotterText } from '../export/outlines';
+import { plotterLayout, preparePlotter } from '../export/plotter';
+import { LayerSorter } from './LayerSorter';
+import type { LayerId } from '../scene/layers';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
 import { PagePanel } from './PagePanel';
@@ -297,8 +300,10 @@ export function App() {
   }, [pendingEdit]);
   /** the SVG as the Export settings say (plotter: a layer per pen), for download or for a link */
   const makeSvg = async () => {
-    const out = prepareScene(scene, mode, mode === 'live' ? undefined : await loadFonts(), { pens: p.pens, plotterText: plotText });
-    return sceneToSvg(out, { paper: paperInExport && mode !== 'plotter', ...(mode === 'plotter' ? { layers: 'pen' as const, pens: p.pens } : {}) });
+    const fonts = mode === 'live' ? undefined : await loadFonts();
+    // the plotter file is also cut by the layer rules, and laid out in layers as the layer settings say
+    const out = mode === 'plotter' ? preparePlotter(scene, p, fonts!, plotText) : prepareScene(scene, mode, fonts, { pens: p.pens, plotterText: plotText });
+    return sceneToSvg(out, { paper: paperInExport && mode !== 'plotter', ...(mode === 'plotter' ? plotterLayout(p) : {}) });
   };
   const showPoster = () => { if (narrow) setTab('poster'); };
   /** a GPX that could not be read: shown where the file was dropped */
@@ -388,13 +393,14 @@ export function App() {
     let live = true;
     const t = setTimeout(async () => {
       try {
-        const out = prepareScene(scene, 'plotter', await loadFonts(), { pens: p.pens, plotterText: plotText });
-        const svg = sceneToSvg(out, { paper: true, ink: { pens: p.pens, dark: isDarkPaper(p.paper) } });
+        const out = preparePlotter(scene, p, await loadFonts(), plotText);
+        const svg = sceneToSvg(out, { paper: true, ink: { pens: p.pens, dark: isDarkPaper(p.paper) }, tagLayers: true, ...plotterLayout(p) });
         if (live) setPlotSvg(svg);
       } catch { if (live) setPlotSvg(''); }
     }, draft ? 0 : 250);
     return () => { live = false; clearTimeout(t); };
-  }, [plotPreview, scene, p.pens, p.paper, draft, plotText]);
+  }, [plotPreview, scene, p.pens, p.paper, p.layers, draft, plotText]);
+  const [hotLayer, setHotLayer] = useState<LayerId | null>(null);
   const designSvg = useMemo(() => sceneToSvg(scene, { paper: true, ids: true }), [scene]);
   const previewSvg = plotPreview && plotSvg ? plotSvg : designSvg;
 
@@ -1146,6 +1152,7 @@ export function App() {
         <div className="stage">
           <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editAt} onPointerDown={startDrag}
             onMouseOver={(e) => setHovered(plotPreview ? '' : clickTarget(e.target)?.label ?? '')} onMouseLeave={() => setHovered('')} dangerouslySetInnerHTML={{ __html: previewSvg }} />
+          {plotPreview && !narrow && <LayerSorter project={p} prims={scene.prims} hovered={hotLayer} onHover={setHotLayer} />}
         </div>
       </main>
       {footer}

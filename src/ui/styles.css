@@ -205,3 +205,23 @@ button.link:hover:not(:disabled) { background: none; }
 .photoplaces .notes { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; display: grid; gap: 3px; }
 .photoplaces .notes li.err { color: var(--error); }
 .photoplaces .mono { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+
+/* the layer sorter, beside the poster in the plotter view (desktop only: App leaves it out on narrow screens) */
+.stage:has(.layers) { gap: 16px; }
+.stage:has(.layers) .sheet { min-width: 0; flex: 0 1 auto; }
+.layers { flex: 0 0 270px; align-self: flex-start; max-height: calc(100vh - 120px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 13px; }
+.layers-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.layers-by { display: block; margin: 4px 0; }
+.layer-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
+.layer { border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; background: var(--bg); cursor: grab; }
+.layer.hot { border-color: var(--accent); }
+.layer.empty { opacity: .55; }
+.layer.dragging { opacity: .4; }
+.layer-row { display: flex; align-items: center; gap: 6px; }
+.layer-row button:not(.link) { min-height: 0; padding: 0 6px; line-height: 20px; }
+.layer-pens { display: inline-flex; gap: 2px; min-width: 14px; }
+.layer-name { flex: 1; text-align: left; }
+.layer-cuts { margin: 6px 0 2px; display: grid; gap: 3px; }
+.layer-cuts label { display: block; }
+.layer-cuts .note { color: var(--fg); opacity: .75; }
+@media (max-width: 800px) { .layers { display: none; } }

@@ -1,6 +1,7 @@
 import type { PathPrim, Prim, Scene, TextPrim } from '../scene/types';
 import { penFor, type Pen } from '../scene/pens';
 import { penKind } from '../scene/pens';
+import { layerLabel, layerOfPart, type LayerId, type LayerSettings } from '../scene/layers';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const f = (n: number) => +n.toFixed(3);
@@ -69,6 +70,37 @@ export interface SvgOptions {
   pens?: Pen[];
   /** draw lines the way their pens lay ink on paper (the editor's plotter preview); exports leave it off */
   ink?: InkLook;
+  /** with `layers: 'pen'` and `stack.byStack`: file layers follow the layer stack (a layer for each run of one pen) instead of one per pen */
+  stack?: LayerSettings;
+  /** mark each path with the layer of the design it belongs to (the editor highlights a layer from it); exports leave it off */
+  tagLayers?: boolean;
+}
+
+/** One stretch of the plot drawn with one pen: a layer of the file when the file follows the stack. */
+export interface PlotRun { id: string; label: string; pen: string | undefined; layers: LayerId[]; prims: Prim[] }
+
+/**
+ * The plot in the stack's order, cut into runs of consecutive primitives that share a pen: the pen is changed between runs.
+ * Primitives keep their order within a layer; one with no part goes last.
+ */
+export function plotRuns(prims: Prim[], pens: Pen[], stack: LayerSettings): PlotRun[] {
+  const rank = (p: Prim) => { const l = layerOfPart(p.part); return l === undefined ? stack.order.length : stack.order.indexOf(l); };
+  const sorted = prims.map((p, i) => ({ p, i, r: rank(p) })).sort((a, b) => a.r - b.r || a.i - b.i);
+  const runs: PlotRun[] = [];
+  let key = '';
+  for (const { p } of sorted) {
+    const l = penLayerOf(p, pens);
+    const here = layerOfPart(p.part);
+    if (runs.length && key === l.id) {
+      const run = runs[runs.length - 1]!;
+      run.prims.push(p);
+      if (here && !run.layers.includes(here)) run.layers.push(here);
+      continue;
+    }
+    key = l.id;
+    runs.push({ id: `${l.id}-run${runs.length + 1}`, label: l.label, pen: p.pen, layers: here ? [here] : [], prims: [p] });
+  }
+  return runs;
 }
 
 /**
@@ -104,27 +136,35 @@ export function penLayerOf(p: Prim, pens: Pen[]): { id: string; label: string; r
 
 export function sceneToSvg(scene: Scene, opts: SvgOptions = {}): string {
   const byPen = opts.layers === 'pen' && !!opts.pens;
-  const order: string[] = [];
-  const rank = new Map<string, number>();
-  const groups = new Map<string, { label: string; els: string[] }>();
-  for (const p of scene.prims) {
-    const { id, label, rank: r } = byPen ? penLayerOf(p, opts.pens!) : { ...layerOf(p), rank: 0 };
-    rank.set(id, r);
-    if (!groups.has(id)) {
-      groups.set(id, { label, els: [] });
-      order.push(id);
-    }
-    groups.get(id)!.els.push(el(p, opts.ids, opts.ink));
-  }
+  const tag = (p: Prim, svg: string) => (opts.tagLayers && p.kind === 'path' && layerOfPart(p.part) ? svg.replace('<path ', `<path data-layer="${layerOfPart(p.part)}" `) : svg);
   const { widthMm: w, heightMm: h } = scene;
-  // pen layers follow the palette's order (the order the pens are swapped in); style layers keep first appearance
-  if (byPen) order.sort((a, b) => rank.get(a)! - rank.get(b)!);
-  const layers = order
-    .map((id, i) => {
-      const g = groups.get(id)!;
-      return `<g id="${id}" inkscape:groupmode="layer" inkscape:label="${byPen ? esc(g.label) : `Layer ${i + 1} ${g.label}`}">${g.els.join('')}</g>`;
-    })
-    .join('\n');
+  let layers: string;
+  if (byPen && opts.stack?.byStack) {
+    layers = plotRuns(scene.prims, opts.pens!, opts.stack)
+      .map((run) => `<g id="${run.id}" inkscape:groupmode="layer" inkscape:label="${esc(run.layers.length ? `${run.label} · ${run.layers.map(layerLabel).join(', ')}` : run.label)}">${run.prims.map((p) => tag(p, el(p, opts.ids, opts.ink))).join('')}</g>`)
+      .join('\n');
+  } else {
+    const order: string[] = [];
+    const rank = new Map<string, number>();
+    const groups = new Map<string, { label: string; els: string[] }>();
+    for (const p of scene.prims) {
+      const { id, label, rank: r } = byPen ? penLayerOf(p, opts.pens!) : { ...layerOf(p), rank: 0 };
+      rank.set(id, r);
+      if (!groups.has(id)) {
+        groups.set(id, { label, els: [] });
+        order.push(id);
+      }
+      groups.get(id)!.els.push(tag(p, el(p, opts.ids, opts.ink)));
+    }
+    // pen layers follow the palette's order (the order the pens are swapped in); style layers keep first appearance
+    if (byPen) order.sort((a, b) => rank.get(a)! - rank.get(b)!);
+    layers = order
+      .map((id, i) => {
+        const g = groups.get(id)!;
+        return `<g id="${id}" inkscape:groupmode="layer" inkscape:label="${byPen ? esc(g.label) : `Layer ${i + 1} ${g.label}`}">${g.els.join('')}</g>`;
+      })
+      .join('\n');
+  }
   const paper = opts.paper ? `<rect id="paper" width="${f(w)}" height="${f(h)}" fill="${normColor(scene.paper)}"/>\n` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${f(w)}mm" height="${f(h)}mm" viewBox="0 0 ${f(w)} ${f(h)}">\n${paper}${layers}\n</svg>`;
 }

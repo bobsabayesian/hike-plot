@@ -108,40 +108,40 @@ export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, op
       if (!plotter) {
         // print and PNG: a true fill, or just the outline of the letters
         return [outlined
-          ? { kind: 'path', d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: p.strokeMm ?? 0.35, round: true, opacity: p.opacity }
-          : { kind: 'path', d, color: p.color, pen: p.pen, mode: 'fill', opacity: p.opacity }];
+          ? { kind: 'path', part: p.part, d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: p.strokeMm ?? 0.35, round: true, opacity: p.opacity }
+          : { kind: 'path', part: p.part, d, color: p.color, pen: p.pen, mode: 'fill', opacity: p.opacity }];
       }
       if (outlined) {
         // the outline, drawn as passes of the pen when it is heavier than the tip
         return passOffsets(p.strokeMm ?? 0.35, pen).map((o) => ({
-          kind: 'path' as const, d: o === 0 ? d : offsetPath(d, o), color: p.color, pen: p.pen, mode: 'stroke' as const, widthMm: pen, round: true,
+          kind: 'path' as const, part: p.part, d: o === 0 ? d : offsetPath(d, o), color: p.color, pen: p.pen, mode: 'stroke' as const, widthMm: pen, round: true,
         }));
       }
       if (p.hatch) {
         // a pen cannot fill: hatch the letters with parallel lines of the pen
         const lines = hatchPath(d, pen * HATCH_FACTOR[p.hatch]);
-        return lines ? [{ kind: 'path', d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }] : [];
+        return lines ? [{ kind: 'path', part: p.part, d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }] : [];
       }
       const mode = opts.plotterText ?? 'outline';
       if (mode === 'single' || (mode === 'auto' && p.sizeMm <= SINGLE_STROKE_MAX_MM)) {
         // single strokes: one line per stroke of each letter, drawn with the pen (text with a character the set lacks keeps the outline)
         const strokes = textToStrokes(p);
-        if (strokes) return [{ kind: 'path', d: strokes, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }];
+        if (strokes) return [{ kind: 'path', part: p.part, d: strokes, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }];
       }
       // plain filled letters: a pen cannot fill, so the letter is outlined and filled in with hatch lines of the same pen
       // (an outline alone leaves big letters hollow and makes small ones, as thick as the pen, merge into blobs)
       const lines = hatchPath(d, pen * HATCH_FACTOR[p.plotFill ?? 'solid']);
-      const out: PathPrim[] = [{ kind: 'path', d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }];
-      if (lines) out.push({ kind: 'path', d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
+      const out: PathPrim[] = [{ kind: 'path', part: p.part, d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }];
+      if (lines) out.push({ kind: 'path', part: p.part, d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
       return out;
     }
     if (!plotter) return [p];
     if (p.mode === 'fill' && p.hatch) {
       const lines = hatchPath(p.d, pen * HATCH_FACTOR[p.hatch]);
       const strokes: PathPrim[] = [];
-      if (lines) strokes.push({ kind: 'path', d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
+      if (lines) strokes.push({ kind: 'path', part: p.part, d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
       // keep the outline too, so the shape has a crisp edge
-      strokes.push({ kind: 'path', d: p.d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
+      strokes.push({ kind: 'path', part: p.part, d: p.d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
       return strokes;
     }
     // Plotters cannot fill or fade: draw the outline instead, at full strength, with the one pen.

@@ -8,6 +8,7 @@ import type { HatchDensity } from './types';
 import { defaultRelief, type ReliefSettings } from '../relief/relief';
 import { defaultShade, type ShadeSettings } from '../relief/shade';
 import { defaultCover, type CoverSettings } from '../cover/types';
+import { defaultLayers, type LayerSettings } from './layers';
 import { defaultGrid, type GridSettings } from './grid';
 
 export type SizeGroup = 'US (inches)' | 'ISO (A series)' | 'Metric (cm)';
@@ -160,6 +161,8 @@ export interface Project {
   units: 'imperial' | 'metric';
   /** the pen palette every section picks from */
   pens: Pen[];
+  /** the plotter's layers: their drawing order, and which layer cuts lines out of which beneath it */
+  layers: LayerSettings;
   route: {
     pen: string; weightMm: number; style: StrokeStyle;
     /** clear paper beside the route, mm beyond its edge: contour and relief lines are cut that close to it; 0 = off */
@@ -258,6 +261,7 @@ export const defaultProject = (): Project => ({
   features: defaultFeatures(),
   units: 'imperial',
   pens: defaultPens(),
+  layers: defaultLayers(),
   route: { pen: PEN_RED, weightMm: 0.9, style: 'solid', ticks: 'off', tickEvery: 1, tickSizePt: 7, liftMm: 0, dropMm: 1.5 },
   terrain: {
     enabled: true, intervalM: 0, indexEvery: 5,

@@ -1,3 +1,4 @@
+import { normalizeLayers } from './scene/layers';
 import { defaultProject, type Project } from './scene/project';
 
 export const FILE_APP = 'walk-of-frame';
@@ -34,6 +35,7 @@ export function fromFile(raw: unknown): Project {
   if (!Array.isArray(p.points)) p.points = [];
   if (!Array.isArray(p.waypoints)) p.waypoints = [];
   if (!Array.isArray(p.pens) || !p.pens.length) p.pens = defaultProject().pens;
+  p.layers = normalizeLayers(p.layers);
   return p;
 }
 

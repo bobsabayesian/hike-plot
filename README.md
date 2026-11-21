@@ -79,6 +79,12 @@ Plotter text: under Export, "Text" chooses how text is written for a pen plotter
 
 Land cover can thin the contours under it: each inked kind has a "Clear lines" slider (0 to 100%). The terrain lines under that cover are broken into dashes, a bigger share of every 3 mm stretch left open the higher the slider, so the cover shows through while the shape of the ground still reads; 100% is the same as bare paper. It applies to contours (flat and 3D) and the in-between shade lines, and it means more pen lifts in the plotter file. The "Clear paper" pattern remains the all-the-way version.
 
+## Layers: order and cuts (plotter view)
+
+In the Plotter view on a desktop-width window, a Layers panel sits beside the poster (it is left out on narrow screens). Its rows are the parts of the design (Terrain lines, Land cover, Water, Route, Landmarks, text, ...), each showing its pen, in the order they are drawn: first at the top. Move a row with the arrows or by dragging it. Open a row to say which layers drawn before it it cuts lines out of, with a gap in mm that is added to half the width of its pen's line; a layer can only cut layers beneath it. "Top layers clear what is under them" draws the ground first and makes the route, north arrow, landmarks and text clear the terrain lines, land cover and water under them. Hovering a row dims the rest of the poster.
+
+The cuts act on what the plotter actually draws (hatch, repeated passes, single strokes, marker width) in the plotter view and the plotter SVG, not in print, PNG or the Design view. The existing clearing settings (Clear beside route, Clear around labels, land cover Clear paper and Clear lines) keep working in their own panels and are shown as notes in the rows. With "Plot in this order" off (the default) the file keeps one layer per pen in the pens' order; on, the file's layers follow the order, one for each run of one pen, named after the pen and the parts in it, and the panel counts the pen changes. The settings are saved with the project.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.
