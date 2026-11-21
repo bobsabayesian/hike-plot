@@ -93,6 +93,10 @@ On a desktop-width window the action bar has a zoom control (hidden on narrow sc
 
 The "Hand-drawn feel" group adds a steady, gentle wander to lines, as if drawn freehand: a Wobble amount (up to half a millimetre of drift over a few millimetres of line), Draw again (a new seed, same lines), and which layers wander (terrain, water, route, border, profile, north arrow, doodles by default; text stays as it is). It is applied when the poster is built, so the preview, PNG and both SVG kinds agree, and the layer cuts work on the wandering lines. Each line's wander depends on where it starts, so changing something else does not shift it. Tiny marks wander less, and closed shapes still close.
 
+## Doodles
+
+The "Doodles" group scatters little single-stroke drawings (pines, round trees, tents, mountains, flags, cairns, birds, clouds, a sun) over the map where there is room: not on the route, the landmark labels, the north arrow or each other, and inside the map. How many, how big, Shuffle (a new scatter from a new seed), the pens (one for the ground, one for the sky) and which kinds are on are settings. Trees come in groves and birds in flocks, at most one sun. Each doodle clears the terrain lines and land cover marks under it (a rounded box with the "Clear around" gap), the same way a landmark label does. In the 3D view the trees, tents, mountains, flags and cairns stand on terrain you can see, and the cloud, sun and birds go where there is no terrain (the sky above the relief); on a flat map everything goes on the map. Doodles are their own layer ("Doodles") in the layer sorter, and the hand-drawn wander applies to them by default.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.

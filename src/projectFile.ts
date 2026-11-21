@@ -1,5 +1,6 @@
 import { normalizeLayers } from './scene/layers';
 import { normalizeHand } from './scene/hand';
+import { normalizeDoodles } from './doodles/types';
 import { defaultProject, type Project } from './scene/project';
 
 export const FILE_APP = 'walk-of-frame';
@@ -38,6 +39,7 @@ export function fromFile(raw: unknown): Project {
   if (!Array.isArray(p.pens) || !p.pens.length) p.pens = defaultProject().pens;
   p.layers = normalizeLayers(p.layers);
   p.hand = normalizeHand(p.hand);
+  p.doodles = normalizeDoodles(p.doodles);
   // route info items added since the file was saved are offered too (switched off), after the ones it has
   const info = p.text.info.items;
   if (Array.isArray(info)) for (const it of defaultProject().text.info.items) if (!info.some((x) => x.key === it.key)) info.push(it);

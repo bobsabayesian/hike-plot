@@ -29,6 +29,8 @@ import { prepareScene, tipFor, type ExportMode, type PlotterText } from '../expo
 import { plotterLayout, preparePlotter } from '../export/plotter';
 import { LayerSorter } from './LayerSorter';
 import { useZoom } from './zoom';
+import { GLYPHS } from '../doodles/glyphs';
+import { doodleCount } from '../doodles/place';
 import { LAYERS, type LayerId } from '../scene/layers';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
@@ -677,6 +679,25 @@ export function App() {
             <Row label="Pen"><PenSelect pens={p.pens} value={p.shade.pen} allowDefault={`Contour pen, drawn twice (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.shade.pen; else x.shade.pen = id; })} /></Row>
             <div className="hint">Slopes facing away from the sun are drawn darker, like hillshading made of lines. "Sun from" is degrees clockwise from north (315 is northwest); "Sun height" is degrees above the horizon. {need && <>To match the light on the day, <a href={suncalcUrl(need, p.points)} target="_blank" rel="noopener noreferrer">look up the sun on SunCalc</a> (this map, {p.points.some((q) => q.time !== undefined) ? 'when the hike started' : 'today at noon'}) and copy its azimuth and altitude here. </>}"In shade" is the share of the land that counts as shaded. Works on the contours and on 3D relief rows; heavy contour lines are left as they are.</div>
           </div>)}
+        </Group>
+
+        <Group id="doodles" title="Doodles" {...gp('doodles')}
+          toggle={{ on: p.doodles.enabled, onChange: (v) => set((x) => { x.doodles.enabled = v; }) }}>
+          {p.doodles.enabled && (<>
+            <Row label="How many"><input type="range" min={5} max={100} step={5} value={p.doodles.density} onChange={(e) => set((x) => { x.doodles.density = +e.target.value; })} /><span>{doodleCount(composed.view?.frame ?? { x: 0, y: 0, w: 0, h: 0 }, p.doodles)}</span></Row>
+            <Row label="Size"><input type="range" min={4} max={24} step={1} value={p.doodles.sizeMm} onChange={(e) => set((x) => { x.doodles.sizeMm = +e.target.value; })} /><span>{p.doodles.sizeMm} mm</span></Row>
+            <Row label="Scatter again"><button type="button" onClick={() => set((x) => { x.doodles.seed = Math.floor(Math.random() * 1e9); })}>Shuffle</button></Row>
+            <Row label="Clear around"><input type="range" min={0} max={5} step={0.2} value={p.doodles.clearMm} onChange={(e) => set((x) => { x.doodles.clearMm = +e.target.value; })} /><span>{p.doodles.clearMm.toFixed(1)} mm</span></Row>
+            <Row label="Pen"><PenSelect pens={p.pens} value={p.doodles.pen} onChange={(id) => set((x) => { x.doodles.pen = id!; })} /></Row>
+            <Row label="Sky pen"><PenSelect pens={p.pens} value={p.doodles.skyPen} onChange={(id) => set((x) => { x.doodles.skyPen = id!; })} /></Row>
+            <Row label="Line weight"><input type="number" min={0.05} max={1} step={0.05} value={p.doodles.weightMm} onChange={(e) => set((x) => { x.doodles.weightMm = Math.max(0.05, +e.target.value || 0.25); })} /><span className="unit">mm</span></Row>
+            <div className="kinds">
+              {GLYPHS.map((g) => (
+                <label key={g.kind}><input type="checkbox" checked={p.doodles.kinds[g.kind]} onChange={(e) => set((x) => { x.doodles.kinds[g.kind] = e.target.checked; })} /> {g.label}</label>
+              ))}
+            </div>
+            <div className="hint">Little single-stroke drawings set down where there is room: not on the route, the labels or each other, with clear paper around each (the terrain lines and land cover marks under it are cut away). Trees come in groves and birds in flocks. In the 3D view the trees, tents, mountains, flags and cairns stand on terrain you can see, and the cloud, sun and birds go in the sky; on a flat map they all go on the map. Shuffle scatters them differently.</div>
+          </>)}
         </Group>
 
         <Group id="hand" title="Hand-drawn feel" {...gp('hand')}

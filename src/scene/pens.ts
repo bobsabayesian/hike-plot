@@ -128,6 +128,8 @@ export const featurePenId = (f: Project['features'], key: FeaturePenKey): string
 export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   p.route.pen = fn(p.route.pen);
   p.terrain.pen = fn(p.terrain.pen);
+  p.doodles.pen = fn(p.doodles.pen);
+  p.doodles.skyPen = fn(p.doodles.skyPen);
   if (p.terrain.indexPen !== undefined) p.terrain.indexPen = fn(p.terrain.indexPen);
   if (p.shade.pen !== undefined) p.shade.pen = fn(p.shade.pen);
   if (p.relief.base.pen !== undefined) p.relief.base.pen = fn(p.relief.base.pen);
@@ -246,6 +248,10 @@ export function penSlots(p: Project): PenSlot[] {
         set: (q, id) => { if (id === undefined || id === q.features.pens.default) delete q.features.pens.overrides[k]; else q.features.pens.overrides[k] = id; },
       });
     }
+  }
+  if (p.doodles.enabled) {
+    add('doodles', 'Doodles', 'doodles', (q) => q.doodles.pen, (q, id) => { q.doodles.pen = id; });
+    add('skyDoodles', 'Sky doodles', 'doodles', (q) => q.doodles.skyPen, (q, id) => { q.doodles.skyPen = id; });
   }
   if (p.profile.enabled && p.points.length) add('profile', 'Elevation profile', 'profile', (q) => q.profile.pen, (q, id) => { q.profile.pen = id; });
   if (p.grid.enabled) add('grid', 'Map grid', 'grid', (q) => q.grid.pen, (q, id) => { q.grid.pen = id; });

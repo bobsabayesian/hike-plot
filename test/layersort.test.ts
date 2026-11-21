@@ -7,7 +7,7 @@ import { existingClears } from '../src/ui/LayerSorter';
 
 describe('layers', () => {
   it('cover every part of the scene exactly once', () => {
-    const parts: Part[] = ['border', 'title', 'location', 'info', 'watermark', 'contours', 'relief', 'cover', 'water', 'profile', 'route', 'north', 'grid', 'landmarks'];
+    const parts: Part[] = ['border', 'title', 'location', 'info', 'watermark', 'contours', 'relief', 'cover', 'water', 'profile', 'route', 'north', 'grid', 'landmarks', 'doodles'];
     for (const p of parts) expect(layerOfPart(p)).toBeDefined();
     const all = LAYERS.flatMap((l) => [...l.parts]);
     expect(new Set(all).size).toBe(all.length);

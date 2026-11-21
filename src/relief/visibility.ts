@@ -7,6 +7,8 @@ export type P3 = [number, number, number];
 export interface Visibility {
   /** is this point of the terrain surface (or just above it) in view, rather than hidden behind a hill? */
   isVisible(x: number, y: number, z: number): boolean;
+  /** is there terrain on the page at this point (within `r` mm of it)? Where there is none, it is sky. */
+  covered(px: number, py: number, r?: number): boolean;
 }
 
 /** Depth-buffer pixels per mm of page. */
@@ -82,6 +84,13 @@ export function buildVisibility(r: Relief): Visibility {
   }
 
   const vis: Visibility = {
+    covered(px, py, r = 0) {
+      const u0 = Math.floor((px - r - frame.x) * R), u1 = Math.floor((px + r - frame.x) * R);
+      const v0 = Math.floor((py - r - frame.y) * R), v1 = Math.floor((py + r - frame.y) * R);
+      // outside the buffer there is no terrain; it counts as sky
+      for (let v = Math.max(0, v0); v <= Math.min(H - 1, v1); v++) for (let u = Math.max(0, u0); u <= Math.min(W - 1, u1); u++) if (buf[v * W + u] !== NONE) return true;
+      return false;
+    },
     isVisible(x, y, z) {
       const [px, py] = camera.project(x, y, z);
       const u = Math.floor((px - frame.x) * R);

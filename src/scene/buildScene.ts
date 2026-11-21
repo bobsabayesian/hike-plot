@@ -16,6 +16,8 @@ import { band, depthOf, splitFar, thinLine } from '../relief/fade';
 import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
 import { thinUnder } from '../cover/thin';
 import { applyHand } from './hand';
+import { GLYPH_BY_KIND } from '../doodles/glyphs';
+import { doodleHalos, doodleLines, placeDoodles, type Placed } from '../doodles/place';
 import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
 import { coverMask, markSymbol, patternMarks, type Mask } from '../cover/draw';
 import { COVER_CLASSES, type CoverClass } from '../cover/types';
@@ -378,7 +380,22 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         });
       }
 
-      const halos = landmarkOut?.halos ?? [];
+      // doodles: scattered where there is room (clear of the route and the labels), and each clears the lines under it
+      const labelHalos = landmarkOut?.halos ?? [];
+      const doodleVis = relief ? (vis ?? buildVisibility(relief)) : undefined;
+      const doodles: Placed[] = p.doodles.enabled
+        ? placeDoodles({
+          settings: p.doodles, frame, route: routeXY, halos: labelHalos, obstacles: labelObstacles,
+          ground: (x, y) => {
+            if (!relief) return [x, y];
+            const z = relief.heightMm(relief.surface.sample(x, y));
+            const pt = relief.camera.project(x, y, z);
+            return frameHas(pt) && doodleVis!.isVisible(x, y, z + 0.5) ? pt : undefined;
+          },
+          sky: doodleVis ? (cx, cy, r) => !doodleVis.covered(cx, cy, r) : undefined,
+        })
+        : [];
+      const halos = [...labelHalos, ...doodleHalos(doodles, p.doodles.clearMm)];
       // clear paper beside the route: half of what the route draws (its weight, or the pen's line if that is wider) plus the gap
       const routeClearR = (p.route.clearMm ?? 0) > 0 && routeXY.length >= 2 ? Math.max(p.route.weightMm, inkWidth(penFor(p.pens, p.route.pen))) / 2 + p.route.clearMm! : 0;
       const clearLines = (lines: XY[][]): XY[][] => cutNearRoute(cutOutHalos(inFrame(lines), halos), routeXY, routeClearR);
@@ -606,6 +623,15 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       }
 
       tagFrom(waterAt, 'water');
+      if (doodles.length) {
+        const doodlesAt = prims.length;
+        for (const sky of [false, true]) {
+          const lines = doodles.filter((d) => (GLYPH_BY_KIND[d.kind].home === 'sky') === sky).flatMap(doodleLines);
+          const pen = sky ? p.doodles.skyPen : p.doodles.pen;
+          if (lines.length) prims.push({ kind: 'path', d: toD(lines), color: colorOf(pen), pen, mode: 'stroke', widthMm: p.doodles.weightMm, round: true });
+        }
+        tagFrom(doodlesAt, 'doodles');
+      }
       if (gridOn) {
         // the grid goes over the land and water and under the route, broken where it would cross a landmark's name
         const grid = gridLayout(fit, frame, p.grid.spacingM);

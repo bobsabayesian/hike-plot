@@ -14,7 +14,7 @@ const outsideBy = (p: XY, h: Halo): number => {
   const lx = dx * c + dy * s, ly = -dx * s + dy * c;
   return Math.hypot(Math.max(0, Math.abs(lx) - h.box.w / 2), Math.max(0, Math.abs(ly) - h.box.h / 2));
 };
-const inside = (p: XY, h: Halo): boolean => outsideBy(p, h) <= h.r;
+export const inside = (p: XY, h: Halo): boolean => outsideBy(p, h) <= h.r;
 
 const STEP_MM = 0.25;
 /** A piece a cut leaves shorter than this, mm, is dropped: it would only be a speck or a stub poking at the text. */
