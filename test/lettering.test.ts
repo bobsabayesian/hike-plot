@@ -66,3 +66,25 @@ describe('handwritten title', () => {
     expect(fromFile(raw).text.title).toMatchObject({ lettering: 'font', scriptMm: 0.6 });
   });
 });
+
+describe('title from the handwriting service', () => {
+  const PT = 25.4 / 72;
+  const ink = { widthMm: 60, heightMm: 12, strokes: [[[0, 0], [60, 12]] as [number, number][]], missing: '' };
+  const make = (edit: (p: Project) => void = () => {}) => poster((p) => { p.text.title.lettering = 'handwriter'; edit(p); });
+  it('keeps the printed title until the strokes arrive', async () => {
+    const { s } = make((p) => { p.text.title.value = 'Waiting only'; });
+    expect(titleOf(s)[0]!.kind).toBe('text');
+  });
+  it('draws the strokes in the title pen once they are here, inside the content width', async () => {
+    const { primeInk } = await import('../src/handwriter/ink');
+    const { p } = make();
+    const req = { text: 'Hand title', sizeMm: +(p.text.title.sizePt * PT).toFixed(2), font: 'handwriting', preset: 'project', seed: 1 };
+    primeInk(req, ink);
+    const s = buildScene({ ...p, text: { ...p.text, title: { ...p.text.title, value: 'Hand title' } } });
+    const t = titleOf(s);
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ kind: 'path', mode: 'stroke', pen: 'ink', widthMm: p.text.title.scriptMm, part: 'title' });
+    const xs = [...(t[0] as PathPrim).d.matchAll(/[ML]([\d.-]+) /g)].map((m) => +m[1]!);
+    expect(xs[1]! - xs[0]!).toBeCloseTo(60, 1);
+  });
+});

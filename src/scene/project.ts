@@ -70,7 +70,8 @@ export interface LocationBlock extends TitleBlock {
 export type TitleAlign = 'inherit' | 'left' | 'center' | 'right' | 'justify';
 export type TitleStyle = 'fill' | 'outline' | 'outlineFill';
 /** the title in the text font, or written out by hand in a single-stroke handwriting face */
-export type TitleLettering = 'font' | 'script' | 'scriptFull';
+/** 'handwriter' is the owner's handwriting service (admin page): drawn from its strokes once they have arrived */
+export type TitleLettering = 'font' | 'script' | 'scriptFull' | 'handwriter';
 export interface TitleSettings extends TitleBlock {
   /** 'inherit' follows the text alignment; 'justify' stretches the title across the content width */
   align: TitleAlign;
@@ -79,6 +80,10 @@ export interface TitleSettings extends TitleBlock {
   lettering: TitleLettering;
   /** line weight of handwritten lettering, mm */
   scriptMm: number;
+  /** the handwriting service's typeface ('handwriting' = the service's own), style preset ('project' = its own) and seed (another take) */
+  hwFont: string;
+  hwPreset: string;
+  hwSeed: number;
   /** line weight of the letter outline (outline and outlineFill) */
   outlineMm: number;
   /** pen for the inside of the letters (outlineFill); `pen` draws the outline */
@@ -292,7 +297,7 @@ export const defaultProject = (): Project => ({
     font: 'sans',
     trackingEm: 0.12,
     align: 'left',
-    title: { visible: true, sizePt: 60, placement: 'bottom', pen: PEN_INK, align: 'inherit', style: 'fill', lettering: 'font', scriptMm: 0.6, outlineMm: 0.35, fillPen: PEN_INK, fillDensity: 'solid' },
+    title: { visible: true, sizePt: 60, placement: 'bottom', pen: PEN_INK, align: 'inherit', style: 'fill', lettering: 'font', scriptMm: 0.6, hwFont: 'handwriting', hwPreset: 'project', hwSeed: 1, outlineMm: 0.35, fillPen: PEN_INK, fillDensity: 'solid' },
     location: { visible: true, sizePt: 18, placement: 'bottom', showCoords: true, coordFormat: 'latlon', pen: PEN_INK },
     info: {
       visible: true, pen: PEN_INK, sizePt: 22, placement: 'bottom', layout: 'row',

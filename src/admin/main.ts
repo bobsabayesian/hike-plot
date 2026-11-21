@@ -84,7 +84,39 @@ function draw() {
   }
 }
 
+/** The handwriting service form: its address and token (kept in R2 by the Worker; the token is never read back). */
+async function handwriterPanel() {
+  const msg = (t: string, bad = false) => { $('hw-msg').textContent = t; $('hw-msg').className = bad ? 'err' : 'dim'; };
+  const call = async (method: string, path = '/api/admin/handwriter', body?: unknown) => {
+    const r = await fetch(path, { method, credentials: 'same-origin', headers: { 'x-admin-action': 'handwriter', ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    return { ok: r.ok, data: (await r.json().catch(() => ({}))) as Record<string, any> };
+  };
+  const show = (d: Record<string, any>) => {
+    if (d.configured) { $<HTMLInputElement>('hw-host').value = d.host; $<HTMLInputElement>('hw-token').placeholder = `Saved (${d.tokenHint}); paste only to replace`; msg(`Saved: ${d.host}`); }
+    else msg('Not set up yet.');
+    $('hw-remove').hidden = !d.configured; $('hw-test').hidden = !d.configured;
+  };
+  try { show((await call('GET')).data); } catch { msg('Could not read the setting.', true); }
+  $('hw').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const r = await call('PUT', '/api/admin/handwriter', { host: $<HTMLInputElement>('hw-host').value, token: $<HTMLInputElement>('hw-token').value });
+    if (!r.ok) return msg(r.data.error ?? 'Could not save.', true);
+    $<HTMLInputElement>('hw-token').value = '';
+    show(r.data);
+  });
+  $('hw-test').addEventListener('click', async () => {
+    msg('Testing…');
+    const r = await call('POST', '/api/admin/handwriter/test');
+    msg(r.data.ok ? `Works: the service drew a test word (${r.data.paths} strokes).` : (r.data.error ?? 'The test failed.'), !r.data.ok);
+  });
+  $('hw-remove').addEventListener('click', async () => {
+    if (!window.confirm('Remove the handwriting service? Posters that use it fall back to the printed lettering.')) return;
+    show((await call('DELETE')).data);
+  });
+}
+
 async function main() {
+  void handwriterPanel();
   try {
     $('who').textContent = (await get<{ email: string }>('/api/admin/me')).email;
     const s = await get<{ projects: Project[]; totals: { projects: number; bytes: number } }>('/api/admin/summary');

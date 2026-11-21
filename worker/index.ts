@@ -4,6 +4,14 @@ import { handleAdmin } from './admin';
 import { handleShare, type ShareBucket } from './share';
 import { handlePhoto, type PhotoBucket } from './photo';
 import { verifyAccess } from './access';
+import { handleHandwriter, handleHandwriterAdmin, CONFIG_KEY, type HwStore } from './handwriter';
+
+/** the handwriting service's address and token, kept in the bucket beside the projects */
+const hwStore = (b?: Bucket & ShareBucket): HwStore | undefined => b && {
+  get: async () => { const o = await b.get(CONFIG_KEY); try { return o ? JSON.parse(await o.text()) : null; } catch { return null; } },
+  put: async (c) => { await b.put(CONFIG_KEY, JSON.stringify(c), { httpMetadata: { contentType: 'application/json' } }); },
+  del: async () => { await (b as unknown as { delete(k: string): Promise<void> }).delete(CONFIG_KEY); },
+};
 
 interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
@@ -24,6 +32,9 @@ export default {
       if (!user) return new Response('Not signed in through Cloudflare Access.', { status: 403, headers });
       if (path === '/api/admin/me') return new Response(JSON.stringify({ email: user.email }), { headers: { 'content-type': 'application/json', ...headers } });
       const bucket = env.PROJECTS;
+      const hw = hwStore(bucket);
+      const hwApi = hw && (await handleHandwriterAdmin(req, hw));
+      if (hwApi) return hwApi;
       const api = await handleAdmin(req, {
         listObjects: async (prefix) => {
           const out: { key: string; size: number; uploaded: number; meta?: Record<string, string> }[] = [];
@@ -42,6 +53,6 @@ export default {
       const page = await env.ASSETS.fetch(req);
       return new Response(page.body, { status: page.status, headers: { ...Object.fromEntries(page.headers), ...headers } });
     }
-    return (await handlePhoto(req, env.PROJECTS as unknown as PhotoBucket)) ?? (await handleShare(req, env.PROJECTS)) ?? (await handleProjects(req, env.PROJECTS)) ?? (await handleApi(req)) ?? env.ASSETS.fetch(req);
+    return (await handleHandwriter(req, hwStore(env.PROJECTS))) ?? (await handlePhoto(req, env.PROJECTS as unknown as PhotoBucket)) ?? (await handleShare(req, env.PROJECTS)) ?? (await handleProjects(req, env.PROJECTS)) ?? (await handleApi(req)) ?? env.ASSETS.fetch(req);
   },
 };

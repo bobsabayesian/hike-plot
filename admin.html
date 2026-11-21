@@ -34,6 +34,16 @@
   <main>
     <section><div class="tot" id="totals"></div></section>
     <section>
+      <h2>Handwriting service</h2>
+      <p class="dim">Your handwriting API (its address and the project's token). Once saved, the title's Lettering offers "My handwriting". The token stays on the server and is never sent to the app.</p>
+      <form id="hw" autocomplete="off" style="display:grid;gap:8px;max-width:520px">
+        <input id="hw-host" type="text" placeholder="https://handwriter.example.com" aria-label="Service address" />
+        <input id="hw-token" type="password" placeholder="Token (project.secret)" aria-label="Token" />
+        <div><button type="submit">Save</button> <button type="button" id="hw-test">Test</button> <button type="button" id="hw-remove" class="del">remove</button></div>
+        <div id="hw-msg" class="dim" role="status"></div>
+      </form>
+    </section>
+    <section>
       <h2>Saved projects</h2>
       <p><input id="find" type="search" placeholder="Find a code, name or place" aria-label="Find a project" /></p>
       <p id="msg" class="dim">Loading…</p>

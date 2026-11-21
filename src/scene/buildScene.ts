@@ -16,6 +16,7 @@ import { band, depthOf, splitFar, thinLine } from '../relief/fade';
 import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
 import { thinUnder } from '../cover/thin';
 import { applyHand } from './hand';
+import { inkFor } from '../handwriter/ink';
 import { canStroke, textToStrokes } from '../export/strokefont';
 import { GLYPH_BY_KIND } from '../doodles/glyphs';
 import { doodleHalos, doodleLines, placeDoodles, type Placed } from '../doodles/place';
@@ -208,7 +209,18 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
       draw: (y) => {
         const base = y + size * 0.72;
         const outline = { ...place, mode: 'stroke' as const, strokeMm: ts.outlineMm };
-        if (ts.lettering !== 'font' && canStroke(title, ts.lettering)) {
+        if (ts.lettering === 'handwriter') {
+          // the owner's handwriting service: its strokes, fitted into the title's width, once they have arrived (printed lettering until then)
+          const { ink } = inkFor({ text: title, sizeMm: +size.toFixed(2), font: ts.hwFont ?? 'handwriting', preset: ts.hwPreset ?? 'project', seed: ts.hwSeed ?? 1 });
+          if (ink) {
+            const k = Math.min(1, innerW / ink.widthMm);
+            const w = ink.widthMm * k;
+            const x0 = align === 'right' ? contentR - w : align === 'center' ? (contentL + contentR) / 2 - w / 2 : contentL;
+            const y0 = y + size * 0.375 - (ink.heightMm * k) / 2;
+            const d = ink.strokes.map((s) => s.map(([px, py], i) => `${i ? 'L' : 'M'}${+(x0 + px * k).toFixed(3)} ${+(y0 + py * k).toFixed(3)}`).join(' ')).join(' ');
+            return [{ kind: 'path', d, color: colorOf(ts.pen), pen: ts.pen, mode: 'stroke', widthMm: ts.scriptMm, round: true } as Prim];
+          }
+        } else if (ts.lettering !== 'font' && canStroke(title, ts.lettering)) {
           // written out by hand: the letters as pen strokes, the case as typed; a title with a character the face lacks keeps the font
           const d = textToStrokes(text(ts.pen, title, base, size, place, titleX) as Extract<Prim, { kind: 'text' }>, ts.lettering);
           if (d) return [{ kind: 'path', d, color: colorOf(ts.pen), pen: ts.pen, mode: 'stroke', widthMm: ts.scriptMm, round: true } as Prim];

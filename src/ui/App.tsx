@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { handwriterEnabled, inkFor, inkVersion, subscribeInk } from '../handwriter/ink';
 import { useStore } from '../store';
 import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
@@ -345,7 +346,11 @@ export function App() {
     return () => { window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
   }, [draft]);
   const shown = useMemo(() => (draft && p.relief.enabled ? { ...p, relief: { ...p.relief, hideHidden: false, rows: Math.min(p.relief.rows, 40) } } : p), [p, draft]);
-  const composed = useMemo(() => composeScene(shown, terrain, osm), [shown, terrain, osm]);
+  // handwriting from the service arrives after the first compose: draw again when it lands
+  const inkSeen = useSyncExternalStore(subscribeInk, inkVersion);
+  const [hwOn, setHwOn] = useState(false);
+  useEffect(() => { void handwriterEnabled().then(setHwOn); }, []);
+  const composed = useMemo(() => composeScene(shown, terrain, osm), [shown, terrain, osm, inkSeen]);
   const scene = composed.scene;
   // Route and elevation-profile controls only mean something once a GPX track is loaded.
   const hasTrack = p.points.length > 0;
@@ -989,8 +994,24 @@ export function App() {
               <option value="font">Printed (the text font)</option>
               <option value="script">Handwritten script</option>
               <option value="scriptFull">Handwritten script, fuller</option>
+              {(hwOn || p.text.title.lettering === 'handwriter') && <option value="handwriter">My handwriting (service)</option>}
             </select>
           </Row>
+          {p.text.title.lettering === 'handwriter' && (() => {
+            const t = p.text.title;
+            const got = inkFor({ text: (t.value ?? auto.title).trim(), sizeMm: +(t.sizePt * 25.4 / 72).toFixed(2), font: t.hwFont ?? 'handwriting', preset: t.hwPreset ?? 'project', seed: t.hwSeed ?? 1 });
+            return (<>
+              <Row label="Typeface"><select value={t.hwFont ?? 'handwriting'} onChange={(e) => set((x) => { x.text.title.hwFont = e.target.value; })}>
+                {['handwriting', 'sans', 'sans-bold', 'serif', 'serif-italic', 'script', 'gothic'].map((f) => <option key={f} value={f}>{f === 'handwriting' ? 'Handwriting' : f}</option>)}
+              </select></Row>
+              <Row label="Style"><select value={t.hwPreset ?? 'project'} onChange={(e) => set((x) => { x.text.title.hwPreset = e.target.value; })}>
+                <option value="project">The service's own</option>
+                {['natural', 'neat', 'messy', 'cursive'].map((f) => <option key={f} value={f}>{f}</option>)}
+              </select></Row>
+              <Row label="Take"><input type="number" step={1} value={t.hwSeed ?? 1} onChange={(e) => set((x) => { x.text.title.hwSeed = Math.trunc(+e.target.value) || 0; })} /><button className="link" onClick={() => set((x) => { x.text.title.hwSeed = Math.floor(Math.random() * 99999); })}>another</button></Row>
+              <div className="hint">{got.error ? `Showing the printed lettering: ${got.error}` : got.loading ? 'Fetching your handwriting…' : got.ink?.missing ? `Left out (no glyph): ${got.ink.missing}.` : 'Single-line strokes from your handwriting service.'}</div>
+            </>);
+          })()}
           {(p.text.title.lettering ?? 'font') !== 'font' && (<>
             <Row label="Pen"><PenSelect pens={p.pens} value={p.text.title.pen} onChange={(id) => set((x) => { x.text.title.pen = id!; })} /></Row>
             <Row label="Line weight"><input type="number" min={0.1} max={3} step={0.05} value={p.text.title.scriptMm} onChange={(e) => set((x) => { x.text.title.scriptMm = Math.max(0.1, +e.target.value || 0.6); })} /><span className="unit">mm</span></Row>

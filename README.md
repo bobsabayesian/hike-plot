@@ -115,3 +115,7 @@ Under `npm run dev` the page is at `/admin` with no sign-in and an empty list (s
 ## The 1-hour link
 
 "Copy 1-hour link" next to the SVG download puts the SVG (as the Export settings make it, so a plotter SVG with a layer per pen) in `hike/share/<token>.svg` and copies `/api/share/<token>.svg`. The Worker enforces the hour itself (R2 only expires whole days, and only through a bucket rule): an older file is refused and deleted when asked for, and every new link clears the expired ones. The file is served with a sandboxing Content-Security-Policy, so it can only ever be data. The token (16 characters, about 80 bits) is the only key. To also have R2 clear any left-over files, add a lifecycle rule for the `hike/share/` prefix on the `project-files` bucket.
+
+## Handwriting service
+
+If you run a service that draws text as single-line SVG (`GET /api/v1/text.svg`, bearer token), set it up on the admin page (`/admin` → Handwriting service): the address and the project's token. They are stored in R2 and the token never reaches the browser; the Worker asks the service on the app's behalf (`/api/handwriter/text`, text up to 300 characters, margin 0). Once saved, Title → Lettering offers "My handwriting (service)", with the service's typeface, style preset and a seed ("another" for a new take). The strokes are fitted into the title width and plotted in the title pen at the line weight; until they arrive (or if the service is down) the printed lettering shows.
