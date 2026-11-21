@@ -28,6 +28,7 @@ import { isDarkPaper } from '../scene/pens';
 import { prepareScene, tipFor, type ExportMode, type PlotterText } from '../export/outlines';
 import { plotterLayout, preparePlotter } from '../export/plotter';
 import { LayerSorter } from './LayerSorter';
+import { useZoom } from './zoom';
 import type { LayerId } from '../scene/layers';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
@@ -279,6 +280,7 @@ export function App() {
     for (const ov of Object.values(x.features.overrides)) { delete ov.dx; delete ov.dy; delete ov.side; }
   });
   const editAt = (e: React.MouseEvent) => {
+    if (zoom.consumePan()) return;
     if (justDragged.current) { justDragged.current = false; return; }
     const hit = clickTarget(e.target);
     if (!hit) return;
@@ -401,6 +403,7 @@ export function App() {
     return () => { live = false; clearTimeout(t); };
   }, [plotPreview, scene, p.pens, p.paper, p.layers, draft, plotText]);
   const [hotLayer, setHotLayer] = useState<LayerId | null>(null);
+  const zoom = useZoom(composed.scene.widthMm, composed.scene.heightMm, !narrow);
   const designSvg = useMemo(() => sceneToSvg(scene, { paper: true, ids: true }), [scene]);
   const previewSvg = plotPreview && plotSvg ? plotSvg : designSvg;
 
@@ -1119,6 +1122,13 @@ export function App() {
                 title={look !== 'custom' && customStash ? 'Back to your own design from before you picked a look' : 'Your own settings: this is chosen as soon as you change anything a look sets'}
                 onClick={() => restoreCustom()}>Custom</button>
             </span>
+            {!narrow && (
+              <span className="seg zoom" role="group" aria-label="Zoom">
+                <button type="button" aria-label="Zoom out" title="Zoom out (-)" disabled={zoom.zoom <= 1} onClick={zoom.zoomOut}>−</button>
+                <button type="button" className="zoom-pct" title={zoom.zoom > 1 ? 'Back to the whole poster (0)' : 'Zoom to real size'} onClick={() => (zoom.zoom > 1 ? zoom.fit() : zoom.actual())}>{zoom.zoom > 1 ? `${zoom.percent}%` : 'Fit'}</button>
+                <button type="button" aria-label="Zoom in" title="Zoom in (+). Ctrl and the wheel zoom toward the pointer" disabled={zoom.zoom >= zoom.max} onClick={zoom.zoomIn}>+</button>
+              </span>
+            )}
             <span className="bar-status hint" aria-live="polite">{plotPreview ? (plotSvg ? 'Click-to-edit is off here' : 'Drawing…') : hovered ? (hovered.startsWith('Landmark:') ? `Click to edit, drag to move: ${hovered.slice(10)}` : `Click to edit: ${hovered}`) : 'Click any part of the poster to edit it'}</span>
             {labelsPlacedByHand && !plotPreview && (
               <button type="button" onClick={replaceLabels} title="Forget the labels you moved or put on a side, and place every label again automatically">Re-place labels</button>
@@ -1150,8 +1160,12 @@ export function App() {
           )}
         </div>
         <div className="stage">
-          <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editAt} onPointerDown={startDrag}
-            onMouseOver={(e) => setHovered(plotPreview ? '' : clickTarget(e.target)?.label ?? '')} onMouseLeave={() => setHovered('')} dangerouslySetInnerHTML={{ __html: previewSvg }} />
+          <div ref={zoom.vpRef} className={`viewport${zoom.zoom > 1 ? ' zoomed' : ''}${zoom.panning ? ' panning' : ''}`}
+            onPointerDown={(e) => zoom.onPan(e, (t) => plotPreview || !t.closest('[data-lm]'))}>
+            <div ref={zoom.sheetRef} className="sheet" role="img" aria-label="Preview of the poster" onClick={editAt} onPointerDown={startDrag}
+              style={zoom.zoom > 1 ? ({ '--zw': `${zoom.sheetPx}px` } as React.CSSProperties) : undefined}
+              onMouseOver={(e) => setHovered(plotPreview ? '' : clickTarget(e.target)?.label ?? '')} onMouseLeave={() => setHovered('')} dangerouslySetInnerHTML={{ __html: previewSvg }} />
+          </div>
           {plotPreview && !narrow && <LayerSorter project={p} prims={scene.prims} hovered={hotLayer} onHover={setHotLayer} />}
         </div>
       </main>

@@ -85,6 +85,10 @@ In the Plotter view on a desktop-width window, a Layers panel sits beside the po
 
 The cuts act on what the plotter actually draws (hatch, repeated passes, single strokes, marker width) in the plotter view and the plotter SVG, not in print, PNG or the Design view. The existing clearing settings (Clear beside route, Clear around labels, land cover Clear paper and Clear lines) keep working in their own panels and are shown as notes in the rows. With "Plot in this order" off (the default) the file keeps one layer per pen in the pens' order; on, the file's layers follow the order, one for each run of one pen, named after the pen and the parts in it, and the panel counts the pen changes. The settings are saved with the project.
 
+## Zoom
+
+On a desktop-width window the action bar has a zoom control (hidden on narrow screens, where pinching is native). The percentage is a share of the poster's real printed size (96 css px to the inch), so 100% is life size; click it to jump between Fit and 100%. Ctrl (or ⌘) and the mouse wheel, or a trackpad pinch, zoom toward the pointer; `+`, `-` and `0` do the same from the keyboard (not while a field has focus). Zoomed in, drag the poster to pan (in the Design view, not from a label, which drags itself) or use the scrollbars. The poster is vector, so it stays sharp; the most it shows is four times real size. The Layers panel stays where it is while the poster scrolls. Zoom is not saved with the project.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.

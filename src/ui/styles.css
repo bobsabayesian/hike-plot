@@ -225,3 +225,15 @@ button.link:hover:not(:disabled) { background: none; }
 .layer-cuts label { display: block; }
 .layer-cuts .note { color: var(--fg); opacity: .75; }
 @media (max-width: 800px) { .layers { display: none; } }
+
+/* zoom: the viewport scrolls, the sheet inside is sized by --zw when zoomed in */
+.viewport { flex: 1 1 0; min-width: 0; min-height: 0; align-self: stretch; display: flex; overflow: auto; }
+.viewport .sheet { margin: auto; }
+.viewport.zoomed { cursor: grab; }
+.viewport.zoomed.panning { cursor: grabbing; user-select: none; }
+.viewport.zoomed .sheet { flex: none; max-width: none; max-height: none; }
+.viewport.zoomed .sheet svg { width: var(--zw); max-width: none; max-height: none; }
+.viewport.zoomed.panning .sheet { pointer-events: none; }
+.app.narrow .viewport { display: block; overflow: visible; }
+.zoom button { min-width: 34px; padding: 4px 8px; }
+.zoom .zoom-pct { min-width: 52px; }
