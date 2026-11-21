@@ -46,7 +46,7 @@ export type FontKey = 'sans' | 'serif';
 export type ProfilePosition = 'bottom' | 'corner';
 
 export type Placement = 'top' | 'bottom';
-export type InfoKey = 'distance' | 'gain' | 'maxEle' | 'duration' | 'date' | 'contour';
+export type InfoKey = 'distance' | 'gain' | 'maxEle' | 'duration' | 'date' | 'contour' | 'towers' | 'steps' | 'fields' | 'bananas' | 'everests';
 export type NorthStyle = 'arrow' | 'circle' | 'compass' | 'rose';
 export type Corner = 'tl' | 'tr' | 'bl' | 'br';
 
@@ -289,6 +289,11 @@ export const defaultProject = (): Project => ({
         { key: 'duration', visible: false, label: 'Time' },
         { key: 'date', visible: true, label: 'Date' },
         { key: 'contour', visible: false, label: 'Contour interval' },
+        { key: 'towers', visible: false, label: 'Climbed' },
+        { key: 'steps', visible: false, label: 'Steps' },
+        { key: 'fields', visible: false, label: 'Football fields' },
+        { key: 'bananas', visible: false, label: 'Bananas end to end' },
+        { key: 'everests', visible: false, label: 'Everests' },
       ],
     },
   },

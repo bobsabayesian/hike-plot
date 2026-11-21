@@ -84,3 +84,27 @@ export function formatDuration(ms: number): string {
 export function formatCoords(lat: number, lon: number): string {
   return `${Math.abs(lat).toFixed(4)}° ${lat >= 0 ? 'N' : 'S'}  ${Math.abs(lon).toFixed(4)}° ${lon >= 0 ? 'E' : 'W'}`;
 }
+
+// --- the playful numbers: the same walk, measured in things you can picture ---
+export const EIFFEL_TOWER_M = 330;
+export const EVEREST_M = 8849;
+/** an American football field, goal line to goal line */
+export const FOOTBALL_FIELD_M = 91.44;
+export const BANANA_M = 0.18;
+/** a hiker's stride */
+export const STEP_M = 0.75;
+
+const round = (n: number, step: number) => Math.round(n / step) * step;
+const group = (n: number) => Math.round(n).toLocaleString('en-US');
+const one = (n: number) => (n < 10 ? n.toFixed(1) : group(n));
+
+/** "2.8 Eiffel Towers" of climbing (or 1.0 Eiffel Tower) */
+export function formatTowers(gainM: number): string {
+  const n = gainM / EIFFEL_TOWER_M;
+  return `${n.toFixed(1)} Eiffel Tower${n.toFixed(1) === '1.0' ? '' : 's'}`;
+}
+/** about how many steps the distance is, to the nearest hundred (or fewer, for a short walk) */
+export const formatSteps = (distM: number): string => group(distM / STEP_M >= 1000 ? round(distM / STEP_M, 100) : round(distM / STEP_M, 10));
+export const formatFields = (distM: number): string => one(distM / FOOTBALL_FIELD_M);
+export const formatBananas = (distM: number): string => group(distM / BANANA_M >= 10000 ? round(distM / BANANA_M, 100) : distM / BANANA_M);
+export const formatEverests = (gainM: number): string => { const n = gainM / EVEREST_M; return n < 1 ? n.toFixed(2) : n.toFixed(1); };

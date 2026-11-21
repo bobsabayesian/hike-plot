@@ -3,7 +3,7 @@ import { bbox, bboxCenter, fitBBox, fitScale, groundMetersPerMm, haversine, MAP_
 import { toMgrs } from '../geo/utm';
 import type { Rect } from '../geo/clip';
 import {
-  computeStats, metersToFeet, formatCoords, formatDuration, formatFeet, formatKm, formatMeters, formatMiles,
+  computeStats, metersToFeet, formatCoords, formatDuration, formatEverests, formatBananas, formatFields, formatSteps, formatTowers, formatFeet, formatKm, formatMeters, formatMiles,
   type TrackStats,
 } from '../geo/stats';
 import { contourInterval, contourPaths, toD } from '../topo/contours';
@@ -140,6 +140,11 @@ export function autoValues(p: Project, stats?: TrackStats, contourM?: number) {
       maxEle: stats?.maxEleM !== undefined ? ele(stats.maxEleM) : '',
       duration: stats?.durationMs !== undefined ? formatDuration(stats.durationMs) : '',
       date: autoDate(stats?.startTime),
+      towers: stats && stats.gainM > 0 ? formatTowers(stats.gainM) : '',
+      steps: stats && stats.distanceM > 0 ? formatSteps(stats.distanceM) : '',
+      fields: stats && stats.distanceM > 0 ? formatFields(stats.distanceM) : '',
+      bananas: stats && stats.distanceM > 0 ? formatBananas(stats.distanceM) : '',
+      everests: stats && stats.gainM > 0 ? formatEverests(stats.gainM) : '',
       contour: contourM ? (imperial ? `${contourM} m (${Math.round(metersToFeet(contourM))} ft)` : `${contourM} m`) : '',
     } as Record<InfoItem['key'], string>,
   };

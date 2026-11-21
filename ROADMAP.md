@@ -1,36 +1,35 @@
-# Roadmap
+# Roadmap: whimsy and personality
 
-Ideas for making the poster's landscape less plain, roughly in order. Done items move to the bottom.
+The plan is to add the ingredients first, see which ones feel right, and then make mood presets ("Treasure map", "Field journal", "Blueprint"...) from the ones that earn their place. Every decoration should be its own layer, so the layer sorter can cut lines out from under it, and everything has to survive a pen plotter: single strokes, no fills, few pen lifts.
 
-## Next
+Status: **building** (being added now), **next**, **later**, **done**.
 
-- **Distant ridges**: the skyline beyond the view, from a wider elevation grid, as one faint line in a light pen.
-- **A deeper map in 3D**: stretch the map area away from the viewer so a tilted block fills a portrait page without
-  trimming (goes well with distant ridges).
+## Hand-made feel
+- **Hand-drawn wobble**: a slider that adds seeded, subtle wander to lines, per layer, with a Shuffle button for a new seed. *building*
+- **Sketchy double strokes**: a second pass offset a little, using the pass machinery the plotter export already has. *later*
+- **Handwriting title**: choose the Hershey script/cursive faces (the data is already in the repo) for the title. *next*
+- **Title flourishes**: title on an arc, a bouncing baseline, an offset shadow pass, a ribbon or banner behind it. *later*
 
-## Done
+## Things to look at in the empty space
+- **Doodles**: single-stroke pines, trees, tents, mountains, flags, cairns, birds, clouds and a sun, placed where they do not collide with the route or labels, clearing the lines under them; in the 3D view the sky gets the sun, clouds and birds. *building*
+- **Richer landmark icons**: tent, flag, camera, coffee cup, bear paw; photo-sourced landmarks default to a camera. *next*
+- **Callouts**: a speech bubble or leader line on a landmark with your own note ("lunch here, best view"). *later*
 
-- **Cleaner clearing around labels, and moving labels by hand**: lines are cut on an even rounded outline with exact
-  ends and no stubs, labels are measured with the fonts' real glyph widths, water names get a clear zone too; drag a
-  landmark name in the preview to move it, with "Re-place labels" and "Put back" to undo.
-- **Map grid and Military map look** (Map grid section; "Military map" button at the top of Map): a UTM grid (WGS 84)
-  over the flat map with military-style grid numbers outside the neat line, scale bars, the grid zone and 100 km
-  square (MGRS) and the contour interval under the map; the look sets brown 40 m contours, blue water, green woods
-  and a black grid at a true 1:50,000, with MGRS references (coordinates, the high point, the 100 km squares).
-- **Looks in the toolbar**: Military map, 3D contours and Custom above the poster; Custom is chosen as soon as a
-  style is changed, and brings back the design from before a look was picked.
-- **Lighter lines in the distance** (3D relief section, "Fade far away"): past a chosen point, every 2nd and then every
-  4th row or contour, and/or a lighter far pen.
-- **More for the route** (Route section, and "+ High point" under Landmarks): mile or km marks with numbers, a route
-  raised above the 3D ground with lines dropped to it, and a high point landmark named with its elevation.
-- **Unhide a hidden landmark** (Landmarks section): a Hidden list of every landmark hidden by hand, with Show and
-  Show all.
-- **Zoom for the 3D view** (3D relief section): enlarge the view past the frame to fill the page, trimmed at the
-  frame's edges and centered on the route.
-- **Solid base under the 3D terrain** (3D relief section): walls down to a floor on the sides facing the viewer, with
-  strata at each contour or heavy contour, or upright hatching.
-- **Land cover** (Land cover section): forests, rock and scree, glaciers and snow, meadow, wetland and sand from the
-  OpenFreeMap tiles, each filled with a plotter pattern (trees, dots, hatching, scree dashes, marsh tufts) or left as
-  clear paper. Drawn on the flat map and draped on the 3D relief.
-- **Slope shading** (Shading section): slopes facing away from the sun drawn darker, with extra lines between them in
-  the shade.
+## Cartographic charm
+- **Water ripples**: concentric ripple lines along lake shores and wave marks on water. *next*
+- **Border styles**: postage-stamp perforations, rope, double rule, ornate corners. *next*
+- **Old-fashioned peaks**: molehill-profile mountain symbols instead of triangles. *later*
+
+## Playful text
+- **Fun stats**: "≈ 2.8 Eiffel Towers of climbing", steps, football fields, bananas end to end, Everests. *building*
+- **Stamp badge**: a circular passport stamp with place and date, or a "summit achieved" ribbon. *later*
+
+## Colour and personality
+- **Elevation-banded contour pens**: low ground in one pen, high in another, one pen per band; a rainbow-by-mile route the same way. *later*
+- **Mood presets**: Treasure map, Blueprint, Field journal, Vintage park poster, Minimal; a dice button that picks a random palette within sensible limits. *after the ingredients above*
+- **QR code**: a QR to the saved project link in a corner, drawn as plotter-friendly squares (the QR library is already a dependency). *next*
+
+## Older leftovers
+- Per-landmark label size.
+- A rate limit for public saves and the phone relay.
+- An R2 lifecycle rule for `hike/share/` and `hike/photo/`.
