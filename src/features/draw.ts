@@ -25,6 +25,9 @@ export function waterLinesPrim(lines: XY[][], s: FeatureSettings, pen: Pen): Pri
     : [];
 }
 
+/** a small circle outline centered at (cx, cy) */
+const ring = (cx: number, cy: number, rr: number) => `M${f(cx - rr)} ${f(cy)}a${f(rr)} ${f(rr)} 0 1 0 ${f(2 * rr)} 0a${f(rr)} ${f(rr)} 0 1 0 ${f(-2 * rr)} 0Z`;
+
 /** Simple outline glyph per kind, centered on (x, y); strokes only so it plots. */
 export function markerPath(kind: LandmarkKind, x: number, y: number, r: number, icon: Icon = 'default'): string {
   const circle = (rr: number) => `M${f(x - rr)} ${f(y)}a${f(rr)} ${f(rr)} 0 1 0 ${f(2 * rr)} 0a${f(rr)} ${f(rr)} 0 1 0 ${f(-2 * rr)} 0Z`;
@@ -45,6 +48,11 @@ export function markerPath(kind: LandmarkKind, x: number, y: number, r: number, 
       }
       return d + 'Z';
     }
+    case 'tent': return `M${f(x - r)} ${f(y + r * 0.8)}L${f(x)} ${f(y - r * 0.9)}L${f(x + r)} ${f(y + r * 0.8)}ZM${f(x - r * 0.35)} ${f(y + r * 0.8)}L${f(x)} ${f(y - r * 0.05)}L${f(x + r * 0.35)} ${f(y + r * 0.8)}`;
+    case 'flag': return `M${f(x - r * 0.5)} ${f(y + r)}V${f(y - r)}L${f(x + r * 0.9)} ${f(y - r * 0.55)}L${f(x - r * 0.5)} ${f(y - r * 0.1)}`;
+    case 'camera': return `M${f(x - r)} ${f(y - r * 0.5)}h${f(r * 2)}v${f(r * 1.3)}h${f(-r * 2)}ZM${f(x - r * 0.4)} ${f(y - r * 0.5)}L${f(x - r * 0.25)} ${f(y - r * 0.85)}h${f(r * 0.5)}L${f(x + r * 0.4)} ${f(y - r * 0.5)}` + ring(x, y + r * 0.15, r * 0.38);
+    case 'cup': return `M${f(x - r * 0.7)} ${f(y - r * 0.4)}h${f(r * 1.2)}v${f(r * 1.2)}h${f(-r * 1.2)}ZM${f(x + r * 0.5)} ${f(y - r * 0.1)}h${f(r * 0.3)}v${f(r * 0.6)}h${f(-r * 0.3)}M${f(x - r * 0.35)} ${f(y - r * 0.95)}v${f(r * 0.35)}M${f(x + r * 0.05)} ${f(y - r * 0.95)}v${f(r * 0.35)}`;
+    case 'paw': return ring(x, y + r * 0.35, r * 0.5) + ring(x - r * 0.75, y - r * 0.15, r * 0.2) + ring(x - r * 0.28, y - r * 0.65, r * 0.2) + ring(x + r * 0.28, y - r * 0.65, r * 0.2) + ring(x + r * 0.75, y - r * 0.15, r * 0.2);
     case 'pin': return `M${f(x - r * 0.9)} ${f(y + r * 0.8)}V${f(y - r * 0.1)}L${f(x)} ${f(y - r)}L${f(x + r * 0.9)} ${f(y - r * 0.1)}V${f(y + r * 0.8)}Z`;
   }
   switch (kind) {

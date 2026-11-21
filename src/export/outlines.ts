@@ -89,6 +89,8 @@ export interface PrepareOptions {
   pens?: Pen[];
   /** tip width for anything without a pen (and when there is no palette); defaults to 0.3 mm */
   penMm?: number;
+  /** direction of the hatch lines in the plotter export, degrees (90 = upright); defaults to 45 */
+  hatchAngleDeg?: number;
 }
 
 /** The width one pass leaves on paper for a primitive's pen (tip plus ink spread); heavy lines and hatch spacing follow it. */
@@ -119,7 +121,7 @@ export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, op
       }
       if (p.hatch) {
         // a pen cannot fill: hatch the letters with parallel lines of the pen
-        const lines = hatchPath(d, pen * HATCH_FACTOR[p.hatch]);
+        const lines = hatchPath(d, pen * HATCH_FACTOR[p.hatch], opts.hatchAngleDeg);
         return lines ? [{ kind: 'path', part: p.part, d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }] : [];
       }
       const mode = opts.plotterText ?? 'outline';
@@ -130,14 +132,14 @@ export function prepareScene(scene: Scene, mode: ExportMode, fonts?: FontSet, op
       }
       // plain filled letters: a pen cannot fill, so the letter is outlined and filled in with hatch lines of the same pen
       // (an outline alone leaves big letters hollow and makes small ones, as thick as the pen, merge into blobs)
-      const lines = hatchPath(d, pen * HATCH_FACTOR[p.plotFill ?? 'solid']);
+      const lines = hatchPath(d, pen * HATCH_FACTOR[p.plotFill ?? 'solid'], opts.hatchAngleDeg);
       const out: PathPrim[] = [{ kind: 'path', part: p.part, d, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true }];
       if (lines) out.push({ kind: 'path', part: p.part, d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
       return out;
     }
     if (!plotter) return [p];
     if (p.mode === 'fill' && p.hatch) {
-      const lines = hatchPath(p.d, pen * HATCH_FACTOR[p.hatch]);
+      const lines = hatchPath(p.d, pen * HATCH_FACTOR[p.hatch], opts.hatchAngleDeg);
       const strokes: PathPrim[] = [];
       if (lines) strokes.push({ kind: 'path', part: p.part, d: lines, color: p.color, pen: p.pen, mode: 'stroke', widthMm: pen, round: true });
       // keep the outline too, so the shape has a crisp edge

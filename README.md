@@ -119,3 +119,7 @@ Under `npm run dev` the page is at `/admin` with no sign-in and an empty list (s
 ## Handwriting service
 
 If you run a service that draws text as single-line SVG (`GET /api/v1/text.svg`, bearer token), set it up on the admin page (`/admin` → Handwriting service): the address and the project's token. They are stored in R2 and the token never reaches the browser; the Worker asks the service on the app's behalf (`/api/handwriter/text`, text up to 300 characters, margin 0). Once saved, Title → Lettering offers "My handwriting (service)", with the service's typeface, style preset and a seed ("another" for a new take). The strokes are fitted into the title width and plotted in the title pen at the line weight; until they arrive (or if the service is down) the printed lettering shows.
+
+## Landmark icons and hatch angle
+
+Landmark icons now include a tent, flag, camera, coffee cup and bear paw (pick one per kind or per landmark). Places added from photos are drawn with a camera. In the plotter view, "Hatch angle" (30° to 90°, 90° is upright) sets the direction of the hatch lines that fill shapes in the plotter file; the default is 45°.

@@ -308,7 +308,7 @@ export function App() {
   const makeSvg = async () => {
     const fonts = mode === 'live' ? undefined : await loadFonts();
     // the plotter file is also cut by the layer rules, and laid out in layers as the layer settings say
-    const out = mode === 'plotter' ? preparePlotter(scene, p, fonts!, plotText) : prepareScene(scene, mode, fonts, { pens: p.pens, plotterText: plotText });
+    const out = mode === 'plotter' ? preparePlotter(scene, p, fonts!, plotText) : prepareScene(scene, mode, fonts, { pens: p.pens, plotterText: plotText, hatchAngleDeg: p.hatchAngleDeg });
     return sceneToSvg(out, { paper: paperInExport && mode !== 'plotter', ...(mode === 'plotter' ? plotterLayout(p) : {}) });
   };
   const showPoster = () => { if (narrow) setTab('poster'); };
@@ -409,7 +409,7 @@ export function App() {
       } catch { if (live) setPlotSvg(''); }
     }, draft ? 0 : 250);
     return () => { live = false; clearTimeout(t); };
-  }, [plotPreview, scene, p.pens, p.paper, p.layers, draft, plotText]);
+  }, [plotPreview, scene, p.pens, p.paper, p.layers, p.hatchAngleDeg, draft, plotText]);
   const [hotLayer, setHotLayer] = useState<LayerId | null>(null);
   const zoom = useZoom(composed.scene.widthMm, composed.scene.heightMm, !narrow);
   const designSvg = useMemo(() => sceneToSvg(scene, { paper: true, ids: true }), [scene]);
@@ -892,7 +892,12 @@ export function App() {
           })}
           <PhotoPlaces onPlaces={(places) => set((x) => {
             let list = x.customLandmarks ?? [];
-            for (const pl of places) list = [...list, { id: newCustomId(list), name: pl.name, at: 'latlon' as const, lat: pl.lat, lon: pl.lon }];
+            for (const pl of places) {
+              const id = newCustomId(list);
+              list = [...list, { id, name: pl.name, at: 'latlon' as const, lat: pl.lat, lon: pl.lon }];
+              // a place that came from a photo is drawn with a camera
+              x.features.overrides[id] = { ...x.features.overrides[id], icon: 'camera' };
+            }
             x.customLandmarks = list;
           })} />
         </>)}
@@ -1144,6 +1149,10 @@ export function App() {
               <option value="single">Single strokes for all text</option>
               <option value="outline">Outlined and filled letters for all text</option>
             </select>
+          </Row>
+          <Row label="Hatch angle">
+            <input type="range" min={30} max={90} step={5} value={p.hatchAngleDeg ?? 45} onChange={(e) => set((x) => { x.hatchAngleDeg = +e.target.value; })} />
+            <span className="unit">{p.hatchAngleDeg ?? 45}°{(p.hatchAngleDeg ?? 45) === 90 ? ' upright' : ''}</span>
           </Row>
           <div className="hint">Single strokes draw each letter as a few lines of the pen: fast, and small labels stay readable. Filled letters are outlined and hatched: heavier, but small ones clot with a wide pen.</div>
           <div className="hint">

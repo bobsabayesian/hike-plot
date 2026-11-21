@@ -176,6 +176,8 @@ export interface Project {
   pens: Pen[];
   /** the plotter's layers: their drawing order, and which layer cuts lines out of which beneath it */
   layers: LayerSettings;
+  /** direction of the hatch lines that fill shapes in the plotter file, 30 to 90 degrees (90 = upright) */
+  hatchAngleDeg: number;
   /** a hand-drawn wander added to the lines */
   hand: HandSettings;
   /** little drawings (trees, tents, birds, clouds...) scattered where there is room */
@@ -279,6 +281,7 @@ export const defaultProject = (): Project => ({
   units: 'imperial',
   pens: defaultPens(),
   layers: defaultLayers(),
+  hatchAngleDeg: 45,
   hand: defaultHand(),
   doodles: defaultDoodles(),
   route: { pen: PEN_RED, weightMm: 0.9, style: 'solid', ticks: 'off', tickEvery: 1, tickSizePt: 7, liftMm: 0, dropMm: 1.5 },

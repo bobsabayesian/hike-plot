@@ -120,3 +120,13 @@ describe('closed letter outlines', () => {
     expect(textToPath(word('OO'), fonts)).toMatch(/^(M[^MZ]*Z)+$/);
   });
 });
+
+describe('hatch angle setting', () => {
+  it('upright hatching is vertical, and the angle follows the setting', async () => {
+    const { hatchPath } = await import('../src/export/hatch');
+    const sq = 'M0 0L10 0L10 10L0 10Z';
+    const xs = (d: string) => [...d.matchAll(/M([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)/g)].map((m) => [+m[1]!, +m[2]!, +m[3]!, +m[4]!]);
+    for (const [x1, , x2] of xs(hatchPath(sq, 1, 90))) expect(x1).toBeCloseTo(x2!, 2);
+    for (const [x1, y1, x2, y2] of xs(hatchPath(sq, 1, 30))) { const a = Math.abs(Math.atan2(y2! - y1!, x2! - x1!)) * 180 / Math.PI; expect([30, 150].some((t) => Math.abs(a - t) < 0.5)).toBe(true); }
+  });
+});

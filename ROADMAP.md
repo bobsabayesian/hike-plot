@@ -12,7 +12,7 @@ Status: **building** (being added now), **next**, **later**, **done**.
 
 ## Things to look at in the empty space
 - **Doodles**: single-stroke pines, trees, tents, mountains, flags, cairns, birds, clouds and a sun, placed where they do not collide with the route or labels, clearing the lines under them; in the 3D view the sky gets the sun, clouds and birds. *done (not yet deployed)*
-- **Richer landmark icons**: tent, flag, camera, coffee cup, bear paw; photo-sourced landmarks default to a camera. *next*
+- **Richer landmark icons**: tent, flag, camera, coffee cup, bear paw; photo-sourced landmarks default to a camera. *done (not yet deployed)*
 - **Callouts**: a speech bubble or leader line on a landmark with your own note ("lunch here, best view"). *later*
 
 ## Cartographic charm
