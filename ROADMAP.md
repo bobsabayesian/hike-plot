@@ -5,7 +5,7 @@ The plan is to add the ingredients first, see which ones feel right, and then ma
 Status: **building** (being added now), **next**, **later**, **done**.
 
 ## Hand-made feel
-- **Hand-drawn wobble**: a slider that adds seeded, subtle wander to lines, per layer, with a Shuffle button for a new seed. *building*
+- **Hand-drawn wobble**: a slider that adds seeded, subtle wander to lines, per layer, with a Shuffle button for a new seed. *done (not yet deployed)*
 - **Sketchy double strokes**: a second pass offset a little, using the pass machinery the plotter export already has. *later*
 - **Handwriting title**: choose the Hershey script/cursive faces (the data is already in the repo) for the title. *next*
 - **Title flourishes**: title on an arc, a bouncing baseline, an offset shadow pass, a ribbon or banner behind it. *later*
@@ -21,7 +21,7 @@ Status: **building** (being added now), **next**, **later**, **done**.
 - **Old-fashioned peaks**: molehill-profile mountain symbols instead of triangles. *later*
 
 ## Playful text
-- **Fun stats**: "≈ 2.8 Eiffel Towers of climbing", steps, football fields, bananas end to end, Everests. *building*
+- **Fun stats**: "≈ 2.8 Eiffel Towers of climbing", steps, football fields, bananas end to end, Everests. *done (not yet deployed)*
 - **Stamp badge**: a circular passport stamp with place and date, or a "summit achieved" ribbon. *later*
 
 ## Colour and personality

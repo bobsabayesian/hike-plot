@@ -89,6 +89,10 @@ The cuts act on what the plotter actually draws (hatch, repeated passes, single 
 
 On a desktop-width window the action bar has a zoom control (hidden on narrow screens, where pinching is native). The percentage is a share of the poster's real printed size (96 css px to the inch), so 100% is life size; click it to jump between Fit and 100%. Ctrl (or ⌘) and the mouse wheel, or a trackpad pinch, zoom toward the pointer; `+`, `-` and `0` do the same from the keyboard (not while a field has focus). Zoomed in, drag the poster to pan (in the Design view, not from a label, which drags itself) or use the scrollbars. The poster is vector, so it stays sharp; the most it shows is four times real size. The Layers panel stays where it is while the poster scrolls. Zoom is not saved with the project.
 
+## Hand-drawn feel
+
+The "Hand-drawn feel" group adds a steady, gentle wander to lines, as if drawn freehand: a Wobble amount (up to half a millimetre of drift over a few millimetres of line), Draw again (a new seed, same lines), and which layers wander (terrain, water, route, border, profile, north arrow, doodles by default; text stays as it is). It is applied when the poster is built, so the preview, PNG and both SVG kinds agree, and the layer cuts work on the wandering lines. Each line's wander depends on where it starts, so changing something else does not shift it. Tiny marks wander less, and closed shapes still close.
+
 ## Saved projects and the admin page
 
 "Save project" writes the whole poster (settings, GPX track and waypoints) as `hike/<code>.json` in the shared `project-files` R2 bucket, and returns an 8-character code. Opening a code, or a link with `?p=<code>`, restores it. Each save makes a new code, so one cannot overwrite another. The code is the only protection: anyone who has it can open the project.

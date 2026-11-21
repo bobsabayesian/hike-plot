@@ -11,6 +11,7 @@ export const LAYERS = [
   { id: 'terrain', label: 'Terrain lines', parts: ['contours', 'relief'] },
   { id: 'cover', label: 'Land cover', parts: ['cover'] },
   { id: 'water', label: 'Water', parts: ['water'] },
+  { id: 'doodles', label: 'Doodles', parts: ['doodles'] },
   { id: 'grid', label: 'Grid and legend', parts: ['grid'] },
   { id: 'profile', label: 'Elevation profile', parts: ['profile'] },
   { id: 'route', label: 'Route', parts: ['route'] },

@@ -29,7 +29,7 @@ import { prepareScene, tipFor, type ExportMode, type PlotterText } from '../expo
 import { plotterLayout, preparePlotter } from '../export/plotter';
 import { LayerSorter } from './LayerSorter';
 import { useZoom } from './zoom';
-import type { LayerId } from '../scene/layers';
+import { LAYERS, type LayerId } from '../scene/layers';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
 import { PagePanel } from './PagePanel';
@@ -84,6 +84,7 @@ const PARTS: Record<Part, { group: string; label: string; focus?: string }> = {
   north: { group: 'north', label: 'North arrow' },
   grid: { group: 'grid', label: 'Map grid' },
   landmarks: { group: 'landmarks', label: 'Landmarks' },
+  doodles: { group: 'doodles', label: 'Doodles' },
 };
 
 /** The part of the poster under the pointer, if any: a landmark's own label first, then the part an element draws. */
@@ -676,6 +677,20 @@ export function App() {
             <Row label="Pen"><PenSelect pens={p.pens} value={p.shade.pen} allowDefault={`Contour pen, drawn twice (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.shade.pen; else x.shade.pen = id; })} /></Row>
             <div className="hint">Slopes facing away from the sun are drawn darker, like hillshading made of lines. "Sun from" is degrees clockwise from north (315 is northwest); "Sun height" is degrees above the horizon. {need && <>To match the light on the day, <a href={suncalcUrl(need, p.points)} target="_blank" rel="noopener noreferrer">look up the sun on SunCalc</a> (this map, {p.points.some((q) => q.time !== undefined) ? 'when the hike started' : 'today at noon'}) and copy its azimuth and altitude here. </>}"In shade" is the share of the land that counts as shaded. Works on the contours and on 3D relief rows; heavy contour lines are left as they are.</div>
           </div>)}
+        </Group>
+
+        <Group id="hand" title="Hand-drawn feel" {...gp('hand')}
+          toggle={{ on: p.hand.amount > 0, onChange: (v) => set((x) => { x.hand.amount = v ? 40 : 0; }) }}>
+          {p.hand.amount > 0 && (<>
+            <Row label="Wobble"><input type="range" min={5} max={100} step={5} value={p.hand.amount} onChange={(e) => set((x) => { x.hand.amount = +e.target.value; })} /><span>{p.hand.amount}%</span></Row>
+            <Row label="Draw again"><button type="button" onClick={() => set((x) => { x.hand.seed = Math.floor(Math.random() * 1e9); })}>Shuffle</button><span className="hint">a new wander for the same lines</span></Row>
+            <div className="kinds">
+              {LAYERS.filter((l) => l.id !== 'title' && l.id !== 'details' && l.id !== 'landmarks' && l.id !== 'grid').map((l) => (
+                <label key={l.id}><input type="checkbox" checked={p.hand.layers.includes(l.id)} onChange={(e) => set((x) => { x.hand.layers = e.target.checked ? [...new Set([...x.hand.layers, l.id])] : x.hand.layers.filter((i) => i !== l.id); })} /> {l.label}</label>
+              ))}
+            </div>
+            <div className="hint">Adds a steady, gentle wander to the lines of the layers ticked, as if drawn freehand. Text stays as it is. It is the same in the preview and in the plotter file.</div>
+          </>)}
         </Group>
 
         <Group id="cover" title="Land cover" {...gp('cover')}

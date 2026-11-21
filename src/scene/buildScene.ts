@@ -15,6 +15,7 @@ import { baseLines, strataLevels } from '../relief/base';
 import { band, depthOf, splitFar, thinLine } from '../relief/fade';
 import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
 import { thinUnder } from '../cover/thin';
+import { applyHand } from './hand';
 import { buildShadeMap, extraShare, splitByShade } from '../relief/shade';
 import { coverMask, markSymbol, patternMarks, type Mask } from '../cover/draw';
 import { COVER_CLASSES, type CoverClass } from '../cover/types';
@@ -756,7 +757,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     }
   }
 
-  return { scene: { widthMm: W, heightMm: H, paper: p.paper, prims }, view, landmarks, pool, open };
+  return { scene: { widthMm: W, heightMm: H, paper: p.paper, prims: applyHand(prims, p.hand) }, view, landmarks, pool, open };
 }
 
 /** How far above the ground a landmark's spot is tested for being in view, mm (in the relief's height units). */
