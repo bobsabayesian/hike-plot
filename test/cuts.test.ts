@@ -199,3 +199,22 @@ describe('on a poster', () => {
     expect(out.prims.every((x) => x.part !== undefined)).toBe(true);
   });
 });
+
+describe('the north arrow in the plotter file', () => {
+  it('its filled parts are hatched in the pen, not just outlined', async () => {
+    const { northPrims } = await import('../src/scene/north');
+    const fake = { unitsPerEm: 1000, charToGlyph: () => ({ advanceWidth: 500, getPath: (x: number, y: number) => ({ toPathData: () => `M${x} ${y}L${x + 1} ${y}L${x + 1} ${y - 1}L${x} ${y - 1}`, commands: [] }) }) };
+    const fonts = { sans: fake, serif: fake } as unknown as FontSet;
+    for (const style of ['arrow', 'circle', 'compass', 'rose'] as const) {
+      const prims = northPrims({ x: 0, y: 0, w: 200, h: 200 }, { style, corner: 'tl', sizeMm: 24, weightMm: 0.3, color: '#000000', pen: 'ink', fontFamily: 'x', fontKey: 'sans' } as never);
+      const fills = prims.filter((p): p is PathPrim => p.kind === 'path' && p.mode === 'fill');
+      if (style === 'rose') continue;
+      expect(fills.length).toBeGreaterThan(0);
+      expect(fills.every((p) => p.hatch === 'solid')).toBe(true);
+      const plot = prepareScene({ widthMm: 200, heightMm: 200, paper: '#fff', prims: fills }, 'plotter', fonts, { pens: defaultProject().pens }).prims as PathPrim[];
+      // the outline and the hatch lines: more than the outline alone, all strokes in the pen
+      expect(plot.length).toBeGreaterThanOrEqual(fills.length * 2);
+      expect(plot.every((p) => p.mode === 'stroke' && p.pen === 'ink' && p.part === 'north')).toBe(true);
+    }
+  });
+});

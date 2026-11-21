@@ -52,7 +52,8 @@ export function northPrims(frame: Rect, o: NorthOpts): Prim[] {
   const poly = (pts: [number, number][], close = true) => polyD(pts.map(rot), close);
   const circle = (x: number, y: number, r: number) => circleD(...rot([x, y]), r);
   const line = (d: string) => prims.push({ kind: 'path', d, color: o.color, pen: o.pen, mode: 'stroke', widthMm: o.weightMm, round: true });
-  const fill = (d: string) => prims.push({ kind: 'path', d, color: o.color, pen: o.pen, mode: 'fill' });
+  // a pen cannot fill: the plotter export hatches the shape in the same pen (print and the screen still fill it)
+  const fill = (d: string) => prims.push({ kind: 'path', part: 'north', d, color: o.color, pen: o.pen, mode: 'fill', hatch: 'solid' });
   const label = (t: string, x0_: number, baseline0: number, size: number) => {
     // rotate the label's center, keep the glyphs upright
     const [x, cyL] = rot([x0_, baseline0 - size * 0.36]);
