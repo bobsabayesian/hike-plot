@@ -63,11 +63,12 @@ describe('a feature on the route still gets a label', () => {
     expect(l.anchor).toBe('middle');
   });
   it('takes the side that crosses the route least', () => {
-    // three long lines block above, level and below; extra wiggles make the right side much worse than the left
+    // long lines block above and below; the level line reaches only partway along the left, and extra wiggles make
+    // the right side much worse than the left
     const route: XY[] = [
       [mx - 60, my - 5], [mx + 60, my - 5], [mx + 60, my],
       [mx + 40, my], [mx + 34, my + 1.9], [mx + 28, my - 1.9], [mx + 22, my + 1.9], [mx + 16, my - 1.9], [mx + 10, my + 1.9], [mx + 4, my],
-      [mx - 60, my], [mx - 60, my + 5], [mx + 60, my + 5],
+      [mx - 30, my], [mx - 60, my + 5], [mx + 60, my + 5],
     ];
     const w = 'Bright Angel Trailhead'.length * 4 * 0.56;
     const right = { cx: mx + 3.4 + w / 2, cy: my - 0.05 * 4, w, h: 4, ang: 0 };

@@ -1,3 +1,4 @@
+import { textWidthMm } from '../src/features/measure';
 import { describe, expect, it } from 'vitest';
 import { BORDER_CLEARANCE_MM, borderPrims, defaultBorder, layoutBorder, type BorderSettings } from '../src/scene/border';
 import { defaultProject, posterMm, type Project } from '../src/scene/project';
@@ -120,25 +121,25 @@ describe('labels stay inside the border', () => {
     const p = base((q) => {
       q.waypoints = sampleWaypoints(q.points).slice(0, 1); // the summit, at the right edge of the map
       q.features.kinds.waypoint = true;
-      Object.assign(q.page.margins, { top: 34, right: 34, bottom: 34, left: 34 });
+      Object.assign(q.page.margins, { top: 38, right: 38, bottom: 38, left: 38 }); // room for the label beside its marker
       edit(q);
     });
     return { p, label: buildScene(p).prims.find((x) => x.kind === 'text' && x.text === 'Summit') as { x: number; anchor: string } | undefined };
   };
   it('a label that would run past the border is moved to the other side of its marker', () => {
     const none = summit(() => {});
-    const framed = summit((q) => { q.border = on({ offsetMm: 28 }); });
+    const framed = summit((q) => { q.border = on({ offsetMm: 32 }); });
     expect(none.label?.anchor).toBe('start'); // fits in the margin when there is no border
     expect(framed.label).toBeDefined();
     expect(framed.label!.anchor).not.toBe('start'); // would have crossed the border
   });
   it('no label is written past the inner border line', () => {
-    const { p } = summit((q) => { q.border = on({ offsetMm: 28, style: 'double', gapMm: 2 }); });
+    const { p } = summit((q) => { q.border = on({ offsetMm: 32, style: 'double', gapMm: 2 }); });
     const { w } = posterMm(p);
     const inner = layoutBorder(w, posterMm(p).h, p.border, p.page.margins).rects.at(-1)!.x + p.border.weightMm / 2 + 1.5;
     for (const t of buildScene(p).prims) {
       if (t.kind !== 'text' || t.text.startsWith('Generated') || t.text === t.text.toUpperCase()) continue;
-      const width = t.text.length * t.sizeMm * 0.56;
+      const width = textWidthMm(t.text, t.sizeMm, t.fontKey, t.trackingMm);
       const x1 = t.anchor === 'start' ? t.x + width : t.anchor === 'end' ? t.x : t.x + width / 2;
       expect(x1).toBeLessThanOrEqual(w - inner + 0.5);
     }

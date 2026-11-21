@@ -88,6 +88,9 @@ export interface FeatureOverride {
   /** the user chose this one from the list, even if its kind is switched off */
   pinned?: boolean;
   side?: Side;
+  /** the label moved by hand from its spot on its side, mm on the poster (dragged in the preview) */
+  dx?: number;
+  dy?: number;
 }
 
 export interface FeatureSettings {

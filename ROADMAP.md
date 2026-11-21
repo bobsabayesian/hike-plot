@@ -10,6 +10,9 @@ Ideas for making the poster's landscape less plain, roughly in order. Done items
 
 ## Done
 
+- **Cleaner clearing around labels, and moving labels by hand**: lines are cut on an even rounded outline with exact
+  ends and no stubs, labels are measured with the fonts' real glyph widths, water names get a clear zone too; drag a
+  landmark name in the preview to move it, with "Re-place labels" and "Put back" to undo.
 - **Map grid and Military map look** (Map grid section; "Military map" button at the top of Map): a UTM grid (WGS 84)
   over the flat map with military-style grid numbers outside the neat line, scale bars, the grid zone and 100 km
   square (MGRS) and the contour interval under the map; the look sets brown 40 m contours, blue water, green woods

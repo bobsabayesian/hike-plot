@@ -228,7 +228,55 @@ export function App() {
   // label focuses its own name box). Hovering names what a click would open, in the action bar.
   const [pendingEdit, setPendingEdit] = useState<string | null>(null);
   const [hovered, setHovered] = useState('');
+  // Drag a landmark's name in the preview to move it: the label follows the pointer, and on release the move is kept
+  // as that landmark's offset (the poster is then laid out again, clear zones and all). A press that barely moves is
+  // still a click, which opens the landmark for editing.
+  const justDragged = useRef(false);
+  const startDrag = (e: React.PointerEvent) => {
+    if (plotPreview || e.button !== 0) return;
+    const el = (e.target as Element).closest('[data-lm]') as SVGGraphicsElement | null;
+    const id = el?.getAttribute('data-lm');
+    const svg = el?.ownerSVGElement;
+    const entry = composed.landmarks?.find((l) => l.id === id);
+    if (!el || !id || !svg || !entry || entry.kind === 'river') return;
+    const pxPerMm = svg.getBoundingClientRect().width / composed.scene.widthMm;
+    const x0 = e.clientX, y0 = e.clientY;
+    let dx = 0, dy = 0, moving = false;
+    const move = (ev: PointerEvent) => {
+      if (!moving && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+      moving = true;
+      ev.preventDefault();
+      dx = (ev.clientX - x0) / pxPerMm;
+      dy = (ev.clientY - y0) / pxPerMm;
+      el.setAttribute('transform', `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);
+    };
+    const end = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      if (!moving) return;
+      justDragged.current = true;
+      if (ev.type === 'pointercancel') { el.removeAttribute('transform'); return; }
+      set((x) => {
+        const ov = { ...x.features.overrides[id] };
+        ov.dx = +((ov.dx ?? 0) + dx).toFixed(2);
+        ov.dy = +((ov.dy ?? 0) + dy).toFixed(2);
+        // keep it on the side it was dragged from, or the next layout could flip it and the move would be lost
+        if ((!ov.side || ov.side === 'auto') && entry.side) ov.side = entry.side;
+        x.features.overrides[id] = ov;
+      });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  };
+  /** any label moved by hand or put on a chosen side */
+  const labelsPlacedByHand = Object.values(p.features.overrides).some((o) => o.dx || o.dy || (o.side && o.side !== 'auto'));
+  const replaceLabels = () => set((x) => {
+    for (const ov of Object.values(x.features.overrides)) { delete ov.dx; delete ov.dy; delete ov.side; }
+  });
   const editAt = (e: React.MouseEvent) => {
+    if (justDragged.current) { justDragged.current = false; return; }
     const hit = clickTarget(e.target);
     if (!hit) return;
     setTab('settings');
@@ -734,6 +782,7 @@ export function App() {
                 </select>
                 <input type="number" min={0} max={40} step={0.5} title="Clear the terrain lines this many mm around this label (blank: use the general setting)" placeholder="clear" value={ov.clearMm ?? ''}
                   onChange={(e) => edit({ clearMm: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} />
+                {l.moved && <button type="button" title="Put this label back where it was placed automatically" onClick={() => edit({ dx: undefined, dy: undefined, side: undefined })}>Put back</button>}
                 {!l.placed && !l.hidden && <span className="hint" title="No room for this label">no room</span>}
               </div>
             );
@@ -1060,7 +1109,10 @@ export function App() {
                 title={look !== 'custom' && customStash ? 'Back to your own design from before you picked a look' : 'Your own settings: this is chosen as soon as you change anything a look sets'}
                 onClick={() => restoreCustom()}>Custom</button>
             </span>
-            <span className="bar-status hint" aria-live="polite">{plotPreview ? (plotSvg ? 'Click-to-edit is off here' : 'Drawing…') : hovered ? `Click to edit: ${hovered}` : 'Click any part of the poster to edit it'}</span>
+            <span className="bar-status hint" aria-live="polite">{plotPreview ? (plotSvg ? 'Click-to-edit is off here' : 'Drawing…') : hovered ? (hovered.startsWith('Landmark:') ? `Click to edit, drag to move: ${hovered.slice(10)}` : `Click to edit: ${hovered}`) : 'Click any part of the poster to edit it'}</span>
+            {labelsPlacedByHand && !plotPreview && (
+              <button type="button" onClick={replaceLabels} title="Forget the labels you moved or put on a side, and place every label again automatically">Re-place labels</button>
+            )}
             <span className="bar-actions">
               {saver.mine && saver.code && (
                 <button type="button" disabled={!!saver.busy} onClick={() => void saver.save(true)} title={`Replace the saved copy under ${saver.code}: the same code and link, with these changes`}>
@@ -1088,7 +1140,7 @@ export function App() {
           )}
         </div>
         <div className="stage">
-          <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editAt}
+          <div className="sheet" role="img" aria-label="Preview of the poster" onClick={editAt} onPointerDown={startDrag}
             onMouseOver={(e) => setHovered(plotPreview ? '' : clickTarget(e.target)?.label ?? '')} onMouseLeave={() => setHovered('')} dangerouslySetInnerHTML={{ __html: previewSvg }} />
         </div>
       </main>

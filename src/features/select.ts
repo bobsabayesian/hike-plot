@@ -1,6 +1,7 @@
 import { clipPolyline, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
 import type { Halo } from './halo';
+import { textWidthMm } from './measure';
 import type { FeatureSettings, LabelKind, Landmark, Side, WaterLine, WaterName } from './types';
 
 export interface LandmarkEntry {
@@ -12,6 +13,10 @@ export interface LandmarkEntry {
   pinned: boolean;
   /** false when it was a candidate but no label position fit */
   placed: boolean;
+  /** the side of its marker the label went to (for point labels) */
+  side?: Exclude<Side, 'auto'>;
+  /** moved by hand */
+  moved?: boolean;
 }
 
 export interface PlacedLabel {
@@ -23,6 +28,8 @@ export interface PlacedLabel {
   x: number;
   y: number;
   anchor: 'start' | 'middle' | 'end';
+  /** the side of its marker it went to */
+  side?: Exclude<Side, 'auto'> | 'middle';
   /** degrees clockwise about (x, y); set for river names that follow their river */
   rotate?: number;
 }
@@ -45,6 +52,9 @@ export interface PlaceInput {
   markerR: number;
   /** other things on the poster labels must keep clear of (north arrow, corner profile) */
   obstacles?: Box[];
+  /** the label font and its letter spacing, to measure labels with */
+  fontKey?: 'sans' | 'serif';
+  trackingMm?: number;
 }
 
 /** An oriented rectangle: center, size, and turn in radians (clockwise on screen). */
@@ -285,6 +295,8 @@ const MAX_POOL = 60;
  */
 export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
   const { settings: s, fit, frame, route, sizeMm, markerR } = inp;
+  /** a label's width on paper, from the font's own glyph widths */
+  const measure = (name: string) => textWidthMm(name, sizeMm, inp.fontKey, inp.trackingMm ?? sizeMm * 0.05);
   const inFrame = ([x, y]: XY) => x >= frame.x && x <= frame.x + frame.w && y >= frame.y && y <= frame.y + frame.h;
 
   const eleVals = inp.landmarks.filter((l) => l.kind === 'peak' && l.ele !== undefined).map((l) => l.ele!);
@@ -328,7 +340,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
     for (const r of stitchRivers(inp.water)) {
       const ov = s.overrides[r.id];
       const name = (ov?.name ?? r.name).trim() || r.name;
-      const found = riverStretches(r.coords.map(([la, lo]) => fit.toMm(la, lo)), name.length * sizeMm * CHAR_W, sizeMm, frame);
+      const found = riverStretches(r.coords.map(([la, lo]) => fit.toMm(la, lo)), measure(name), sizeMm, frame);
       const first = found.stretches[0];
       if (!first) continue;
       addCand({
@@ -381,7 +393,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
 
   /** Find a spot for `c` and record the label. Returns whether it fit. */
   const place = (c: Candidate, name: string, ov: NonNullable<PlaceInput['settings']['overrides'][string]>): boolean => {
-    const w = name.length * sizeMm * CHAR_W;
+    const w = measure(name);
 
     if (c.kind === 'river') {
       // Write the name along the river, just above it; try below, then other stretches, if taken.
@@ -398,6 +410,7 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
           const baseline: XY = [center[0] - nx * sizeMm * 0.35, center[1] - ny * sizeMm * 0.35];
           if (insideBounds(box, lb) && !routeHits(route, box) && !taken.some((t) => overlap(t, box))) {
             taken.push(box);
+            addHalo(c, box);
             labels.push({ id: c.id, kind: 'river', text: name, x: baseline[0], y: baseline[1], anchor: 'middle', rotate: (st.angle * 180) / Math.PI });
             return true;
           }
@@ -408,7 +421,10 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
 
     const r = c.marker ? markerR : 0;
     const markerBox = boxAt(c.x - r, c.y - r, c.x + r, c.y + r);
-    const forced = ov.side && ov.side !== 'auto';
+    // a label moved by hand goes exactly where it was put, on the side it was moved from
+    const dx = ov.dx ?? 0, dy = ov.dy ?? 0;
+    const moved = dx !== 0 || dy !== 0;
+    const forced = (ov.side && ov.side !== 'auto') || moved;
     const sides = c.marker ? sideOrder(ov.side ?? 'auto') : (['middle'] as const);
 
     // A feature that sits on the route (a trailhead is where the route starts) can't avoid it on every side,
@@ -441,6 +457,11 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
       } else {
         label = { ...base, x: c.x, y: c.y + sizeMm * 0.35, anchor: 'middle' };
         box = boxAt(c.x - w / 2, c.y - sizeMm * 0.55, c.x + w / 2, c.y + sizeMm * 0.45);
+      }
+      label.side = side;
+      if (moved) {
+        label = { ...label, x: label.x + dx, y: label.y + dy };
+        box = { ...box, cx: box.cx + dx, cy: box.cy + dy };
       }
       const inside = insideBounds(box, lb);
       const labelsFree = !taken.some((t) => overlap(t, box)) && !labelBoxes.some((t) => overlap(t, padded(box))) && !(c.marker && side !== 'middle' && overlap(box, markerBox));
@@ -483,6 +504,9 @@ export function placeLandmarks(inp: PlaceInput): LandmarkPlacement {
     entries.push(entry);
     if (place(c, name, ov)) {
       entry.placed = true;
+      const drawn = labels[labels.length - 1];
+      if (drawn?.side && drawn.side !== 'middle') entry.side = drawn.side;
+      if (ov.dx || ov.dy) entry.moved = true;
       (pinned ? P : A)[group]++;
       status.set(c.id, 'drawn');
     } else {

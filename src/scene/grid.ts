@@ -1,7 +1,7 @@
 import { clipPolyline, type Rect, type XY } from '../geo/clip';
 import type { Fit } from '../geo/project';
 import { fromUtm, latBand, squareId, toMgrs, toUtm, utmZone } from '../geo/utm';
-import { CHAR_W } from '../features/select';
+import { textWidthMm } from '../features/measure';
 import type { Prim, TextPrim } from './types';
 
 /** A military-style map grid: UTM lines with their numbers in the margin, and the MGRS names in a legend. */
@@ -149,7 +149,7 @@ export function gridPrims(layout: GridLayout, frame: Rect, s: GridSettings, d: G
   const text = (t: string, x: number, y: number, anchor: TextPrim['anchor'], size: number): TextPrim => ({
     kind: 'text', part: 'grid', text: t, x, y, anchor, sizeMm: size, trackingMm: 0, fontFamily: d.fontFamily, fontKey: d.fontKey, color: d.color, pen: d.pen,
   });
-  const width = (t: string, size: number) => t.length * size * CHAR_W;
+  const width = (t: string, size: number) => textWidthMm(t, size, d.fontKey);
   /**
    * One grid number. The big digits are the line's own; the first line along each edge also gets the digits before
    * them (small, raised) and the meters after them, as on a military sheet: ⁵47⁰⁰⁰ᵐE.

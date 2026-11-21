@@ -521,7 +521,7 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
             avoid.push({ cx: contentR - innerW * 0.2, cy: frame.y + frame.h - H * 0.04, w: innerW * 0.4, h: H * 0.08, ang: 0 });
           numbers = placeContourLabels(pieces, {
             intervalM: interval!, indexEvery: tc.indexEvery, every: tc.labels.every, density: tc.labels.density, gap: tc.labels.gap,
-            sizePt: tc.labels.sizePt, format: (lv) => formatLevel(lv, p.units), frame, obstacles: avoid, route: routeXY,
+            sizePt: tc.labels.sizePt, format: (lv) => formatLevel(lv, p.units), frame, obstacles: avoid, route: routeXY, fontKey: t.font,
           });
           if (numbers.length && tc.labels.gap) ({ regular, index } = pathsWithGaps(pieces, numbers, tc.labels.sizePt));
         }

@@ -1,5 +1,6 @@
 import { clipPolyline, type Rect, type XY } from '../geo/clip';
-import { CHAR_W, overlap, riverStretches, routeHits, type Box } from '../features/select';
+import { overlap, riverStretches, routeHits, type Box } from '../features/select';
+import { textWidthMm } from '../features/measure';
 import { toD, type ContourPiece } from './contours';
 
 const PT = 25.4 / 72;
@@ -37,6 +38,8 @@ export interface LabelOptions {
   /** things a number must stay clear of: landmark labels and markers, north arrow, corner profile */
   obstacles: Box[];
   route: XY[];
+  /** the font the numbers are written in, to measure them */
+  fontKey?: 'sans' | 'serif';
 }
 
 /** Elevation text for a contour level, in the poster's units. */
@@ -164,7 +167,7 @@ export function placeContourLabels(pieces: ContourPiece[], o: LabelOptions): Con
 
   for (const { pc, i } of order) {
     const text = o.format(pc.level);
-    const w = text.length * size * CHAR_W + size * 0.4;
+    const w = textWidthMm(text, size, o.fontKey) + size * 0.4;
     const half = w / 2 + size * 0.5; // the part of the line cut away when there is a gap
     if (cumLengths(pc.pts).at(-1)! < w * 1.3) continue;
     for (const st of riverStretches(pc.pts, w, size, inner, 80).stretches) {

@@ -130,6 +130,9 @@ h3 { font-size: 13px; margin: 14px 0 4px; }
 }
 
 .sheet svg text[data-lm], .sheet svg [data-part] { cursor: pointer; }
+/* landmark names can be dragged to move them */
+.sheet svg text[data-lm] { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.sheet svg text[data-lm]:active { cursor: grabbing; }
 .sheet svg text[data-lm]:hover { text-decoration: underline; }
 .lm input[type=text]:focus { outline: 2px solid var(--accent, #2a6df4); }
 .code { font-family: ui-monospace, monospace; letter-spacing: 0.08em; font-size: 15px; }
