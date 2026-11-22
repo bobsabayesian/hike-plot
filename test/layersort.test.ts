@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beneath, DEFAULT_GAP_MM, defaultLayers, LAYER_IDS, LAYERS, layerOfPart, MAX_GAP_MM, moveLayer, moveLayerTo, normalizeLayers, setCut, setGap, suggestCuts } from '../src/scene/layers';
+import { beneath, DEFAULT_GAP_MM, defaultLayers, LAYER_IDS, LAYERS, layerOfPart, MAX_GAP_MM, moveLayer, moveLayerTo, normalizeLayers, setCut, setGap, starterBlocked, suggestCuts } from '../src/scene/layers';
 import { fromFile, toFile } from '../src/projectFile';
 import { defaultProject } from '../src/scene/project';
 import type { Part } from '../src/scene/types';
@@ -56,14 +56,23 @@ describe('moving layers and setting cuts', () => {
     expect(setGap(s, 'route', -1).rules.route!.gapMm).toBe(0);
     expect(setGap(s, 'north', 2)).toBe(s);
   });
-  it('the starter draws the ground first and makes what is over it clear what is under it', () => {
-    const s = suggestCuts(defaultLayers());
-    expect(s.order.indexOf('terrain')).toBeLessThan(s.order.indexOf('title'));
-    expect(s.order.indexOf('water')).toBeLessThan(s.order.indexOf('route'));
-    expect([...s.order].sort()).toEqual([...LAYER_IDS].sort());
-    for (const up of ['route', 'landmarks', 'north', 'title', 'details'] as const) expect(s.rules[up]!.cuts).toEqual(expect.arrayContaining(['terrain']));
+  it('the starter adds cuts without touching your order or your rules', () => {
+    let mine = moveLayerTo(defaultLayers(), 'title', 3);
+    mine = setCut(mine, 'route', 'water', true);
+    mine = setGap(mine, 'route', 1.5);
+    const s = suggestCuts(mine);
+    expect(s.order).toEqual(mine.order);
+    expect(s.rules.route!.gapMm).toBe(1.5);
+    expect(s.rules.route!.cuts).toEqual(expect.arrayContaining(['water', 'terrain', 'cover']));
+    for (const up of ['landmarks', 'north'] as const) expect(s.rules[up]!.cuts).toEqual(expect.arrayContaining(['terrain']));
     expect(s.rules.terrain).toBeUndefined();
-    expect(s.rules.route!.cuts).not.toContain('route');
+    // details are drawn below the ground in the default order, so they are reported rather than moved
+    expect(starterBlocked(defaultLayers())).toEqual(expect.arrayContaining(['details', 'title']));
+    expect(starterBlocked(s)).not.toContain('route');
+    // a layer drawn below the ground cannot cut it
+    const low = suggestCuts(moveLayerTo(defaultLayers(), 'route', 0));
+    expect(low.rules.route).toBeUndefined();
+    expect(low.order.indexOf('route')).toBeLessThan(low.order.indexOf('terrain'));
   });
 });
 

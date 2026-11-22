@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { COVER_CLASSES, COVER_LABELS } from '../cover/types';
 import { plotRuns } from '../export/svg';
-import { beneath, defaultLayers, DEFAULT_GAP_MM, LAYERS, layerLabel, layerOfPart, MAX_GAP_MM, moveLayer, moveLayerTo, setCut, setGap, suggestCuts, type LayerId } from '../scene/layers';
+import { beneath, defaultLayers, DEFAULT_GAP_MM, LAYERS, layerLabel, layerOfPart, MAX_GAP_MM, moveLayer, moveLayerTo, setCut, setGap, starterBlocked, suggestCuts, type LayerId } from '../scene/layers';
 import { penFor } from '../scene/pens';
 import type { Project } from '../scene/project';
 import type { Prim } from '../scene/types';
@@ -105,7 +105,8 @@ export function LayerSorter({ project: p, prims, hovered, onHover }: { project: 
           );
         })}
       </ol>
-      <div className="row"><button type="button" onClick={() => change((l) => suggestCuts(l))} title="Draw the ground first and the route, north arrow, landmarks and text over it, each clearing the terrain lines, land cover and water under it (changes the order)">Top layers clear what is under them</button></div>
+      <div className="row"><button type="button" onClick={() => change((l) => suggestCuts(l))} title="Wherever the route, north arrow, landmarks and text are over the ground, adds cuts so each clears the terrain lines, land cover and water under it. Your order and the cuts you already set stay; a layer drawn below the ground cannot cut it, so move it up first">Top layers clear what is under them</button></div>
+      {starterBlocked(s).length > 0 && <div className="hint">Drawn below some of the ground, so they cannot clear it: {starterBlocked(s).map((l) => layerLabel(l)).join(', ')}. Move them up to include them.</div>}
       <div className="hint">{LAYERS.length} layers. Cuts and order apply to the plotter view and the plotter SVG.</div>
     </aside>
   );

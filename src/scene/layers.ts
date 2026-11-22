@@ -114,8 +114,14 @@ const STARTER_ORDER: LayerId[] = ['border', 'terrain', 'cover', 'water', 'grid',
  * A starting point: the ground is drawn first, and what is drawn over it (route, north arrow, landmarks, text) clears the
  * terrain lines, land cover and water under it. The order is changed to make that possible (a layer only cuts what is beneath it).
  */
+const STARTER_UPPER: LayerId[] = ['route', 'north', 'landmarks', 'details', 'title'];
+const STARTER_LOWER: LayerId[] = ['terrain', 'cover', 'water'];
+/** The layers the starter would like to have cut the ground but that are drawn below some of it, so cannot. */
+export const starterBlocked = (s: LayerSettings): LayerId[] => STARTER_UPPER.filter((u) => STARTER_LOWER.some((l) => !beneath(s, u).includes(l)));
+
 export function suggestCuts(s: LayerSettings): LayerSettings {
-  let out: LayerSettings = normalizeLayers({ ...s, order: STARTER_ORDER, rules: {} });
-  for (const upper of ['route', 'north', 'landmarks', 'details', 'title'] as LayerId[]) for (const lower of ['terrain', 'cover', 'water'] as LayerId[]) out = setCut(out, upper, lower, true);
+  // the order and the cuts already set stay as they are: this only adds, wherever the upper layer really is above the lower one
+  let out: LayerSettings = normalizeLayers(s);
+  for (const upper of STARTER_UPPER) for (const lower of STARTER_LOWER) out = setCut(out, upper, lower, true);
   return out;
 }
