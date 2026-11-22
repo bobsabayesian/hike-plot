@@ -18,7 +18,7 @@ Status: **building** (being added now), **next**, **later**, **done**.
 ## Cartographic charm
 - **Water ripples**: concentric ripple lines along lake shores and wave marks on water. *done (not yet deployed)*
 - **Border styles**: postage-stamp perforations, rope, double rule, ornate corners. *done (not yet deployed)* (stamp, rope and ornate corners; the double rule was already there)
-- **Old-fashioned peaks**: molehill-profile mountain symbols instead of triangles. *later*
+- **Old-fashioned peaks**: molehill-profile mountain symbols instead of triangles: an "Old-style hill" icon (a rounded hump with shading strokes) in the landmark icon lists. *done (not yet deployed)*
 
 ## Playful text
 - **Fun stats**: "≈ 2.8 Eiffel Towers of climbing", steps, football fields, bananas end to end, Everests. *done (not yet deployed)*

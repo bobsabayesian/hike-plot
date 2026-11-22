@@ -53,6 +53,16 @@ export function markerPath(kind: LandmarkKind, x: number, y: number, r: number, 
     case 'camera': return `M${f(x - r)} ${f(y - r * 0.5)}h${f(r * 2)}v${f(r * 1.3)}h${f(-r * 2)}ZM${f(x - r * 0.4)} ${f(y - r * 0.5)}L${f(x - r * 0.25)} ${f(y - r * 0.85)}h${f(r * 0.5)}L${f(x + r * 0.4)} ${f(y - r * 0.5)}` + ring(x, y + r * 0.15, r * 0.38);
     case 'cup': return `M${f(x - r * 0.7)} ${f(y - r * 0.4)}h${f(r * 1.2)}v${f(r * 1.2)}h${f(-r * 1.2)}ZM${f(x + r * 0.5)} ${f(y - r * 0.1)}h${f(r * 0.3)}v${f(r * 0.6)}h${f(-r * 0.3)}M${f(x - r * 0.35)} ${f(y - r * 0.95)}v${f(r * 0.35)}M${f(x + r * 0.05)} ${f(y - r * 0.95)}v${f(r * 0.35)}`;
     case 'paw': return ring(x, y + r * 0.35, r * 0.5) + ring(x - r * 0.75, y - r * 0.15, r * 0.2) + ring(x - r * 0.28, y - r * 0.65, r * 0.2) + ring(x + r * 0.28, y - r * 0.65, r * 0.2) + ring(x + r * 0.75, y - r * 0.15, r * 0.2);
+    case 'hill': {
+      // an old map's molehill: a rounded hump on a ground line, with short shading strokes down its right-hand side
+      let d = `M${f(x - r * 1.1)} ${f(y + r * 0.6)}C${f(x - r * 0.7)} ${f(y + r * 0.6)} ${f(x - r * 0.55)} ${f(y - r * 0.9)} ${f(x)} ${f(y - r * 0.9)}C${f(x + r * 0.55)} ${f(y - r * 0.9)} ${f(x + r * 0.7)} ${f(y + r * 0.6)} ${f(x + r * 1.1)} ${f(y + r * 0.6)}`;
+      for (const t of [0.3, 0.5, 0.7]) {
+        // a point on the right-hand curve, and a stroke from just inside it down towards the ground line
+        const u = 1 - t, bx = 3 * u * u * t * 0.55 + 3 * u * t * t * 0.7 + t * t * t * 1.1, by = u * u * u * -0.9 + 3 * u * u * t * -0.9 + 3 * u * t * t * 0.6 + t * t * t * 0.6;
+        d += `M${f(x + r * (bx - 0.08))} ${f(y + r * (by + 0.12))}L${f(x + r * (bx - 0.02))} ${f(y + r * 0.5)}`;
+      }
+      return d;
+    }
     case 'pin': return `M${f(x - r * 0.9)} ${f(y + r * 0.8)}V${f(y - r * 0.1)}L${f(x)} ${f(y - r)}L${f(x + r * 0.9)} ${f(y - r * 0.1)}V${f(y + r * 0.8)}Z`;
   }
   switch (kind) {

@@ -70,11 +70,11 @@ export interface OsmData {
 export type Side = 'auto' | 'right' | 'left' | 'above' | 'below';
 
 /** The little drawing beside a label. `default` is the kind's own shape; `none` leaves only the text. */
-export const ICONS = ['default', 'none', 'crosshair', 'circle', 'dot', 'triangle', 'diamond', 'square', 'star', 'pin', 'tent', 'flag', 'camera', 'cup', 'paw'] as const;
+export const ICONS = ['default', 'none', 'crosshair', 'circle', 'dot', 'triangle', 'diamond', 'square', 'star', 'pin', 'tent', 'flag', 'camera', 'cup', 'paw', 'hill'] as const;
 export type Icon = (typeof ICONS)[number];
 export const ICON_LABELS: Record<Icon, string> = {
   default: 'Default', none: 'None', crosshair: '⌖ Crosshair', circle: '○ Circle', dot: '◉ Dot', triangle: '△ Triangle',
-  diamond: '◇ Diamond', square: '□ Square', star: '☆ Star', pin: '⌂ Pin', tent: '⛺ Tent', flag: '⚑ Flag', camera: '◙ Camera', cup: '☕ Coffee cup', paw: '✿ Bear paw',
+  diamond: '◇ Diamond', square: '□ Square', star: '☆ Star', pin: '⌂ Pin', tent: '⛺ Tent', flag: '⚑ Flag', camera: '◙ Camera', cup: '☕ Coffee cup', paw: '✿ Bear paw', hill: '⌒ Old-style hill',
 };
 
 export interface FeatureOverride {
