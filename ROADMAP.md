@@ -27,7 +27,7 @@ Status: **building** (being added now), **next**, **later**, **done**.
 ## Colour and personality
 - **Elevation-banded contour pens**: low ground in one pen, high in another, one pen per band; a rainbow-by-mile route the same way. *later*
 - **Mood presets**: Treasure map, Blueprint, Field journal, Vintage park poster, Minimal; a dice button that picks a random palette within sensible limits. *after the ingredients above*
-- **QR code**: a QR to the saved project link in a corner, drawn as plotter-friendly squares (the QR library is already a dependency). *next*
+- **QR code**: a QR to the saved project link in a corner, drawn as plotter-friendly squares (the QR library is already a dependency). *done (not yet deployed)*
 
 ## Older leftovers
 - Per-landmark label size.

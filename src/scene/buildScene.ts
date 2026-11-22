@@ -15,6 +15,7 @@ import { baseLines, strataLevels } from '../relief/base';
 import { band, depthOf, splitFar, thinLine } from '../relief/fade';
 import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
 import { thinUnder } from '../cover/thin';
+import { qrPrim, qrTarget } from './qr';
 import { applyHand } from './hand';
 import { inkFor } from '../handwriter/ink';
 import { canStroke, textToStrokes } from '../export/strokefont';
@@ -279,6 +280,21 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
           const x = t.align === 'left' ? contentL + i * cw : t.align === 'right' ? contentL + (i + 1) * cw : contentL + (i + 0.5) * cw;
           return cellDraw(it, y, x);
         });
+      },
+    });
+  }
+
+  const qrText = p.qr.enabled ? qrTarget(p.qr) : '';
+  if (qrText) {
+    // two modules of quiet paper round the code; it sits left, centre or right like the text
+    const size = p.qr.sizeMm;
+    const pad = size / 29;
+    blocks[p.qr.placement].push({
+      part: 'qr', height: size, gapAfter: pad * 2 + size * 0.1,
+      draw: (y) => {
+        const x = p.qr.align === 'left' ? contentL : p.qr.align === 'right' ? contentR - size : (contentL + contentR) / 2 - size / 2;
+        const q = qrPrim(qrText, x, y, size, colorOf(p.qr.pen), p.qr.pen);
+        return q ? [q.prim] : [];
       },
     });
   }

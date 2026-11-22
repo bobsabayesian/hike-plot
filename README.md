@@ -131,3 +131,7 @@ Under Landmarks, "Lake ripples" draws 1 to 4 rings that follow each lake's shore
 ## Border styles
 
 The border can be a single line, a double line, a postage-stamp edge (half-round notches bitten in), a twisted rope (two weaving strands) or a single rule with ornate corners (two quarter arcs and a small ring in each). "Gap between" becomes "Pattern size" for the new styles. They all sit inside the margin like the plain border, are pulled in to fit, and keep labels clear of their reach.
+
+## QR code on the poster
+
+The QR code group prints a code beside the text blocks, top or bottom, left, centre or right. It opens the project's saved link (the code shows as soon as the project is saved or opened by code; the link is not stored in the project) or any address you type. Each row of dark squares is one straight stroke as wide as a square, so a pen fills it solid and the plotter file needs no hatching. The group says how big each square comes out; below about 0.45 mm most pens cannot draw them cleanly.

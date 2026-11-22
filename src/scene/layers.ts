@@ -7,7 +7,7 @@ import type { Part } from './types';
 export const LAYERS = [
   { id: 'border', label: 'Border', parts: ['border'] },
   { id: 'title', label: 'Title', parts: ['title'] },
-  { id: 'details', label: 'Location, info, watermark', parts: ['location', 'info', 'watermark'] },
+  { id: 'details', label: 'Location, info, QR, watermark', parts: ['location', 'info', 'watermark', 'qr'] },
   { id: 'terrain', label: 'Terrain lines', parts: ['contours', 'relief'] },
   { id: 'cover', label: 'Land cover', parts: ['cover'] },
   { id: 'water', label: 'Water', parts: ['water'] },

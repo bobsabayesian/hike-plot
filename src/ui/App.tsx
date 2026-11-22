@@ -36,6 +36,7 @@ import { LAYERS, type LayerId } from '../scene/layers';
 import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
 import { PagePanel } from './PagePanel';
+import { qrPrim, qrTarget } from '../scene/qr';
 import { Group, NARROW_QUERY, useGroups, useMediaQuery } from './Group';
 import { FEATURE_PEN_LABELS, penFor } from '../scene/pens';
 import type { FeaturePenKey } from '../features/types';
@@ -88,6 +89,7 @@ const PARTS: Record<Part, { group: string; label: string; focus?: string }> = {
   grid: { group: 'grid', label: 'Map grid' },
   landmarks: { group: 'landmarks', label: 'Landmarks' },
   doodles: { group: 'doodles', label: 'Doodles' },
+  qr: { group: 'qr', label: 'QR code' },
 };
 
 /** The part of the poster under the pointer, if any: a landmark's own label first, then the part an element draws. */
@@ -345,7 +347,12 @@ export function App() {
     window.addEventListener('pointercancel', end);
     return () => { window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
   }, [draft]);
-  const shown = useMemo(() => (draft && p.relief.enabled ? { ...p, relief: { ...p.relief, hideHidden: false, rows: Math.min(p.relief.rows, 40) } } : p), [p, draft]);
+  // the saved project's address, for the QR code (known only once it is saved; the code is never stored in the project)
+  const [savedLink, setSavedLink] = useState('');
+  const shown = useMemo(() => {
+    const q = p.qr.enabled ? { ...p, qr: { ...p.qr, link: savedLink } } : p;
+    return draft && q.relief.enabled ? { ...q, relief: { ...q.relief, hideHidden: false, rows: Math.min(q.relief.rows, 40) } } : q;
+  }, [p, draft, savedLink]);
   // handwriting from the service arrives after the first compose: draw again when it lands
   const inkSeen = useSyncExternalStore(subscribeInk, inkVersion);
   const [hwOn, setHwOn] = useState(false);
@@ -366,6 +373,7 @@ export function App() {
     return (await sceneToPng(scene, (THUMB_PX / widthMm) * 25.4)).blob;
   };
   const saver = useProjectSave({ project: p, openProject, meta: saveMeta, thumb: saveThumb });
+  useEffect(() => { setSavedLink(saver.code ? linkFor(saver.code) : ''); }, [saver.code]);
 
   // Fetch landmarks/water whenever the visible area, or what we want to show, is not covered by what we have.
   const want = useMemo(() => wantedRequest(p.features), [p.features.kinds, p.features.water, p.features.waterLabels]);
@@ -684,6 +692,30 @@ export function App() {
             <Row label="Pen"><PenSelect pens={p.pens} value={p.shade.pen} allowDefault={`Contour pen, drawn twice (${penFor(p.pens, p.terrain.pen).name})`} onChange={(id) => set((x) => { if (id === undefined || id === x.terrain.pen) delete x.shade.pen; else x.shade.pen = id; })} /></Row>
             <div className="hint">Slopes facing away from the sun are drawn darker, like hillshading made of lines. "Sun from" is degrees clockwise from north (315 is northwest); "Sun height" is degrees above the horizon. {need && <>To match the light on the day, <a href={suncalcUrl(need, p.points)} target="_blank" rel="noopener noreferrer">look up the sun on SunCalc</a> (this map, {p.points.some((q) => q.time !== undefined) ? 'when the hike started' : 'today at noon'}) and copy its azimuth and altitude here. </>}"In shade" is the share of the land that counts as shaded. Works on the contours and on 3D relief rows; heavy contour lines are left as they are.</div>
           </div>)}
+        </Group>
+
+        <Group id="qr" title="QR code" {...gp('qr')}
+          toggle={{ on: p.qr.enabled, onChange: (v) => set((x) => { x.qr.enabled = v; }) }}>
+          {p.qr.enabled && (() => {
+            const target = qrTarget({ ...p.qr, link: savedLink });
+            const info = target ? qrPrim(target, 0, 0, p.qr.sizeMm, '#000', p.qr.pen) : undefined;
+            return (<>
+              <Row label="Opens">
+                <select value={p.qr.mode} onChange={(e) => set((x) => { x.qr.mode = e.target.value as 'saved' | 'custom'; })}>
+                  <option value="saved">This project's saved link</option><option value="custom">An address I type</option>
+                </select>
+              </Row>
+              {p.qr.mode === 'custom' && <Row label="Address"><input type="text" value={p.qr.url} placeholder="https://" onChange={(e) => set((x) => { x.qr.url = e.target.value; })} /></Row>}
+              {p.qr.mode === 'saved' && !savedLink && <div className="hint">Save the project to get its link: the code appears on the poster as soon as there is one.</div>}
+              <Row label="Position">
+                <select value={p.qr.placement} onChange={(e) => set((x) => { x.qr.placement = e.target.value as Placement; })}><option value="top">Top</option><option value="bottom">Bottom</option></select>
+                <select value={p.qr.align} onChange={(e) => set((x) => { x.qr.align = e.target.value as 'left' | 'center' | 'right'; })}><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select>
+              </Row>
+              <Row label="Size"><input type="range" min={10} max={50} step={1} value={p.qr.sizeMm} onChange={(e) => set((x) => { x.qr.sizeMm = +e.target.value; })} /><span>{p.qr.sizeMm} mm</span></Row>
+              <Row label="Pen"><PenSelect pens={p.pens} value={p.qr.pen} onChange={(id) => set((x) => { x.qr.pen = id!; })} /></Row>
+              {info && <div className="hint">{info.modules} × {info.modules} squares of {info.moduleMm.toFixed(2)} mm each.{info.moduleMm < 0.45 ? ' That is finer than most pens draw cleanly: make it larger or the address shorter.' : ' Each row of squares is drawn as one stroke the width of a square, so it fills solid. Keep it dark ink on light paper.'}</div>}
+            </>);
+          })()}
         </Group>
 
         <Group id="doodles" title="Doodles" {...gp('doodles')}
