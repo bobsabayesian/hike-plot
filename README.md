@@ -139,3 +139,7 @@ The QR code group prints a code beside the text blocks, top or bottom, left, cen
 ## Sketchy double strokes
 
 In the Hand-drawn feel group, "Sketchy" goes over every line of the ticked layers a second time, with its own wander and shifted a little to one side (up to 0.7 mm at 100%), like a drawing gone over twice. It works with or without the wobble, leaves fills and text alone, and doubles those lines in the plotter file too.
+
+## Redraw in the layer sorter
+
+Reordering layers and ticking cuts changes the settings at once (and the plotter SVG you download), but the plotter preview is only cut again when you press **Redraw**. The button shows a * while changes are waiting.

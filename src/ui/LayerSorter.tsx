@@ -24,7 +24,7 @@ export function existingClears(p: Project, id: LayerId): string[] {
  * The layer sorter, beside the poster in the plotter view: the order the layers are drawn in (first at the top of the list), and
  * for each layer which layers drawn before it it cuts lines out of. Hovering a row dims the rest of the poster.
  */
-export function LayerSorter({ project: p, prims, hovered, onHover }: { project: Project; prims: Prim[]; hovered: LayerId | null; onHover: (id: LayerId | null) => void }) {
+export function LayerSorter({ project: p, prims, hovered, onHover, pending, onRedraw }: { project: Project; prims: Prim[]; hovered: LayerId | null; onHover: (id: LayerId | null) => void; pending: boolean; onRedraw: () => void }) {
   const set = useStore((s) => s.set);
   const s = p.layers;
   const [open, setOpen] = useState<LayerId | null>(null);
@@ -55,6 +55,10 @@ export function LayerSorter({ project: p, prims, hovered, onHover }: { project: 
       <div className="layers-head">
         <strong>Layers</strong>
         <button type="button" className="link" disabled={!cuts && !s.byStack && s.order.every((id, i) => id === defaultLayers().order[i])} onClick={() => change(() => defaultLayers())}>Reset</button>
+      </div>
+      <div className="row">
+        <button type="button" onClick={onRedraw} disabled={!pending} title={pending ? 'The preview still shows the earlier order and cuts: redraw it with these' : 'The preview shows the order and cuts below'}>Redraw{pending ? ' *' : ''}</button>
+        <span className="hint">{pending ? 'Changes waiting. The plotter file already uses them.' : 'Up to date.'}</span>
       </div>
       <label className="layers-by" title="Off: the file has one layer for each pen, in the pens' order. On: the file's layers follow this order, a layer for each run of one pen.">
         <input type="checkbox" checked={s.byStack} onChange={(e) => change((l) => ({ ...l, byStack: e.target.checked }))} /> Plot in this order

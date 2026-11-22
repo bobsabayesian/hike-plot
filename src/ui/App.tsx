@@ -405,19 +405,24 @@ export function App() {
   const [plotText, setPlotText] = useState<PlotterText>('auto');
   const [plotPreview, setPlotPreview] = useState(false);
   const [plotSvg, setPlotSvg] = useState('');
+  // The layer sorter edits `p.layers` at once, but the preview is only recut when asked: reordering and ticking cuts is free, and Redraw applies them
+  const [appliedLayers, setAppliedLayers] = useState(p.layers);
+  useEffect(() => { if (!plotPreview) setAppliedLayers(p.layers); }, [plotPreview, p.layers]);
+  const layersPending = plotPreview && JSON.stringify(appliedLayers) !== JSON.stringify(p.layers);
   // The plotter preview: the poster as the pens will draw it (hatched, passes, ink width, translucency). Slower, so it follows edits after a pause.
   useEffect(() => {
     if (!plotPreview) return;
     let live = true;
     const t = setTimeout(async () => {
       try {
-        const out = preparePlotter(scene, p, await loadFonts(), plotText);
-        const svg = sceneToSvg(out, { paper: true, ink: { pens: p.pens, dark: isDarkPaper(p.paper) }, tagLayers: true, ...plotterLayout(p) });
+        const shownP = { ...p, layers: appliedLayers };
+        const out = preparePlotter(scene, shownP, await loadFonts(), plotText);
+        const svg = sceneToSvg(out, { paper: true, ink: { pens: p.pens, dark: isDarkPaper(p.paper) }, tagLayers: true, ...plotterLayout(shownP) });
         if (live) setPlotSvg(svg);
       } catch { if (live) setPlotSvg(''); }
     }, draft ? 0 : 250);
     return () => { live = false; clearTimeout(t); };
-  }, [plotPreview, scene, p.pens, p.paper, p.layers, p.hatchAngleDeg, draft, plotText]);
+  }, [plotPreview, scene, p.pens, p.paper, appliedLayers, p.hatchAngleDeg, draft, plotText]);
   const [hotLayer, setHotLayer] = useState<LayerId | null>(null);
   const zoom = useZoom(composed.scene.widthMm, composed.scene.heightMm, !narrow);
   const designSvg = useMemo(() => sceneToSvg(scene, { paper: true, ids: true }), [scene]);
@@ -1282,7 +1287,7 @@ export function App() {
               style={zoom.zoom > 1 ? ({ '--zw': `${zoom.sheetPx}px` } as React.CSSProperties) : undefined}
               onMouseOver={(e) => setHovered(plotPreview ? '' : clickTarget(e.target)?.label ?? '')} onMouseLeave={() => setHovered('')} dangerouslySetInnerHTML={{ __html: previewSvg }} />
           </div>
-          {plotPreview && !narrow && <LayerSorter project={p} prims={scene.prims} hovered={hotLayer} onHover={setHotLayer} />}
+          {plotPreview && !narrow && <LayerSorter project={p} prims={scene.prims} hovered={hotLayer} onHover={setHotLayer} pending={layersPending} onRedraw={() => setAppliedLayers(p.layers)} />}
         </div>
       </main>
       {footer}
