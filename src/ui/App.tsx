@@ -738,9 +738,10 @@ export function App() {
         </Group>
 
         <Group id="hand" title="Hand-drawn feel" {...gp('hand')}
-          toggle={{ on: p.hand.amount > 0, onChange: (v) => set((x) => { x.hand.amount = v ? 40 : 0; }) }}>
-          {p.hand.amount > 0 && (<>
-            <Row label="Wobble"><input type="range" min={5} max={100} step={5} value={p.hand.amount} onChange={(e) => set((x) => { x.hand.amount = +e.target.value; })} /><span>{p.hand.amount}%</span></Row>
+          toggle={{ on: p.hand.amount > 0 || (p.hand.sketch ?? 0) > 0, onChange: (v) => set((x) => { x.hand.amount = v ? 40 : 0; x.hand.sketch = 0; }) }}>
+          {(p.hand.amount > 0 || (p.hand.sketch ?? 0) > 0) && (<>
+            <Row label="Wobble"><input type="range" min={0} max={100} step={5} value={p.hand.amount} onChange={(e) => set((x) => { x.hand.amount = +e.target.value; })} /><span>{p.hand.amount}%</span></Row>
+            <Row label="Sketchy"><input type="range" min={0} max={100} step={5} value={p.hand.sketch ?? 0} onChange={(e) => set((x) => { x.hand.sketch = +e.target.value; })} /><span>{p.hand.sketch ? `${p.hand.sketch}%` : 'off'}</span></Row>
             <Row label="Draw again"><button type="button" onClick={() => set((x) => { x.hand.seed = Math.floor(Math.random() * 1e9); })}>Shuffle</button><span className="hint">a new wander for the same lines</span></Row>
             <div className="kinds">
               {LAYERS.filter((l) => l.id !== 'title' && l.id !== 'details' && l.id !== 'landmarks' && l.id !== 'grid').map((l) => (

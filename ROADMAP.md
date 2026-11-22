@@ -6,7 +6,7 @@ Status: **building** (being added now), **next**, **later**, **done**.
 
 ## Hand-made feel
 - **Hand-drawn wobble**: a slider that adds seeded, subtle wander to lines, per layer, with a Shuffle button for a new seed. *done (not yet deployed)*
-- **Sketchy double strokes**: a second pass offset a little, using the pass machinery the plotter export already has. *later*
+- **Sketchy double strokes**: a second pass offset a little, a "Sketchy" slider in the hand-drawn group that goes over each line of the ticked layers a second time, drawn with its own wander and shifted up to 0.7 mm. *done (not yet deployed)*
 - **Handwriting title**: choose the Hershey script/cursive faces (the data is already in the repo) for the title. *done (not yet deployed)*
 - **Title flourishes**: title on an arc, a bouncing baseline, an offset shadow pass, a ribbon or banner behind it. *later*
 

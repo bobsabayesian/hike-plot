@@ -9,12 +9,14 @@ export interface HandSettings {
   amount: number;
   /** another number draws the same lines with a different wander */
   seed: number;
+  /** 0 (off) to 100: a second, slightly shifted pass over the same lines, like a sketch gone over twice */
+  sketch: number;
   /** the layers whose lines wander */
   layers: LayerId[];
 }
 
 export const HAND_LAYERS_DEFAULT: LayerId[] = ['terrain', 'water', 'route', 'border', 'profile', 'north', 'doodles'];
-export const defaultHand = (): HandSettings => ({ amount: 0, seed: 1, layers: [...HAND_LAYERS_DEFAULT] });
+export const defaultHand = (): HandSettings => ({ amount: 0, seed: 1, sketch: 0, layers: [...HAND_LAYERS_DEFAULT] });
 
 /** Largest sideways wander, mm, at amount 100. */
 const MAX_WANDER_MM = 0.5;
@@ -31,6 +33,7 @@ export function normalizeHand(raw: unknown): HandSettings {
   return {
     amount: typeof r.amount === 'number' && Number.isFinite(r.amount) ? Math.min(100, Math.max(0, r.amount)) : 0,
     seed: typeof r.seed === 'number' && Number.isFinite(r.seed) ? Math.floor(r.seed) : 1,
+    sketch: typeof r.sketch === 'number' && Number.isFinite(r.sketch) ? Math.min(100, Math.max(0, r.sketch)) : 0,
     layers,
   };
 }
@@ -87,7 +90,7 @@ export function wobbleLine(pts: XY[], closed: boolean, amount: number, seed: num
 }
 
 /** The path data of a prim, with its lines wandering. Dashes, colour, pen and weight are kept; text is left alone. */
-export function wobblePath(p: PathPrim, amount: number, seed: number): PathPrim {
+export function wobblePath(p: PathPrim, amount: number, seed: number, shift: XY = [0, 0]): PathPrim {
   const subs = flattenPath(p.d);
   if (!subs.length) return p;
   const parts = subs.map((s, i) => {
@@ -95,18 +98,30 @@ export function wobblePath(p: PathPrim, amount: number, seed: number): PathPrim 
     // each line wanders its own way: its start (not its place in the list) sets its noise, so edits elsewhere do not shift it
     const own = Math.floor(first[0] * 7 + first[1] * 13) ^ (i * 977) ^ seed;
     const pts = wobbleLine(s.pts as XY[], s.closed, amount, own);
-    return pts.map((q, k) => `${k ? 'L' : 'M'}${q[0]} ${q[1]}`).join('') + (s.closed ? 'Z' : '');
+    return pts.map((q, k) => `${k ? 'L' : 'M'}${fmt(q[0] + shift[0])} ${fmt(q[1] + shift[1])}`).join('') + (s.closed ? 'Z' : '');
   });
   return { ...p, d: parts.join('') };
 }
 
-/** The scene's lines, with those of the chosen layers wandering. */
+/** Largest sideways shift of the second pass, mm, at sketch 100. */
+const MAX_SKETCH_MM = 0.7;
+
+/**
+ * The scene's lines, with those of the chosen layers wandering and, if asked, gone over a second time: the same line again, drawn
+ * with its own wander and a little to one side. Fills and text are left alone.
+ */
 export function applyHand(prims: Prim[], hand: HandSettings): Prim[] {
-  if (!(hand.amount > 0) || !hand.layers.length) return prims;
+  const sketch = hand.sketch > 0;
+  if ((!(hand.amount > 0) && !sketch) || !hand.layers.length) return prims;
   const on = new Set<LayerId>(hand.layers);
-  return prims.map((p) => {
-    if (p.kind !== 'path') return p;
+  const angle = hash(hand.seed, 5, 5) * Math.PI * 2;
+  const shift: XY = [Math.cos(angle) * (hand.sketch / 100) * MAX_SKETCH_MM, Math.sin(angle) * (hand.sketch / 100) * MAX_SKETCH_MM];
+  return prims.flatMap((p): Prim[] => {
+    if (p.kind !== 'path') return [p];
     const l = layerOfPart(p.part);
-    return l && on.has(l) ? wobblePath(p, hand.amount, hand.seed) : p;
+    if (!l || !on.has(l)) return [p];
+    const first = hand.amount > 0 ? wobblePath(p, hand.amount, hand.seed) : p;
+    if (!sketch || p.mode !== 'stroke') return [first];
+    return [first, wobblePath(p, Math.max(hand.amount, 30), hand.seed + 7919, shift)];
   });
 }

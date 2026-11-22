@@ -135,3 +135,7 @@ The border can be a single line, a double line, a postage-stamp edge (half-round
 ## QR code on the poster
 
 The QR code group prints a code beside the text blocks, top or bottom, left, centre or right. It opens the project's saved link (the code shows as soon as the project is saved or opened by code; the link is not stored in the project) or any address you type. Each row of dark squares is one straight stroke as wide as a square, so a pen fills it solid and the plotter file needs no hatching. The group says how big each square comes out; below about 0.45 mm most pens cannot draw them cleanly.
+
+## Sketchy double strokes
+
+In the Hand-drawn feel group, "Sketchy" goes over every line of the ticked layers a second time, with its own wander and shifted a little to one side (up to 0.7 mm at 100%), like a drawing gone over twice. It works with or without the wobble, leaves fills and text alone, and doubles those lines in the plotter file too.

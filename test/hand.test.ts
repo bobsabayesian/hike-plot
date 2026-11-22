@@ -81,13 +81,40 @@ describe('on the scene', () => {
 describe('the setting', () => {
   it('is off by default, is repaired when read, and survives saving; an older file opens with it off', () => {
     expect(defaultHand().amount).toBe(0);
-    expect(normalizeHand({ amount: 500, seed: 2.9, layers: ['route', 'nonsense', 'route'] })).toEqual({ amount: 100, seed: 2, layers: ['route'] });
+    expect(normalizeHand({ amount: 500, seed: 2.9, layers: ['route', 'nonsense', 'route'] })).toEqual({ amount: 100, seed: 2, sketch: 0, layers: ['route'] });
     expect(normalizeHand('junk')).toEqual(defaultHand());
     const p = defaultProject();
-    p.hand = { amount: 35, seed: 99, layers: ['route', 'water'] };
+    p.hand = { amount: 35, seed: 99, sketch: 20, layers: ['route', 'water'] };
     const raw = JSON.parse(JSON.stringify(toFile(p)));
     expect(fromFile(raw).hand).toEqual(p.hand);
     delete raw.project.hand;
     expect(fromFile(raw).hand).toEqual(defaultHand());
+  });
+});
+
+describe('sketchy second pass', () => {
+  const route = { kind: 'path', part: 'route', d: 'M0 0L40 0L40 30', color: '#000', pen: 'ink', mode: 'stroke', widthMm: 0.4 } as const;
+  const fill = { ...route, mode: 'fill' } as const;
+  const text = { kind: 'text', part: 'title', text: 'x' } as never;
+  it('goes over each line of a ticked layer twice, the second a little to one side', async () => {
+    const { applyHand, defaultHand } = await import('../src/scene/hand');
+    const out = applyHand([route, text], { ...defaultHand(), sketch: 100 });
+    expect(out).toHaveLength(3);
+    const [a, b] = out as { d: string }[];
+    expect(a!.d).toBe(route.d); // no wobble asked for: the first pass is untouched
+    expect(b!.d).not.toBe(a!.d);
+    const y = [...b!.d.matchAll(/L?M?[\d.-]+ ([\d.-]+)/g)].map((m) => +m[1]!);
+    expect(Math.max(...y.map(Math.abs))).toBeLessThan(40);
+  });
+  it('leaves fills, unticked layers and an off setting alone', async () => {
+    const { applyHand, defaultHand } = await import('../src/scene/hand');
+    expect(applyHand([fill], { ...defaultHand(), sketch: 50 })).toHaveLength(1);
+    expect(applyHand([route], { ...defaultHand(), sketch: 50, layers: ['water'] })).toHaveLength(1);
+    expect(applyHand([route], defaultHand())).toEqual([route]);
+  });
+  it('is repeatable', async () => {
+    const { applyHand, defaultHand } = await import('../src/scene/hand');
+    const h = { ...defaultHand(), amount: 30, sketch: 40 };
+    expect(applyHand([route], h)).toEqual(applyHand([route], h));
   });
 });
