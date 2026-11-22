@@ -37,6 +37,7 @@ import { summarizePasses } from '../export/offset';
 import { PenSelect, PensPanel } from './PensPanel';
 import { PagePanel } from './PagePanel';
 import { qrPrim, qrTarget } from '../scene/qr';
+import { MAX_BADGE_MM, MIN_BADGE_MM } from '../scene/badge';
 import { Group, NARROW_QUERY, useGroups, useMediaQuery } from './Group';
 import { FEATURE_PEN_LABELS, penFor } from '../scene/pens';
 import type { FeaturePenKey } from '../features/types';
@@ -90,6 +91,7 @@ const PARTS: Record<Part, { group: string; label: string; focus?: string }> = {
   landmarks: { group: 'landmarks', label: 'Landmarks' },
   doodles: { group: 'doodles', label: 'Doodles' },
   qr: { group: 'qr', label: 'QR code' },
+  badge: { group: 'badge', label: 'Stamp' },
 };
 
 /** The part of the poster under the pointer, if any: a landmark's own label first, then the part an element draws. */
@@ -325,6 +327,7 @@ export function App() {
   const [mode, setMode] = useState<ExportMode>('plotter');
   const [dpi, setDpi] = useState(150);
   const [pngBusy, setPngBusy] = useState(false);
+  const [proof, setProof] = useState('');
   const downloadSvg = async () => {
     setSvgBusy(true); setExportErr('');
     try { download('hike-poster.svg', await makeSvg(), 'image/svg+xml'); }
@@ -333,7 +336,7 @@ export function App() {
   };
   const downloadPng = async () => {
     setPngBusy(true); setExportErr('');
-    try { download('hike-poster.png', (await sceneToPng(scene, dpi)).blob, 'image/png'); }
+    try { download('hike-poster.png', (await sceneToPng(scene, dpi, proof)).blob, 'image/png'); }
     catch (e) { setExportErr(e instanceof Error ? e.message : 'PNG export failed'); }
     finally { setPngBusy(false); }
   };
@@ -721,6 +724,22 @@ export function App() {
               {info && <div className="hint">{info.modules} × {info.modules} squares of {info.moduleMm.toFixed(2)} mm each.{info.moduleMm < 0.45 ? ' That is finer than most pens draw cleanly: make it larger or the address shorter.' : ' Each row of squares is drawn as one stroke the width of a square, so it fills solid. Keep it dark ink on light paper.'}</div>}
             </>);
           })()}
+        </Group>
+
+        <Group id="badge" title="Stamp" {...gp('badge')}
+          toggle={{ on: p.badge.enabled, onChange: (v) => set((x) => { x.badge.enabled = v; }) }}>
+          {p.badge.enabled && (<>
+            <Row label="Top"><input type="text" value={p.badge.top} maxLength={40} placeholder="the poster title" onChange={(e) => set((x) => { x.badge.top = e.target.value; })} /></Row>
+            <Row label="Middle"><input type="text" value={p.badge.middle} maxLength={40} placeholder="SUMMIT" onChange={(e) => set((x) => { x.badge.middle = e.target.value; })} /></Row>
+            <Row label="Bottom"><input type="text" value={p.badge.bottom} maxLength={40} placeholder="the date" onChange={(e) => set((x) => { x.badge.bottom = e.target.value; })} /></Row>
+            <Row label="Position">
+              <select value={p.badge.placement} onChange={(e) => set((x) => { x.badge.placement = e.target.value as Placement; })}><option value="top">Top</option><option value="bottom">Bottom</option></select>
+              <select value={p.badge.align} onChange={(e) => set((x) => { x.badge.align = e.target.value as 'left' | 'center' | 'right'; })}><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select>
+            </Row>
+            <Row label="Size"><input type="range" min={MIN_BADGE_MM} max={MAX_BADGE_MM} step={1} value={p.badge.sizeMm} onChange={(e) => set((x) => { x.badge.sizeMm = +e.target.value; })} /><span>{p.badge.sizeMm} mm</span></Row>
+            <Row label="Pen"><PenSelect pens={p.pens} value={p.badge.pen} onChange={(id) => set((x) => { x.badge.pen = id!; })} /></Row>
+            <div className="hint">A round stamp, like a passport page: the top and bottom words follow the ring (long ones are squeezed to fit), the middle word is big. Leave the top or bottom empty to use the title and the date of the hike.</div>
+          </>)}
         </Group>
 
         <Group id="doodles" title="Doodles" {...gp('doodles')}
@@ -1210,6 +1229,10 @@ export function App() {
           const s = pngSize(scene.widthMm, scene.heightMm, dpi);
           return <div className="hint">{s.width} × {s.height} px{s.capped ? ` (reduced to ${s.dpi} dpi, the largest this browser can render)` : ''}</div>;
         })()}
+        <Row label="Proof text">
+          <input type="text" value={proof} maxLength={40} placeholder="e.g. PROOF (none)" onChange={(e) => setProof(e.target.value)} />
+        </Row>
+        <div className="hint">{proof.trim() ? 'The PNG gets this word repeated across it in pale red, so it can be shared for approval without being printed. The SVG is not marked.' : 'Optional: a word like PROOF stamped across the PNG, for sharing a preview.'}</div>
         <div className="hint">Download the SVG and PNG from the bar above the poster; they follow these settings.</div>
         <div className="row">
           <button type="button" disabled={linkBusy} title="Put this SVG on the server and copy a link to it that works for one hour, to open it on another computer" onClick={async () => {

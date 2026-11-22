@@ -22,7 +22,8 @@ Status: **building** (being added now), **next**, **later**, **done**.
 
 ## Playful text
 - **Fun stats**: "≈ 2.8 Eiffel Towers of climbing", steps, football fields, bananas end to end, Everests. *done*
-- **Stamp badge**: a circular passport stamp with place and date, or a "summit achieved" ribbon. *later*
+- **Stamp badge**: a circular passport stamp with place and date. *done (not yet deployed)* (a "summit achieved" ribbon is still open)
+- **Proof text for PNG**: an optional word stamped across the PNG export. *done (not yet deployed)*
 
 ## Colour and personality
 - **Elevation-banded contour pens**: low ground in one pen, high in another, one pen per band; a rainbow-by-mile route the same way. *later*

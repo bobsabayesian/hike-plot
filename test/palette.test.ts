@@ -81,7 +81,7 @@ describe('removing a pen', () => {
     const p = defaultProject();
     const seen: string[] = [];
     mapPenRefs(p, (id) => { seen.push(id); return 'x'; });
-    expect(seen.length).toBe(12 + 2 + 6 + 2 + 1); // QR code, route, contours, profile, north, grid, title, title fill, location, info, watermark, border, landmarks default + 2 overrides + 6 land cover kinds + 2 doodle pens
+    expect(seen.length).toBe(12 + 2 + 6 + 2 + 2); // stamp, QR code, route, contours, profile, north, grid, title, title fill, location, info, watermark, border, landmarks default + 2 overrides + 6 land cover kinds + 2 doodle pens
     expect(p.route.pen).toBe('x');
     expect(p.terrain.pen).toBe('x');
     expect(p.profile.pen).toBe('x');
@@ -94,6 +94,7 @@ describe('removing a pen', () => {
     expect(p.watermarkPen).toBe('x');
     expect(p.border.pen).toBe('x');
     expect(p.qr.pen).toBe('x');
+    expect(p.badge.pen).toBe('x');
     expect(p.doodles.pen).toBe('x');
     expect(p.doodles.skyPen).toBe('x');
     expect(p.features.pens).toEqual({ default: 'x', overrides: { waterOutline: 'x', waterLabel: 'x' } });

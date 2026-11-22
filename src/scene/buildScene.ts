@@ -16,6 +16,7 @@ import { band, depthOf, splitFar, thinLine } from '../relief/fade';
 import { distanceTicks, everyAlong, tickLabel, tickMark, tickMeters } from './routeMarks';
 import { thinUnder } from '../cover/thin';
 import { qrPrim, qrTarget } from './qr';
+import { badgePrims } from './badge';
 import { applyHand } from './hand';
 import { inkFor } from '../handwriter/ink';
 import { canStroke, textToStrokes } from '../export/strokefont';
@@ -295,6 +296,19 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
         const x = p.qr.align === 'left' ? contentL : p.qr.align === 'right' ? contentR - size : (contentL + contentR) / 2 - size / 2;
         const q = qrPrim(qrText, x, y, size, colorOf(p.qr.pen), p.qr.pen);
         return q ? [q.prim] : [];
+      },
+    });
+  }
+
+  if (p.badge.enabled) {
+    const size = p.badge.sizeMm;
+    const b = p.badge;
+    const words = { sizeMm: size, top: b.top.trim() || auto.title, middle: b.middle, bottom: b.bottom.trim() || auto.info.date };
+    blocks[b.placement].push({
+      part: 'badge', height: size, gapAfter: size * 0.1,
+      draw: (y) => {
+        const cx = b.align === 'left' ? contentL + size / 2 : b.align === 'right' ? contentR - size / 2 : (contentL + contentR) / 2;
+        return badgePrims(words, cx, y + size / 2, { fontFamily, fontKey: t.font, color: colorOf(b.pen), pen: b.pen });
       },
     });
   }

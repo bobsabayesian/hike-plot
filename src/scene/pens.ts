@@ -145,6 +145,7 @@ export function mapPenRefs(p: Project, fn: (id: string) => string): void {
   p.watermarkPen = fn(p.watermarkPen);
   p.border.pen = fn(p.border.pen);
   p.qr.pen = fn(p.qr.pen);
+  p.badge.pen = fn(p.badge.pen);
   p.features.pens.default = fn(p.features.pens.default);
   for (const k of Object.keys(p.features.pens.overrides) as FeaturePenKey[]) {
     const id = p.features.pens.overrides[k];
@@ -265,6 +266,7 @@ export function penSlots(p: Project): PenSlot[] {
   if (p.text.info.visible) add('info', 'Route info', 'typography', (q) => q.text.info.pen, (q, id) => { q.text.info.pen = id; });
   if (p.border.enabled) add('border', 'Border', 'border', (q) => q.border.pen, (q, id) => { q.border.pen = id; });
   if (p.qr.enabled) add('qr', 'QR code', 'qr', (q) => q.qr.pen, (q, id) => { q.qr.pen = id; });
+  if (p.badge.enabled) add('badge', 'Stamp', 'badge', (q) => q.badge.pen, (q, id) => { q.badge.pen = id; });
   if (p.showWatermark) add('watermark', 'Watermark', 'export', (q) => q.watermarkPen, (q, id) => { q.watermarkPen = id; });
   return out;
 }

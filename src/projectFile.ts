@@ -1,5 +1,6 @@
 import { normalizeLayers } from './scene/layers';
 import { normalizeHand } from './scene/hand';
+import { normalizeBadge } from './scene/badge';
 import { normalizeDoodles } from './doodles/types';
 import { defaultProject, type Project } from './scene/project';
 
@@ -39,6 +40,7 @@ export function fromFile(raw: unknown): Project {
   if (!Array.isArray(p.pens) || !p.pens.length) p.pens = defaultProject().pens;
   p.layers = normalizeLayers(p.layers);
   p.hand = normalizeHand(p.hand);
+  p.badge = normalizeBadge(p.badge, p.badge.pen);
   p.hatchAngleDeg = Math.min(90, Math.max(30, Number(p.hatchAngleDeg) || 45));
   p.doodles = normalizeDoodles(p.doodles);
   // route info items added since the file was saved are offered too (switched off), after the ones it has

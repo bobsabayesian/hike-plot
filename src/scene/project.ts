@@ -5,6 +5,7 @@ import { defaultFeatures, type FeatureSettings, type Landmark } from '../feature
 import { defaultPens, PEN_INK, PEN_RED, type Pen } from './pens';
 import { defaultBorder, type BorderSettings } from './border';
 import { defaultQr, type QrSettings } from './qr';
+import { defaultBadge, type BadgeSettings } from './badge';
 import type { HatchDensity } from './types';
 import { defaultRelief, type ReliefSettings } from '../relief/relief';
 import { defaultShade, type ShadeSettings } from '../relief/shade';
@@ -148,6 +149,8 @@ export interface Project {
   border: BorderSettings;
   /** a QR code to the saved project (or any address), printed with the text blocks */
   qr: QrSettings;
+  /** a round passport stamp with a word round the top and bottom and one in the middle */
+  badge: BadgeSettings;
   /** the terrain drawn in 3D: turned and tipped back, with hills standing up */
   relief: ReliefSettings;
   /** light and shade: slopes away from the sun drawn darker, with extra lines in between */
@@ -273,6 +276,7 @@ export const defaultProject = (): Project => ({
   page: { margins: { top: DEFAULT_MARGIN_MM, right: DEFAULT_MARGIN_MM, bottom: DEFAULT_MARGIN_MM, left: DEFAULT_MARGIN_MM }, linked: true },
   border: defaultBorder(PEN_INK),
   qr: defaultQr(PEN_INK),
+  badge: defaultBadge(PEN_INK),
   relief: defaultRelief(),
   shade: defaultShade(),
   cover: defaultCover(),
