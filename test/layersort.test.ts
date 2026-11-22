@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beneath, DEFAULT_GAP_MM, defaultLayers, LAYER_IDS, LAYERS, layerOfPart, MAX_GAP_MM, moveLayer, moveLayerTo, normalizeLayers, setCut, setGap, starterBlocked, suggestCuts } from '../src/scene/layers';
+import { beneath, DEFAULT_GAP_MM, defaultLayers, LAYER_IDS, LAYERS, layerOfPart, MAX_GAP_MM, moveLayer, moveLayerTo, normalizeLayers, setCut, setGap, setCutsBelow, effectiveCuts, starterBlocked, suggestCuts } from '../src/scene/layers';
 import { fromFile, toFile } from '../src/projectFile';
 import { defaultProject } from '../src/scene/project';
 import type { Part } from '../src/scene/types';
@@ -109,5 +109,29 @@ describe('what the other settings already clear', () => {
     expect(existingClears(p, 'route')[0]).toMatch(/1\.5 mm/);
     expect(existingClears(p, 'landmarks')[0]).toMatch(/labels/);
     expect(existingClears(p, 'cover')[0]).toMatch(/Glacier/);
+  });
+});
+
+describe('cut all the layers below', () => {
+  it('cuts whatever is beneath, and keeps doing so after the order changes', () => {
+    let s = setCutsBelow(defaultLayers(), 'route', true);
+    expect(effectiveCuts(s, 'route')).toEqual(beneath(s, 'route'));
+    s = moveLayerTo(s, 'route', 2);
+    expect(s.rules.route?.below).toBe(true);
+    expect(effectiveCuts(s, 'route')).toEqual(s.order.slice(0, 2));
+    s = moveLayerTo(s, 'route', 10);
+    expect(effectiveCuts(s, 'route')).toHaveLength(10);
+  });
+  it('turning it off keeps the layers ticked before, and removes an empty rule', () => {
+    let s = setCut(defaultLayers(), 'route', 'water', true);
+    s = setCutsBelow(s, 'route', true);
+    s = setCutsBelow(s, 'route', false);
+    expect(s.rules.route).toEqual({ cuts: ['water'], gapMm: DEFAULT_GAP_MM });
+    expect(setCutsBelow(defaultLayers(), 'route', false).rules.route).toBeUndefined();
+  });
+  it('is saved with the project', () => {
+    const p = defaultProject();
+    p.layers = setCutsBelow(p.layers, 'north', true);
+    expect(fromFile(JSON.parse(JSON.stringify(toFile(p)))).layers.rules.north?.below).toBe(true);
   });
 });

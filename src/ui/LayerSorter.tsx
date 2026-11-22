@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { COVER_CLASSES, COVER_LABELS } from '../cover/types';
 import { plotRuns } from '../export/svg';
-import { beneath, defaultLayers, DEFAULT_GAP_MM, LAYERS, layerLabel, layerOfPart, MAX_GAP_MM, moveLayer, moveLayerTo, setCut, setGap, starterBlocked, suggestCuts, type LayerId } from '../scene/layers';
+import { beneath, defaultLayers, DEFAULT_GAP_MM, LAYERS, layerLabel, layerOfPart, MAX_GAP_MM, moveLayer, moveLayerTo, setCut, setCutsBelow, setGap, effectiveCuts, starterBlocked, suggestCuts, type LayerId } from '../scene/layers';
 import { penFor } from '../scene/pens';
 import type { Project } from '../scene/project';
 import type { Prim } from '../scene/types';
@@ -47,7 +47,7 @@ export function LayerSorter({ project: p, prims, hovered, onHover, pending, onRe
     if (!s.byStack) return Math.max(0, new Set(prims.map((x) => x.pen).filter((x) => x !== undefined)).size - 1);
     return Math.max(0, plotRuns(prims, p.pens, s).length - 1);
   }, [prims, p.pens, s]);
-  const cuts = Object.values(s.rules).reduce((n, r) => n + (r?.cuts.length ?? 0), 0);
+  const cuts = s.order.reduce((n, id) => n + effectiveCuts(s, id).length, 0);
 
   return (
     <aside className="layers" aria-label="Layers">
@@ -81,7 +81,7 @@ export function LayerSorter({ project: p, prims, hovered, onHover, pending, onRe
               <div className="layer-row">
                 <span className="layer-pens" aria-hidden="true">{(pens ?? []).map((pid) => <span key={pid} className="swatch" style={{ background: penFor(p.pens, pid).color }} title={penFor(p.pens, pid).name} />)}</span>
                 <button type="button" className="link layer-name" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : id)} title="Show what this layer cuts">
-                  {layerLabel(id)}{empty ? ' (nothing here)' : ''}{rule ? ` · cuts ${rule.cuts.length}` : ''}
+                  {layerLabel(id)}{empty ? ' (nothing here)' : ''}{rule ? (rule.below ? ' · cuts all below' : ` · cuts ${effectiveCuts(s, id).length}`) : ''}
                 </button>
                 <button type="button" aria-label={`Draw ${layerLabel(id)} earlier`} title="Earlier" disabled={i === 0} onClick={() => change((l) => moveLayer(l, id, -1))}>↑</button>
                 <button type="button" aria-label={`Draw ${layerLabel(id)} later`} title="Later" disabled={i === s.order.length - 1} onClick={() => change((l) => moveLayer(l, id, 1))}>↓</button>
@@ -89,10 +89,13 @@ export function LayerSorter({ project: p, prims, hovered, onHover, pending, onRe
               {isOpen && (
                 <div className="layer-cuts">
                   {below.length === 0 ? <div className="hint">Drawn first, so there is nothing beneath it to cut.</div> : (<>
-                    <div className="hint">Cuts lines of:</div>
-                    {below.map((lo) => (
-                      <label key={lo}><input type="checkbox" checked={!!rule?.cuts.includes(lo)} onChange={(e) => change((l) => setCut(l, id, lo, e.target.checked))} /> {layerLabel(lo)}</label>
-                    ))}
+                    <label title="Cuts every layer drawn before this one, and keeps doing so when you reorder"><input type="checkbox" checked={!!rule?.below} onChange={(e) => change((l) => setCutsBelow(l, id, e.target.checked))} /> Cut all the layers below</label>
+                    {!rule?.below && (<>
+                      <div className="hint">Or only the lines of:</div>
+                      {below.map((lo) => (
+                        <label key={lo}><input type="checkbox" checked={!!rule?.cuts.includes(lo)} onChange={(e) => change((l) => setCut(l, id, lo, e.target.checked))} /> {layerLabel(lo)}</label>
+                      ))}
+                    </>)}
                     {rule && (
                       <div className="row">
                         <label>Gap</label>

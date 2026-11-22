@@ -31,7 +31,12 @@ export const DEFAULT_GAP_MM = 0.4;
 export const MAX_GAP_MM = 5;
 
 /** What a layer cuts: the layers beneath it that it knocks lines out of, and the gap left beside it (on top of half the pen's line). */
-export interface LayerRule { cuts: LayerId[]; gapMm: number }
+export interface LayerRule {
+  cuts: LayerId[];
+  gapMm: number;
+  /** cut every layer beneath, whatever it is: follows the order as it is changed, so nothing has to be ticked again */
+  below?: boolean;
+}
 
 export interface LayerSettings {
   /** drawing order, first = bottom = plotted first */
@@ -62,12 +67,13 @@ export function normalizeLayers(raw: unknown): LayerSettings {
   const rules = r.rules && typeof r.rules === 'object' ? r.rules : {};
   for (const id of order) {
     const rule = (rules as Record<string, Partial<LayerRule> | undefined>)[id];
-    if (!rule || !Array.isArray(rule.cuts)) continue;
+    if (!rule) continue;
     const below = beneath(out, id);
-    const cuts = [...new Set(rule.cuts.filter((c): c is LayerId => isId(c) && below.includes(c)))];
-    if (!cuts.length) continue;
+    const cuts = [...new Set((Array.isArray(rule.cuts) ? rule.cuts : []).filter((c): c is LayerId => isId(c) && below.includes(c)))];
+    const all = rule.below === true;
+    if (!cuts.length && !all) continue;
     const gap = typeof rule.gapMm === 'number' && Number.isFinite(rule.gapMm) ? Math.min(MAX_GAP_MM, Math.max(0, rule.gapMm)) : DEFAULT_GAP_MM;
-    out.rules[id] = { cuts, gapMm: gap };
+    out.rules[id] = { cuts, gapMm: gap, ...(all ? { below: true } : {}) };
   }
   return out;
 }
@@ -98,6 +104,23 @@ export function setCut(s: LayerSettings, upper: LayerId, lower: LayerId, on: boo
   const cuts = on ? [...new Set([...rule.cuts, lower])] : rule.cuts.filter((c) => c !== lower);
   const rules = { ...s.rules };
   if (cuts.length) rules[upper] = { ...rule, cuts }; else delete rules[upper];
+  return { ...s, rules };
+}
+
+/** The layers a layer actually cuts now: everything beneath it if it is set to, else the ones ticked (that are still beneath). */
+export function effectiveCuts(s: LayerSettings, id: LayerId): LayerId[] {
+  const rule = s.rules[id];
+  if (!rule) return [];
+  const below = beneath(s, id);
+  return rule.below ? below : rule.cuts.filter((c) => below.includes(c));
+}
+
+/** Cut everything beneath this layer, now and after any reordering. Turning it off keeps the layers ticked before. */
+export function setCutsBelow(s: LayerSettings, id: LayerId, on: boolean): LayerSettings {
+  const rule = s.rules[id] ?? { cuts: [], gapMm: DEFAULT_GAP_MM };
+  const rules = { ...s.rules };
+  const next: LayerRule = { cuts: rule.cuts, gapMm: rule.gapMm, ...(on ? { below: true } : {}) };
+  if (on || next.cuts.length) rules[id] = next; else delete rules[id];
   return { ...s, rules };
 }
 

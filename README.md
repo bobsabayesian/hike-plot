@@ -143,3 +143,5 @@ In the Hand-drawn feel group, "Sketchy" goes over every line of the ticked layer
 ## Redraw in the layer sorter
 
 Reordering layers and ticking cuts changes the settings at once (and the plotter SVG you download), but the plotter preview is only cut again when you press **Redraw**. The button shows a * while changes are waiting.
+
+Each layer in the sorter also has a **Cut all the layers below** checkbox. It cuts whatever is drawn before the layer, and keeps doing so as you reorder, so nothing has to be ticked again (reordering a layer with ticked layers drops the ones that are no longer beneath it).

@@ -1,6 +1,6 @@
 import type { XY } from '../geo/clip';
 import { cutNearPolylines } from '../features/halo';
-import { beneath, layerOfPart, type LayerSettings } from '../scene/layers';
+import { effectiveCuts, layerOfPart, type LayerSettings } from '../scene/layers';
 import type { PathPrim, Scene } from '../scene/types';
 import { flattenPath } from './offset';
 
@@ -55,8 +55,7 @@ export function applyCuts(scene: Scene, layers: LayerSettings): Scene {
   for (const upper of [...layers.order].reverse()) {
     const rule = layers.rules[upper];
     if (!rule) continue;
-    const below = new Set(beneath(layers, upper));
-    const targets = rule.cuts.filter((c) => below.has(c));
+    const targets = effectiveCuts(layers, upper);
     if (!targets.length) continue;
     // the upper layer's lines, grouped by how far each reaches (half its line plus the gap)
     const reach = new Map<number, { r: number; lines: XY[][]; box: Box }>();
