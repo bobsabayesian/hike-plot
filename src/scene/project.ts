@@ -86,6 +86,11 @@ export interface TitleSettings extends TitleBlock {
   hwFont: string;
   hwPreset: string;
   hwSeed: number;
+  /** handwriting spacing: size (% of the title size), letter spacing (%), even-out (%), word gap (%) */
+  hwScale?: number;
+  hwTracking?: number;
+  hwEven?: number;
+  hwWordGap?: number;
   /** line weight of the letter outline (outline and outlineFill) */
   outlineMm: number;
   /** pen for the inside of the letters (outlineFill); `pen` draws the outline */

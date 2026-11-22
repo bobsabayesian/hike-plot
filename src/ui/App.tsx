@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { handwriterEnabled, inkFor, inkVersion, subscribeInk } from '../handwriter/ink';
+import { normalizeSpacing, spaceInk, SPACING_RANGE } from '../handwriter/spacing';
 import { useStore } from '../store';
 import { parseGpx, parseWaypoints } from '../gpx/parse';
 import { sampleTrack, sampleWaypoints } from '../sample';
@@ -1074,6 +1075,21 @@ export function App() {
                 {['natural', 'neat', 'messy', 'cursive'].map((f) => <option key={f} value={f}>{f}</option>)}
               </select></Row>
               <Row label="Take"><input type="number" step={1} value={t.hwSeed ?? 1} onChange={(e) => set((x) => { x.text.title.hwSeed = Math.trunc(+e.target.value) || 0; })} /><button className="link" onClick={() => set((x) => { x.text.title.hwSeed = Math.floor(Math.random() * 99999); })}>another</button></Row>
+              {(() => {
+                const sp = normalizeSpacing({ scale: t.hwScale, tracking: t.hwTracking, even: t.hwEven, wordGap: t.hwWordGap });
+                const sep = got.ink ? spaceInk(got.ink, (t.value ?? auto.title).trim(), sp) : undefined;
+                const slide = (label: string, key: 'hwScale' | 'hwTracking' | 'hwEven' | 'hwWordGap', v: number, [lo, hi]: readonly [number, number]) => (
+                  <Row label={label}><input type="range" min={lo} max={hi} step={1} value={v} onChange={(e) => set((x) => { x.text.title[key] = +e.target.value; })} /><span>{v}%</span></Row>
+                );
+                return (<>
+                  {slide('Writing size', 'hwScale', sp.scale, SPACING_RANGE.scale)}
+                  {slide('Letter spacing', 'hwTracking', sp.tracking, SPACING_RANGE.tracking)}
+                  {slide('Even out gaps', 'hwEven', sp.even, SPACING_RANGE.even)}
+                  {slide('Word gap', 'hwWordGap', sp.wordGap, SPACING_RANGE.wordGap)}
+                  <div className="row"><button type="button" className="link" onClick={() => set((x) => { x.text.title.hwScale = 100; x.text.title.hwTracking = 0; x.text.title.hwEven = 0; x.text.title.hwWordGap = 100; })}>Reset size and spacing</button></div>
+                  {sep && <div className="hint">{sep.separated ? `Found ${sep.letters} separate letters in ${sep.words} word${sep.words === 1 ? '' : 's'}; spacing moves them sideways without reshaping them.` : 'These letters are joined together, so the spacing sliders cannot pull them apart. Size still works.'}</div>}
+                </>);
+              })()}
               <div className="hint">{got.error ? `Showing the printed lettering: ${got.error}` : got.loading ? 'Fetching your handwriting…' : got.ink?.missing ? `Left out (no glyph): ${got.ink.missing}.` : 'Single-line strokes from your handwriting service.'}</div>
             </>);
           })()}
