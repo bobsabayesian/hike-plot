@@ -345,7 +345,8 @@ function compose(p: Project, terrain?: TerrainField, layoutOnly = false, osm?: O
     if (!layoutOnly) {
       // The route and the landmark labels are worked out first: contour numbers have to stay clear of both.
       // Labels may spill a little into the margin, but never onto or past the border.
-      const innerBorder = p.border.enabled ? layoutBorder(W, H, p.border, mg).rects.at(-1)!.x + p.border.weightMm / 2 + 1.5 : 0;
+      const bl = p.border.enabled ? layoutBorder(W, H, p.border, mg) : undefined;
+      const innerBorder = bl ? bl.rects.at(-1)!.x + p.border.weightMm / 2 + bl.depthMm + 1.5 : 0;
       const withinBorder = (r: Rect): Rect => {
         const x0 = Math.max(r.x, innerBorder);
         const y0 = Math.max(r.y, innerBorder);

@@ -1,5 +1,5 @@
 import { clampMargins, posterMm, type Margins, type Project } from '../scene/project';
-import { layoutBorder } from '../scene/border';
+import { BORDER_STYLES, layoutBorder, type BorderStyle } from '../scene/border';
 import { PenSelect } from './PensPanel';
 import { Group, type GroupProps } from './Group';
 import { useStore } from '../store';
@@ -55,8 +55,8 @@ export function PagePanel({ project: p, margins, border }: { project: Project; m
         return (<>
           <div className="row">
             <label>Style</label>
-            <select value={p.border.style} onChange={(e) => set((x) => { x.border.style = e.target.value as 'single' | 'double'; })}>
-              <option value="single">Single line</option><option value="double">Double line</option>
+            <select value={p.border.style} onChange={(e) => set((x) => { x.border.style = e.target.value as BorderStyle; })}>
+              {BORDER_STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </div>
           <div className="row">
@@ -64,9 +64,9 @@ export function PagePanel({ project: p, margins, border }: { project: Project; m
             <input type="number" min={0} step={step} value={marginToUnits(p.border.offsetMm, p.units)} onChange={(e) => set((x) => { x.border.offsetMm = marginFromUnits(+e.target.value, x.units); })} />
             <span className="unit">{unit}</span>
           </div>
-          {p.border.style === 'double' && (
+          {p.border.style !== 'single' && (
             <div className="row">
-              <label>Gap between</label>
+              <label>{p.border.style === 'double' ? 'Gap between' : 'Pattern size'}</label>
               <input type="number" min={0} step={step / 2} value={marginToUnits(p.border.gapMm, p.units)} onChange={(e) => set((x) => { x.border.gapMm = marginFromUnits(+e.target.value, x.units); })} />
               <span className="unit">{unit}</span>
             </div>
@@ -77,7 +77,7 @@ export function PagePanel({ project: p, margins, border }: { project: Project; m
             <span className="unit">mm</span>
           </div>
           <div className="row"><label>Pen</label><PenSelect pens={p.pens} value={p.border.pen} onChange={(id) => set((x) => { x.border.pen = id!; })} /></div>
-          {lay.clamped && <div className="err">Pulled in to fit inside the smallest margin: now {marginToUnits(lay.offsetMm, p.units)} {unit} from the edge{p.border.style === 'double' ? `, ${marginToUnits(lay.gapMm, p.units)} ${unit} apart` : ''}. Widen the margins for more room.</div>}
+          {lay.clamped && <div className="err">Pulled in to fit inside the smallest margin: now {marginToUnits(lay.offsetMm, p.units)} {unit} from the edge{p.border.style !== 'single' ? `, ${p.border.style === 'double' ? 'gap' : 'pattern'} ${marginToUnits(lay.gapMm, p.units)} ${unit}` : ''}. Widen the margins for more room.</div>}
         </>);
       })()}
       </Group>

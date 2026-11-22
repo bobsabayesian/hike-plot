@@ -127,3 +127,7 @@ Landmark icons now include a tent, flag, camera, coffee cup and bear paw (pick o
 ## Water ripples
 
 Under Landmarks, "Lake ripples" draws 1 to 4 rings that follow each lake's shore a little way in (the gap is adjustable), and "Wave marks on lakes" scatters small tilde marks over the open water. Both are drawn in the water pen, are off by default, and work in the 3D view too. Rings stop where a narrow neck or bay is too tight for them.
+
+## Border styles
+
+The border can be a single line, a double line, a postage-stamp edge (half-round notches bitten in), a twisted rope (two weaving strands) or a single rule with ornate corners (two quarter arcs and a small ring in each). "Gap between" becomes "Pattern size" for the new styles. They all sit inside the margin like the plain border, are pulled in to fit, and keep labels clear of their reach.

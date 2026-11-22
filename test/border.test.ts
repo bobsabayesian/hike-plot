@@ -177,3 +177,53 @@ describe('the border in the exports', () => {
     expect(out.prims.filter((x) => x.kind === 'path' && x.widthMm === 0.9 && x.d.endsWith('Z') && x.pen === 'ink')).toHaveLength(1);
   });
 });
+
+import { flattenPath } from '../src/export/offset';
+import { BORDER_STYLES, type BorderStyle } from '../src/scene/border';
+
+describe('border styles', () => {
+  const pts = (style: BorderStyle, over: Partial<BorderSettings> = {}, m = margins) =>
+    borderPrims(W, H, on({ style, ...over }), m, '#000').flatMap((p) => flattenPath(p.d).flatMap((s) => s.pts));
+  const edgeDist = (p: [number, number]) => Math.min(p[0], p[1], W - p[0], H - p[1]);
+
+  it('lists five styles and every one draws something in the border pen', () => {
+    expect(BORDER_STYLES.map((s) => s.id)).toEqual(['single', 'double', 'stamp', 'rope', 'ornate']);
+    for (const s of BORDER_STYLES) {
+      const prims = borderPrims(W, H, on({ style: s.id }), margins, '#123456');
+      expect(prims.length).toBeGreaterThan(0);
+      for (const p of prims) expect(p).toMatchObject({ pen: 'ink', color: '#123456', mode: 'stroke' });
+    }
+  });
+  it('stamp notches are bitten inward from the rule, between plain corners', () => {
+    const q = pts('stamp', { offsetMm: 10, gapMm: 3 });
+    const e = q.map(edgeDist);
+    expect(Math.min(...e)).toBeCloseTo(10, 1);
+    expect(Math.max(...e)).toBeGreaterThan(10.5);
+    expect(Math.max(...e)).toBeLessThan(10 + 3 * 0.45 + 0.1);
+    // the corner itself is on the rule
+    expect(q.some(([x, y]) => Math.abs(x - 10) < 0.01 && Math.abs(y - 10) < 0.01)).toBe(true);
+  });
+  it('rope weaves on both sides of its center line and stays within its reach', () => {
+    const q = pts('rope', { offsetMm: 10, gapMm: 4 });
+    const e = q.map(edgeDist);
+    expect(Math.min(...e)).toBeCloseTo(10, 1);
+    expect(Math.max(...e)).toBeCloseTo(10 + 4, 1);
+  });
+  it('ornate corners reach in no further than their size and keep the plain rule', () => {
+    const prims = borderPrims(W, H, on({ style: 'ornate', offsetMm: 10, gapMm: 3 }), margins, '#000');
+    expect(prims).toHaveLength(2);
+    expect(isRect(prims[0]!.d)).toBe(true);
+    const e = flattenPath(prims[1]!.d).flatMap((s) => s.pts).map(edgeDist);
+    expect(Math.min(...e)).toBeGreaterThanOrEqual(10 - 0.01);
+  });
+  it('every style is pulled in to fit inside the margin, and reports the depth it needs', () => {
+    for (const style of ['double', 'stamp', 'rope', 'ornate'] as const) {
+      const tight = layoutBorder(W, H, on({ style, offsetMm: 20, gapMm: 10 }), { top: 20, right: 20, bottom: 20, left: 20 });
+      expect(tight.clamped).toBe(true);
+      const q = pts(style, { offsetMm: 20, gapMm: 10 }, { top: 20, right: 20, bottom: 20, left: 20 });
+      expect(Math.max(...q.map(edgeDist))).toBeLessThanOrEqual(20 - BORDER_CLEARANCE_MM + 0.3);
+    }
+    expect(layoutBorder(W, H, on({ style: 'ornate', gapMm: 3 }), margins).depthMm).toBeCloseTo(7.2, 5);
+    expect(layoutBorder(W, H, on({ style: 'single' }), margins).depthMm).toBe(0);
+  });
+});
