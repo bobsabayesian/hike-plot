@@ -63,6 +63,7 @@ export function LayerSorter({ project: p, prims, hovered, onHover, pending, onRe
       <label className="layers-by" title="Off: the file has one layer for each pen, in the pens' order. On: the file's layers follow this order, a layer for each run of one pen.">
         <input type="checkbox" checked={s.byStack} onChange={(e) => change((l) => ({ ...l, byStack: e.target.checked }))} /> Plot in this order
       </label>
+      <div className="hint">Tick the box on a row to make that layer cut everything below it.</div>
       <div className="hint">{changes} pen change{changes === 1 ? '' : 's'}{s.byStack ? ' in this order' : ' (one layer per pen)'}. Drawn first at the top; a layer can cut the ones above it.</div>
       <ol className="layer-list">
         {s.order.map((id, i) => {
@@ -83,6 +84,7 @@ export function LayerSorter({ project: p, prims, hovered, onHover, pending, onRe
                 <button type="button" className="link layer-name" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : id)} title="Show what this layer cuts">
                   {layerLabel(id)}{empty ? ' (nothing here)' : ''}{rule ? (rule.below ? ' · cuts all below' : ` · cuts ${effectiveCuts(s, id).length}`) : ''}
                 </button>
+                <input type="checkbox" className="layer-below" aria-label={`${layerLabel(id)} cuts all the layers below`} title={below.length ? 'Cut all the layers below this one (follows the order)' : 'Drawn first: nothing below to cut'} disabled={!below.length} checked={!!rule?.below} onChange={(e) => change((l) => setCutsBelow(l, id, e.target.checked))} />
                 <button type="button" aria-label={`Draw ${layerLabel(id)} earlier`} title="Earlier" disabled={i === 0} onClick={() => change((l) => moveLayer(l, id, -1))}>↑</button>
                 <button type="button" aria-label={`Draw ${layerLabel(id)} later`} title="Later" disabled={i === s.order.length - 1} onClick={() => change((l) => moveLayer(l, id, 1))}>↓</button>
               </div>

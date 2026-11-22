@@ -221,6 +221,7 @@ button.link:hover:not(:disabled) { background: none; }
 .layer-row button:not(.link) { min-height: 0; padding: 0 6px; line-height: 20px; }
 .layer-pens { display: inline-flex; gap: 2px; min-width: 14px; }
 .layer-name { flex: 1; text-align: left; }
+.layer-below { margin: 0; }
 .layer-cuts { margin: 6px 0 2px; display: grid; gap: 3px; }
 .layer-cuts label { display: block; }
 .layer-cuts .note { color: var(--fg); opacity: .75; }
